@@ -1,0 +1,18 @@
+# Theme ITBA — el theme de referencia de Xtal (spec sección 8).
+#
+# Un theme es un paquete de archivos planos: el motor de Xtal no sabe nada de ITBA,
+# solo sabe leer themes. Mañana alguien copia esta estructura para UBA/UTN.
+
+[institucion]
+nombre = "Instituto Tecnológico de Buenos Aires"
+sigla = "ITBA"
+
+[colors]
+# Azul institucional ITBA (usado en títulos y carátula).
+primary = "003C71"
+
+[logos]
+# Rutas relativas al directorio del theme. Opcionales: si no existen, la carátula
+# cae a texto. (Por ahora el theme de referencia no incluye binarios de logo.)
+# principal = "logo-azul.pdf"
+# monocromo = "logo-bn.pdf"

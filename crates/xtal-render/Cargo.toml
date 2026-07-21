@@ -1,0 +1,23 @@
+# xtal-render — motor de templates LaTeX (minijinja con herencia) + generación de
+# bloques PGFPlots desde Rust + carga de themes. El render es una función pura:
+# (Project + ResolvedConfig + Theme) -> String .tex. Nunca toca disco para decidir.
+[package]
+name = "xtal-render"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xtal-model = { workspace = true }
+xtal-config = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+minijinja = { workspace = true }
+rust-embed = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = "1"   # snapshot testing del .tex generado

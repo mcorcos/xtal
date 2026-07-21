@@ -1,0 +1,20 @@
+# Artefactos de compilación de Rust
+/target
+**/*.rs.bk
+
+# Salidas de proyectos de prueba (PDF/aux/log de LaTeX)
+**/salida/*.pdf
+**/salida/*.aux
+**/salida/*.log
+**/salida/*.out
+**/salida/*.toc
+
+# Intermedios de simulación (netlist aumentado + datos crudos de ngspice/wrdata)
+**/salida/sim/
+
+# Snapshots pendientes de revisión (insta)
+**/*.snap.new
+
+# Cosas del sistema
+.DS_Store
+.env.tokens

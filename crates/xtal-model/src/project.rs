@@ -1,0 +1,139 @@
+//! El **Proyecto**: el manifiesto `xtal.toml` en la raíz de la carpeta-proyecto.
+//!
+//! El proyecto ES una carpeta de archivos planos (spec sección 7). Este struct mapea
+//! el `xtal.toml`: identidad del trabajo, theme activo, formato del documento, y la
+//! estructura de secciones del informe. git da el versionado; Xtal no hace VCS.
+
+use serde::{Deserialize, Serialize};
+
+/// Formato del documento: elige la plantilla maestra de LaTeX.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DocFormat {
+    /// TP típico de facultad: carátula con logos, márgenes cómodos. (Default.)
+    #[default]
+    Facultad,
+    /// Estilo paper (IEEE-like), sobrio.
+    Paper,
+}
+
+impl DocFormat {
+    /// Nombre del template de minijinja correspondiente.
+    pub fn template_name(self) -> &'static str {
+        match self {
+            DocFormat::Facultad => "formats/facultad.tex.j2",
+            DocFormat::Paper => "formats/paper.tex.j2",
+        }
+    }
+}
+
+/// Una sección (o subsección) del informe.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Section {
+    /// Título de la sección.
+    pub title: String,
+    /// Cuerpo en LaTeX (puede estar vacío al crearla).
+    #[serde(default)]
+    pub body: String,
+    /// Subsecciones anidadas.
+    #[serde(default)]
+    pub subsections: Vec<Section>,
+    /// `id`s de gráficos a insertar como figuras dentro de esta sección.
+    #[serde(default)]
+    pub figures: Vec<String>,
+}
+
+impl Section {
+    pub fn new(title: impl Into<String>) -> Self {
+        Section {
+            title: title.into(),
+            body: String::new(),
+            subsections: Vec::new(),
+            figures: Vec::new(),
+        }
+    }
+}
+
+/// Bloque `[project]` del `xtal.toml`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectMeta {
+    /// Nombre del proyecto/trabajo.
+    pub name: String,
+    /// Autores.
+    #[serde(default)]
+    pub authors: Vec<String>,
+    /// Theme activo (ej. "itba"). Si falta, lo decide la config global.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
+}
+
+/// Bloque `[document]` del `xtal.toml`: metadata del informe.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DocumentMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<DocFormat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// Materia/cátedra (formato facultad).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub course: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+}
+
+/// El `xtal.toml` completo.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Project {
+    pub project: ProjectMeta,
+    #[serde(default)]
+    pub document: DocumentMeta,
+    /// Estructura de secciones del informe.
+    #[serde(default)]
+    pub sections: Vec<Section>,
+}
+
+impl Project {
+    /// Proyecto nuevo con valores mínimos.
+    pub fn new(name: impl Into<String>) -> Self {
+        Project {
+            project: ProjectMeta {
+                name: name.into(),
+                authors: Vec::new(),
+                theme: None,
+            },
+            document: DocumentMeta::default(),
+            sections: Vec::new(),
+        }
+    }
+
+    /// Formato efectivo (default: facultad).
+    pub fn effective_format(&self) -> DocFormat {
+        self.document.format.unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_project_defaults_to_facultad() {
+        let p = Project::new("TP4");
+        assert_eq!(p.effective_format(), DocFormat::Facultad);
+    }
+
+    #[test]
+    fn sections_can_nest() {
+        let mut intro = Section::new("Introducción");
+        intro.subsections.push(Section::new("Objetivos"));
+        let mut p = Project::new("TP4");
+        p.sections.push(intro);
+        assert_eq!(p.sections[0].subsections.len(), 1);
+        assert_eq!(p.sections[0].subsections[0].title, "Objetivos");
+    }
+
+    // Nota: el roundtrip real de serialización a TOML se testea en `xtal-data`,
+    // que es el crate que depende de `toml` y define el formato en disco.
+}

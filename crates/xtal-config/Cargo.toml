@@ -1,0 +1,18 @@
+# xtal-config — configuración en cascada de 4 capas (defaults del binario -> config
+# global del usuario -> config del proyecto -> flags del comando). Colapsa todo a un
+# `ResolvedConfig` sin Option, que es lo único que ve el motor de render.
+[package]
+name = "xtal-config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xtal-model = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+directories = { workspace = true }
+thiserror = { workspace = true }

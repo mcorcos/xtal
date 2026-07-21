@@ -1,0 +1,13 @@
+# xtal-compile — compila el .tex a PDF llamando al binario `tectonic` por subproceso
+# (no como librería: evita arrastrar XeTeX/harfbuzz al build). Parsea errores de LaTeX
+# y los muestra legibles. También el "warmup" que cachea el set base de paquetes.
+[package]
+name = "xtal-compile"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }

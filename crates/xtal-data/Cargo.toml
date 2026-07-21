@@ -1,0 +1,23 @@
+# xtal-data — toda la entrada/salida de datos: importar CSV de osciloscopio, evaluar
+# fórmulas teóricas, generar datos random, y persistir mediciones/gráficos en disco
+# (un .toml de metadata + un .csv de datos crudos por medición).
+[package]
+name = "xtal-data"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xtal-model = { workspace = true }
+xtal-sim = { workspace = true }   # SimSpec: receta de mediciones simuladas
+serde = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+csv = { workspace = true }
+encoding_rs = { workspace = true }
+encoding_rs_io = { workspace = true }
+evalexpr = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }

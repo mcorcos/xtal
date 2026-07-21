@@ -1,0 +1,82 @@
+# Workspace raíz de Xtal — la CLI de análisis de circuitos de UNIT.
+#
+# Es un workspace Cargo con varios crates-librería (el núcleo puro, sin I/O en el
+# centro) y un único crate-binario (`xtal-cli`) que produce el ejecutable `xtal`.
+# Las dependencias fluyen en una sola dirección: model <- config/data <- render
+# <- compile <- cli. Esto evita que la lógica de presentación contamine el núcleo.
+[workspace]
+resolver = "2"
+members = [
+    "crates/xtal-model",   # tipos de dominio puros (Measurement, Plot, estilos)
+    "crates/xtal-config",  # configuración en cascada de 4 capas
+    "crates/xtal-data",    # I/O de datos: CSV, fórmulas, random, persistencia
+    "crates/xtal-sim",     # simulación de circuitos con ngspice
+    "crates/xtal-render",  # motor de templates LaTeX + generación PGFPlots
+    "crates/xtal-compile", # invocación de Tectonic (compilar .tex -> PDF)
+    "crates/xtal-cli",     # binario `xtal`: parseo de comandos y orquestación
+]
+
+# Metadata compartida por todos los crates del workspace.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Manuel Corcos <manucorcos@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/unit-org/xtal"
+rust-version = "1.80"
+
+# Versiones centralizadas de las dependencias de terceros. Cada crate las referencia
+# con `dep = { workspace = true }`, así nunca se desincronizan versiones entre crates.
+[workspace.dependencies]
+# --- serialización / formatos ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"       # salida --json para que la parsee una IA
+toml = "0.8"            # lectura de TOML -> structs
+toml_edit = "0.22"     # escritura de TOML preservando comentarios/formato
+csv = "1.3"            # parseo robusto de CSV
+encoding_rs = "0.8"    # detección/conversión de encodings (osciloscopios Windows)
+encoding_rs_io = "0.1" # envoltorio Read sobre encoding_rs
+
+# --- CLI ---
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+
+# --- evaluación de fórmulas teóricas ---
+evalexpr = "12"
+
+# --- templates LaTeX ---
+# custom_syntax: usamos delimitadores << >> / <% %> en vez de los default {{ }} / {% %}
+# para no chocar con las llaves y el % de LaTeX.
+minijinja = { version = "2", features = ["custom_syntax"] }
+
+# --- recursos embebidos (themes dentro del binario) ---
+rust-embed = "8"
+
+# --- errores ---
+thiserror = "2"        # errores tipados en las librerías
+anyhow = "1"           # errores con contexto en el binario
+
+# --- utilidades ---
+directories = "6"      # rutas XDG (~/.config/xtal, cache, etc.)
+indexmap = { version = "2", features = ["serde"] } # mapas con orden determinístico
+
+# --- TUI del instalador interactivo (`xtal setup`) ---
+# dialoguer: prompts lindos (Select/Confirm) | indicatif: spinner del warmup |
+# console: estilos/color. Todo en terminal (no GUI), filosofía Teenage Engineering.
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# --- crates internos del workspace ---
+xtal-model = { path = "crates/xtal-model" }
+xtal-config = { path = "crates/xtal-config" }
+xtal-data = { path = "crates/xtal-data" }
+xtal-sim = { path = "crates/xtal-sim" }
+xtal-render = { path = "crates/xtal-render" }
+xtal-compile = { path = "crates/xtal-compile" }
+
+# Perfil de release: binario chico y rápido (importante para distribuir por curl|sh).
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1

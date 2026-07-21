@@ -1,0 +1,15 @@
+# xtal-model — tipos de dominio puros. Es el corazón: define qué es una Medición,
+# qué es un Gráfico, y la tabla de defaults de estilo (el "buen gusto codificado").
+# No hace I/O ni depende de nada pesado: solo serde para serializar.
+[package]
+name = "xtal-model"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }

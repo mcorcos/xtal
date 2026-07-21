@@ -1,0 +1,33 @@
+# xtal-cli — el binario `xtal`. Define toda la superficie de comandos con clap
+# (cada flag exhaustivamente documentada, pensada para que la maneje una IA) y
+# orquesta las librerías del núcleo. Acá vive la salida humana y la --json.
+[package]
+name = "xtal-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# El binario se llama `xtal` aunque el crate se llame `xtal-cli`.
+[[bin]]
+name = "xtal"
+path = "src/main.rs"
+
+[dependencies]
+xtal-model = { workspace = true }
+xtal-config = { workspace = true }
+xtal-data = { workspace = true }
+xtal-sim = { workspace = true }
+xtal-render = { workspace = true }
+xtal-compile = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+indexmap = { workspace = true }
+# Instalador interactivo (`xtal setup`).
+dialoguer = { workspace = true }
+indicatif = { workspace = true }
+console = { workspace = true }

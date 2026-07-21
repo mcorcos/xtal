@@ -1,0 +1,19 @@
+# xtal-sim — simulación de circuitos con ngspice.
+#
+# Sigue el patrón de xtal-compile: shell-out a un binario externo (ngspice), parseo
+# de su salida y de sus errores, y traducción del resultado al modelo de dominio
+# (Measurement). No linkea libngspice por FFI (decisión de la spec, sección 12): para
+# el MVP corremos `ngspice -b` y leemos la salida ASCII de `wrdata`.
+[package]
+name = "xtal-sim"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+xtal-model = { workspace = true }
