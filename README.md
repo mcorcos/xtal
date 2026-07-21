@@ -24,6 +24,9 @@ entregable, sin pelearse con el formato.
 - **Salida siempre LaTeX.** No hay backend de imágenes; el PDF es LaTeX compilado.
 - **Defaults con buen gusto, todo override-able.** Teórica sólida, simulada con markers,
   medida punteada; entrada amarilla, salida verde. Bode en escala logarítmica por default.
+  Los ejes lineales eligen su prefijo SI solos (un transitorio se rotula en ms, no en
+  `·10⁻³`), y la leyenda se ubica en la esquina más despejada — o afuera del eje si los
+  datos no dejan ninguna libre, para no taparlos nunca.
 - **Themes como paquete, no como código.** La identidad de una institución (logos, colores,
   carátulas) es un theme; el motor no sabe de ninguna en particular.
 - **Config en cascada**, modelo git: defaults del binario → global del usuario → proyecto → flag.

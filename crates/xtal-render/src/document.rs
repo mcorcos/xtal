@@ -27,7 +27,10 @@ pub fn build_preamble(theme: &Theme) -> String {
     p.push_str("\\usepackage{pgfplots}\n");
     p.push_str("\\pgfplotsset{compat=1.18}\n");
     p.push_str("\\usepgfplotslibrary{groupplots}\n"); // Bode magnitud+fase apilados
-    p.push_str("\\usepackage{hyperref}\n");
+    // `hidelinks`: los links del índice y las referencias siguen siendo clickeables,
+    // pero sin el recuadro rojo que hyperref dibuja por default (se ve impreso y queda
+    // horrible en un informe).
+    p.push_str("\\usepackage[hidelinks]{hyperref}\n");
     p.push('\n');
     p.push_str("% Paleta de colores de Xtal (roles de señal + paleta extendida)\n");
     p.push_str(&pgfplots::color_preamble());
@@ -192,10 +195,14 @@ fn render_section(
 /// Envuelve un bloque TikZ en un `figure`. El gráfico ya viene a `width=\linewidth`
 /// (NO usamos \resizebox: deformaba las fuentes). El caption es el título del gráfico.
 /// Si `wide`, usa `figure*` (ocupa las dos columnas en formato paper).
+///
+/// Colocación `[htbp]` y no `[t]`: con `[t]` LaTeX empuja la figura al tope de la página
+/// más cercana, y terminaba apareciendo ANTES de la sección que la menciona (o sola en
+/// una página casi vacía). `[htbp]` deja que caiga donde está en el texto si entra.
 fn figure_env(id: &str, tikz: &str, caption: &str, wide: bool) -> String {
     let env = if wide { "figure*" } else { "figure" };
     let mut f = String::new();
-    f.push_str(&format!("\\begin{{{env}}}[t]\n\\centering\n"));
+    f.push_str(&format!("\\begin{{{env}}}[htbp]\n\\centering\n"));
     f.push_str(tikz);
     f.push_str(&format!("\\caption{{{}}}\n", latex_escape(caption)));
     f.push_str(&format!("\\label{{fig:{}}}\n", id));

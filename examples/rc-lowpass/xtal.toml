@@ -30,12 +30,12 @@ figures = []
 
 [[sections]]
 title = "Respuesta en frecuencia"
-body = "La Figura compara las tres fuentes en magnitud y fase. Las tres curvas se superponen dentro del error de medición. El leve corrimiento de la curva medida respecto de la teórica se explica por la tolerancia de los componentes reales."
+body = "La Figura~\\ref{fig:bode} compara las tres fuentes en magnitud y fase. Las tres curvas se superponen dentro del error de medición: la simulación reproduce el modelo analítico y la medición sigue a ambos. El leve corrimiento de la curva medida respecto de la teórica se explica por la tolerancia de los componentes reales."
 subsections = []
 figures = ["bode"]
 
 [[sections]]
 title = "Respuesta temporal"
-body = 'Excitando con una senoidal de $1\,\mathrm{kHz}$ (frecuencia cercana a $f_c$) se observa la atenuación a aproximadamente $0{,}7$ veces la amplitud de entrada y el retardo de fase de unos $-45^\circ$ característicos del corte.'
+body = 'Excitando con una senoidal de $1\,\mathrm{kHz}$ (frecuencia cercana a $f_c$), la Figura~\ref{fig:transitorio} muestra la atenuación a aproximadamente $0{,}7$ veces la amplitud de entrada y el retardo de fase de unos $-45^\circ$ característicos del corte.'
 subsections = []
 figures = ["transitorio"]

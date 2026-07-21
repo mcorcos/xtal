@@ -60,6 +60,11 @@ medición, sin configurar nada: teórica **sólida**, simulada **dashed con mark
 convención de color: entrada **amarilla**, salida **verde**. Se ve la atenuación a ~0.7 y el
 desfasaje de ~-45° propios de excitar en la frecuencia de corte.
 
+Comparando las dos figuras se ven los defaults de ejes en acción: el Bode rotula la frecuencia
+en `[Hz]` sobre escala logarítmica y le alcanza con una leyenda en la esquina, mientras que el
+transitorio se reescala solo a `[ms]` y, como las senoidales llenan todo el cuadro y no dejan
+ninguna esquina libre, la leyenda se va arriba del eje en vez de taparlas.
+
 ## La estructura que genera
 
 El proyecto es una **carpeta de archivos planos**, versionable con git:

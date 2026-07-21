@@ -53,8 +53,9 @@ pub fn render_plot(
 }
 
 /// Opciones de estilo comunes a todos los ejes (grilla, ticks, fuentes, leyenda).
-/// No incluye tamaño ni modo de eje (eso lo pone cada contexto).
-fn common_axis_opts(legend_pos: &str) -> String {
+/// No incluye tamaño ni modo de eje (eso lo pone cada contexto). `legend` es el bloque
+/// ya armado por [`legend_opts`].
+fn common_axis_opts(legend: &str) -> String {
     let mut o = String::new();
     o.push_str("    grid=both,\n");
     o.push_str("    major grid style={line width=0.3pt, draw=black!20},\n");
@@ -63,9 +64,7 @@ fn common_axis_opts(legend_pos: &str) -> String {
     o.push_str("    tick label style={font=\\small},\n");
     o.push_str("    label style={font=\\small},\n");
     o.push_str("    axis line style={draw=black!55},\n");
-    o.push_str(&format!("    legend pos={legend_pos},\n"));
-    o.push_str("    legend cell align=left,\n");
-    o.push_str("    legend style={font=\\footnotesize, fill=white, fill opacity=0.9, text opacity=1, draw=black!25, rounded corners=2pt, inner sep=4pt},\n");
+    o.push_str(legend);
     o
 }
 
@@ -122,12 +121,33 @@ fn render_single_axis(
     // `scale only axis`: así `width` es el ancho TOTAL (eje + etiquetas), el dibujo
     // entra justo en \linewidth y queda centrado (no se va a la derecha).
     out.push_str("    width=\\linewidth,\n    height=6cm,\n");
-    out.push_str(&common_axis_opts(&plot.effective_legend_pos()));
+    // Si ya normalizamos el eje con un prefijo SI (ms, kHz, ...), los valores quedaron
+    // en un rango cómodo: apagamos el multiplicador de PGFPlots para que no vuelva a
+    // sacar un "·10⁻³" arriba del eje además de la unidad.
+    if xfactor != 1.0 {
+        out.push_str("    scaled x ticks=false,\n");
+    }
+    if yfactor != 1.0 {
+        out.push_str("    scaled y ticks=false,\n");
+    }
+    // En ejes X lineales pegamos el gráfico a los datos: el 10% de aire que agrega
+    // PGFPlots por default hace que un transitorio de 0 a 3 ms arranque en -0,2 ms.
+    if x_linear {
+        out.push_str("    enlarge x limits=false,\n");
+    }
+    // Leyenda: la posición del usuario si la fijó; si no, la esquina más despejada, o
+    // afuera del eje cuando los datos no dejan ninguna esquina libre.
+    let all: Vec<&Series> = plot.series.iter().collect();
+    let placement = auto_legend_pos(&all, measurements, !x_linear, !y_linear);
+    out.push_str(&common_axis_opts(&legend_opts(
+        plot.axes.legend_pos.as_deref(),
+        &placement,
+    )));
     out.push_str("]\n");
 
     for (index, series) in plot.series.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, xfactor, yfactor);
+        render_series(&mut out, series, meas, index, monochrome, xfactor, yfactor, true);
     }
 
     out.push_str("\\end{axis}\n");
@@ -152,14 +172,20 @@ fn render_bode_with_phase(
     // Sin `scale only axis`: el ancho total entra en \linewidth y queda centrado.
     out.push_str("    width=\\linewidth,\n    height=4.6cm,\n");
     out.push_str("    xmode=log,\n");
-    out.push_str(&common_axis_opts(&plot.effective_legend_pos()));
+    // La leyenda vive solo en el panel de magnitud, así que la esquina se elige mirando
+    // esas series (eje X logarítmico, magnitud en dB lineal).
+    let placement = auto_legend_pos(&mag, measurements, true, false);
+    out.push_str(&common_axis_opts(&legend_opts(
+        plot.axes.legend_pos.as_deref(),
+        &placement,
+    )));
     out.push_str("]\n");
 
     // --- Panel 1: magnitud (eje X log y dB: sin escalado de unidades) ---
     out.push_str("\\nextgroupplot[ylabel={Magnitud [dB]}]\n");
     for (index, series) in mag.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0);
+        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0, true);
     }
 
     // --- Panel 2: fase (abajo, lleva la etiqueta de frecuencia). Ticks cada 45°. ---
@@ -183,7 +209,7 @@ fn render_bode_with_phase(
     ));
     for (index, series) in phase.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0);
+        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0, false);
     }
 
     out.push_str("\\end{groupplot}\n");
@@ -207,6 +233,10 @@ fn lookup<'a>(
 
 /// Agrega un `\addplot` + su entrada de leyenda al buffer. `xfactor`/`yfactor` escalan
 /// las coordenadas (para el prefijo SI del eje; 1.0 = sin escalar).
+///
+/// `with_legend` en false dibuja la curva sin anotarla en la leyenda: lo usa el panel de
+/// fase del Bode, que repite exactamente las mismas series que el de magnitud y no
+/// necesita un segundo recuadro idéntico.
 #[allow(clippy::too_many_arguments)]
 fn render_series(
     out: &mut String,
@@ -216,6 +246,7 @@ fn render_series(
     monochrome: bool,
     xfactor: f64,
     yfactor: f64,
+    with_legend: bool,
 ) {
     // Resolvemos el estilo final: overrides del usuario > defaults por rol/tipo.
     let style = resolve_style(
@@ -256,14 +287,16 @@ fn render_series(
     out.push_str("};\n");
 
     // Entrada de leyenda (etiqueta de la serie o de la medición), escapada.
-    let label = series
-        .label
-        .clone()
-        .unwrap_or_else(|| meas.effective_label());
-    out.push_str(&format!(
-        "\\addlegendentry{{{}}}\n",
-        crate::escape::latex_escape(&label)
-    ));
+    if with_legend {
+        let label = series
+            .label
+            .clone()
+            .unwrap_or_else(|| meas.effective_label());
+        out.push_str(&format!(
+            "\\addlegendentry{{{}}}\n",
+            crate::escape::latex_escape(&label)
+        ));
+    }
 }
 
 /// Modo de eje PGFPlots para una escala.
@@ -301,12 +334,149 @@ fn data_extents(plot: &Plot, measurements: &IndexMap<String, Measurement>) -> (f
     (xmax, ymax)
 }
 
+/// Fracción del ancho/alto del eje que ocupa aproximadamente el recuadro de leyenda.
+/// Se usa para estimar qué datos quedarían tapados en cada esquina.
+const LEGEND_BOX_FRAC: f64 = 0.32;
+
+/// Dónde poner la leyenda y cuánto molestaría ahí.
+struct LegendPlacement {
+    /// Posición PGFPlots ("north east", "south west", ...).
+    pos: &'static str,
+    /// Fracción de los puntos del gráfico que quedarían tapados por el recuadro.
+    occupancy: f64,
+}
+
+/// Elige la esquina más despejada para la leyenda.
+///
+/// La leyenda se dibuja ENCIMA del área de datos, así que una posición fija (siempre
+/// "north east") tarde o temprano tapa una curva: en un pasabajos, justamente donde la
+/// banda pasante está plana arriba. Acá estimamos, para cada una de las cuatro esquinas,
+/// cuántos puntos caerían debajo del recuadro, y nos quedamos con la que tenga menos.
+///
+/// Devolvemos además qué tan ocupada quedó la ganadora: con datos que llenan todo el
+/// cuadro (una senoidal, por ejemplo) NINGUNA esquina está libre, y el que llama usa ese
+/// dato para abrir una banda de aire en vez de tapar la curva igual.
+///
+/// Los ejes logarítmicos se comparan en log10, que es como se ven en el gráfico. Ante
+/// empate gana el orden de preferencia clásico, empezando por arriba a la derecha.
+fn auto_legend_pos(
+    series: &[&Series],
+    measurements: &IndexMap<String, Measurement>,
+    x_log: bool,
+    y_log: bool,
+) -> LegendPlacement {
+    // Proyecta un valor al espacio en que se dibuja (log10 si el eje es logarítmico).
+    let project = |v: f64, log: bool| -> Option<f64> {
+        if log {
+            if v > 0.0 {
+                Some(v.log10())
+            } else {
+                None
+            }
+        } else if v.is_finite() {
+            Some(v)
+        } else {
+            None
+        }
+    };
+
+    let mut pts: Vec<(f64, f64)> = Vec::new();
+    for s in series {
+        if let Some(m) = measurements.get(&s.measurement) {
+            for (x, y) in &m.data {
+                if let (Some(px), Some(py)) = (project(*x, x_log), project(*y, y_log)) {
+                    pts.push((px, py));
+                }
+            }
+        }
+    }
+    let fallback = LegendPlacement {
+        pos: "north east",
+        occupancy: 0.0,
+    };
+    if pts.is_empty() {
+        return fallback;
+    }
+
+    let (mut xmin, mut xmax) = (f64::INFINITY, f64::NEG_INFINITY);
+    let (mut ymin, mut ymax) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (x, y) in &pts {
+        xmin = xmin.min(*x);
+        xmax = xmax.max(*x);
+        ymin = ymin.min(*y);
+        ymax = ymax.max(*y);
+    }
+    let (w, h) = (xmax - xmin, ymax - ymin);
+    // Datos degenerados (una constante, un solo punto) o no comparables: nada que esquivar.
+    if w <= 0.0 || h <= 0.0 || !w.is_finite() || !h.is_finite() {
+        return fallback;
+    }
+
+    // (nombre, ¿pegada a la derecha?, ¿pegada arriba?) en orden de preferencia.
+    let corners: [(&'static str, bool, bool); 4] = [
+        ("north east", true, true),
+        ("north west", false, true),
+        ("south east", true, false),
+        ("south west", false, false),
+    ];
+
+    let mut best = ("north east", usize::MAX);
+    for (name, right, top) in corners {
+        let x_lo = if right { xmax - w * LEGEND_BOX_FRAC } else { xmin };
+        let x_hi = if right { xmax } else { xmin + w * LEGEND_BOX_FRAC };
+        let y_lo = if top { ymax - h * LEGEND_BOX_FRAC } else { ymin };
+        let y_hi = if top { ymax } else { ymin + h * LEGEND_BOX_FRAC };
+        let count = pts
+            .iter()
+            .filter(|(x, y)| *x >= x_lo && *x <= x_hi && *y >= y_lo && *y <= y_hi)
+            .count();
+        if count < best.1 {
+            best = (name, count);
+        }
+    }
+    LegendPlacement {
+        pos: best.0,
+        occupancy: best.1 as f64 / pts.len() as f64,
+    }
+}
+
+/// Umbral de ocupación a partir del cual consideramos que NINGUNA esquina está libre y
+/// la leyenda tiene que salir del área de datos.
+const LEGEND_CROWDED: f64 = 0.02;
+
+/// Estilo de la leyenda: dentro del eje en la esquina elegida, o afuera si no hay lugar.
+///
+/// Cuando los datos llenan el cuadro (una senoidal, sin ir más lejos) las cuatro esquinas
+/// están ocupadas y cualquier recuadro tapa la curva. En ese caso la sacamos afuera,
+/// arriba del eje y en una sola fila: es lo que se hace en un paper, y nunca pisa nada.
+fn legend_opts(explicit: Option<&str>, placement: &LegendPlacement) -> String {
+    const ALIGN: &str = "    legend cell align=left,\n";
+    // Recuadro sobrio para la leyenda dentro del eje: fondo semitransparente para que se
+    // lea aunque roce la grilla.
+    const BOXED: &str = "    legend style={font=\\footnotesize, fill=white, fill opacity=0.9, text opacity=1, draw=black!25, rounded corners=2pt, inner sep=4pt},\n";
+
+    if let Some(pos) = explicit {
+        return format!("    legend pos={pos},\n{ALIGN}{BOXED}");
+    }
+    if placement.occupancy > LEGEND_CROWDED {
+        return format!(
+            "{ALIGN}    legend style={{font=\\footnotesize, at={{(0.5,1.03)}}, anchor=south, legend columns=-1, draw=none, fill=none, column sep=1.2em}},\n"
+        );
+    }
+    format!("    legend pos={},\n{ALIGN}{BOXED}", placement.pos)
+}
+
 /// Resuelve la etiqueta y el factor de escala de un eje.
 ///
-/// Prioridad de la etiqueta: explícita del gráfico (se respeta tal cual, sin escalar)
-/// → nombre de la medición / nombre por default + unidad. En ejes lineales con unidad
-/// escalable se elige un prefijo SI (ms, kHz, mV, ...) y se devuelve el factor para
-/// multiplicar las coordenadas.
+/// Prioridad del NOMBRE: etiqueta explícita del gráfico → nombre de la medición →
+/// nombre por default del tipo de gráfico. La UNIDAD se le agrega aparte, y en ejes
+/// lineales con unidad escalable se elige un prefijo SI (ms, kHz, mV, ...) devolviendo
+/// el factor por el que hay que multiplicar las coordenadas.
+///
+/// Sutileza: una etiqueta explícita solo apaga todo esto si YA trae su propia unidad
+/// entre corchetes (ej. `--x-label "Tiempo [s]"`), en cuyo caso mandaría la del usuario
+/// y escalar sería mentir. Si es solo un nombre (`--x-label "Tiempo"`), le agregamos la
+/// unidad escalada igual: renombrar un eje no debería costarte los ticks lindos.
 fn resolve_axis(
     explicit: Option<&str>,
     meas_name: Option<&str>,
@@ -315,11 +485,13 @@ fn resolve_axis(
     linear: bool,
     max_abs: f64,
 ) -> (String, f64) {
-    // Si el usuario fijó la etiqueta, la respetamos y NO escalamos (su [s] mandaría).
+    // El usuario ya escribió la unidad: respetamos su etiqueta tal cual y no escalamos.
     if let Some(l) = explicit {
-        return (l.to_string(), 1.0);
+        if l.contains('[') {
+            return (l.to_string(), 1.0);
+        }
     }
-    let name = meas_name.or(default_name);
+    let name = explicit.or(meas_name).or(default_name);
     if linear {
         let (factor, unit2) = choose_si_prefix(max_abs, unit.unwrap_or(""));
         (compose_label(name, Some(&unit2)), factor)
@@ -350,8 +522,13 @@ fn choose_si_prefix(max_abs: f64, unit: &str) -> (f64, String) {
         (1e-6, 1e6, "µ"), // U+00B5: XeTeX/Tectonic lo toma directo (sobrevive el escape)
         (1e-9, 1e9, "n"),
     ];
+    // Tolerancia del 0.1% al comparar contra el umbral. Sin esto, una señal de 1 V
+    // muestreada que pica en 0,9999978 se queda apenas abajo del umbral 1.0 y el eje
+    // termina en "mV" con ticks de 1000: técnicamente correcto y visualmente absurdo.
+    // Con la tolerancia, lo que está en el borde se redondea al prefijo de arriba.
+    const TOL: f64 = 0.999;
     for (threshold, factor, prefix) in table {
-        if max_abs >= *threshold {
+        if max_abs >= *threshold * TOL {
             return (*factor, format!("{prefix}{u}"));
         }
     }
@@ -451,6 +628,121 @@ mod tests {
     fn si_prefix_skips_db_and_degrees() {
         assert_eq!(choose_si_prefix(40.0, "dB"), (1.0, "dB".to_string()));
         assert_eq!(choose_si_prefix(90.0, "deg"), (1.0, "deg".to_string()));
+    }
+
+    /// Una senoidal de 1 V muestreada casi nunca toca el 1.0 exacto. Sin tolerancia en
+    /// la comparación, el eje se iba a "mV" con ticks de -1000 a 1000.
+    #[test]
+    fn si_prefix_does_not_drop_a_prefix_just_below_threshold() {
+        let (factor, unit) = choose_si_prefix(0.9999978, "V");
+        assert!((factor - 1.0).abs() < 1e-12, "no debería reescalar");
+        assert_eq!(unit, "V");
+    }
+
+    /// La tolerancia es angosta: un valor genuinamente chico sí baja de prefijo.
+    #[test]
+    fn si_prefix_still_scales_clearly_small_values() {
+        let (factor, unit) = choose_si_prefix(0.35, "V");
+        assert!((factor - 1e3).abs() < 1e-6);
+        assert_eq!(unit, "mV");
+    }
+
+    /// Construye una medición con los puntos dados (para los tests de leyenda).
+    fn meas_with(id: &str, data: Vec<(f64, f64)>) -> (String, Measurement) {
+        let mut m = Measurement::new(id, MeasurementKind::Theoretical, Source::Formula);
+        m.data = data;
+        (id.to_string(), m)
+    }
+
+    /// Arma un `(series, measurements)` de un solo trazo para los tests de leyenda.
+    fn one_series(id: &str, data: Vec<(f64, f64)>) -> (Series, IndexMap<String, Measurement>) {
+        let (key, m) = meas_with(id, data);
+        let mut measurements = IndexMap::new();
+        measurements.insert(key, m);
+        (Series::new(id), measurements)
+    }
+
+    /// Una curva que sube ocupa las esquinas NE y SO, y deja libres las otras dos.
+    /// Debe elegir una libre (la de arriba a la izquierda, por orden de preferencia).
+    #[test]
+    fn auto_legend_avoids_an_ascending_curve() {
+        let (s, ms) = one_series("asc", (0..=100).map(|i| (i as f64, i as f64)).collect());
+        let p = auto_legend_pos(&[&s], &ms, false, false);
+        assert_eq!(p.pos, "north west");
+        assert_eq!(p.occupancy, 0.0, "la esquina elegida tiene que estar vacía");
+        // Hay lugar adentro: leyenda en la esquina, con su recuadro.
+        let opts = legend_opts(None, &p);
+        assert!(opts.contains("legend pos=north west"));
+        assert!(!opts.contains("anchor=south"));
+    }
+
+    /// Una curva que baja ocupa NO y SE, así que quedan libres NE y SO; ante empate en
+    /// cero gana la preferencia (arriba a la derecha).
+    #[test]
+    fn auto_legend_prefers_north_east_when_tied_and_free() {
+        let (s, ms) = one_series("desc", (0..=100).map(|i| (i as f64, -(i as f64))).collect());
+        let p = auto_legend_pos(&[&s], &ms, false, false);
+        assert_eq!(p.pos, "north east");
+        assert_eq!(p.occupancy, 0.0);
+    }
+
+    /// Con una senoidal NINGUNA esquina queda libre: la leyenda tiene que salir del eje.
+    #[test]
+    fn auto_legend_goes_outside_on_a_full_field_signal() {
+        let data: Vec<(f64, f64)> = (0..400)
+            .map(|i| {
+                let t = i as f64 / 400.0;
+                (t, (t * std::f64::consts::TAU * 3.0).sin())
+            })
+            .collect();
+        let (s, ms) = one_series("seno", data);
+        let p = auto_legend_pos(&[&s], &ms, false, false);
+        assert!(
+            p.occupancy > LEGEND_CROWDED,
+            "una senoidal ocupa todas las esquinas (ocupación {})",
+            p.occupancy
+        );
+        // Se va afuera: arriba del eje, en una sola fila y sin recuadro.
+        let opts = legend_opts(None, &p);
+        assert!(opts.contains("anchor=south"), "debería ir afuera: {opts}");
+        assert!(opts.contains("legend columns=-1"));
+        assert!(!opts.contains("legend pos="));
+    }
+
+    /// Sin datos utilizables no hay nada que esquivar: se cae al default y sin aire extra.
+    #[test]
+    fn auto_legend_falls_back_without_data() {
+        let measurements: IndexMap<String, Measurement> = IndexMap::new();
+        let s = Series::new("no_existe");
+        let p = auto_legend_pos(&[&s], &measurements, false, false);
+        assert_eq!(p.pos, "north east");
+        assert!(legend_opts(None, &p).contains("legend pos=north east"));
+    }
+
+    /// Si el usuario fijó la posición, se respeta y no se autodetecta nada.
+    #[test]
+    fn explicit_legend_pos_wins_over_auto() {
+        let mut plot = Plot::new("resp", PlotKind::Xy);
+        plot.axes.legend_pos = Some("south east".to_string());
+        plot.series.push(Series::new("teorica"));
+        let tex = render_plot(&plot, &sample_measurements(), false).unwrap();
+        assert!(tex.contains("legend pos=south east"));
+    }
+
+    /// Renombrar un eje sin dar unidad no debe costar el prefijo SI ni la unidad.
+    #[test]
+    fn explicit_label_without_unit_still_gets_scaled_unit() {
+        let (label, factor) = resolve_axis(Some("Tensión"), None, None, Some("V"), true, 1.2e-3);
+        assert_eq!(label, "Tensión [mV]");
+        assert!((factor - 1e3).abs() < 1e-6);
+    }
+
+    /// Pero si el usuario ya escribió la unidad, manda la suya y no se reescala nada.
+    #[test]
+    fn explicit_label_with_unit_is_respected_verbatim() {
+        let (label, factor) = resolve_axis(Some("Tensión [V]"), None, None, Some("V"), true, 1.2e-3);
+        assert_eq!(label, "Tensión [V]");
+        assert!((factor - 1.0).abs() < 1e-12);
     }
 
     #[test]
