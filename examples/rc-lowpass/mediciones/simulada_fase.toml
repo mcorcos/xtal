@@ -1,0 +1,17 @@
+id = "simulada_fase"
+kind = "simulated"
+source = "simulation"
+label = "Simulada"
+x_unit = "Hz"
+y_unit = "deg"
+
+[sim]
+circuit = "filtro"
+vector = "v(out)"
+quantity = "phase"
+
+[sim.analysis.Ac]
+sweep = "dec"
+points = 50
+fstart = 10.0
+fstop = 100000.0

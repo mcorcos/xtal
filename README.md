@@ -64,6 +64,13 @@ xtal setup
 
 ---
 
+## Ejemplo completo
+
+En [`examples/rc-lowpass/`](examples/rc-lowpass/) hay un ejemplo de punta a punta: un filtro
+pasabajos RC caracterizado con las tres fuentes (teórica, simulada con ngspice y medida desde
+un CSV), consolidadas en un Bode de dos paneles y compiladas en un informe con carátula.
+Incluye el PDF resultante y un `reproducir.sh` comentado paso a paso.
+
 ## Flujo típico
 
 ```bash

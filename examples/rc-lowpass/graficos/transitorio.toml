@@ -1,0 +1,19 @@
+id = "transitorio"
+kind = "time"
+title = "Respuesta temporal a 1 kHz"
+
+[axes]
+x_label = "Tiempo"
+y_label = "Tensión"
+
+[[series]]
+measurement = "tran_in"
+role = "input"
+panel = "magnitude"
+label = "Entrada"
+
+[[series]]
+measurement = "tran_out"
+role = "output"
+panel = "magnitude"
+label = "Salida"

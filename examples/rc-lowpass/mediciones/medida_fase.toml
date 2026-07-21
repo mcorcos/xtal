@@ -1,0 +1,6 @@
+id = "medida_fase"
+kind = "measured"
+source = "csv"
+label = "Medida"
+x_unit = "Hz"
+y_unit = "deg"

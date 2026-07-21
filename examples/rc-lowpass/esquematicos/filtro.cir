@@ -1,0 +1,16 @@
+* Filtro pasabajos RC de primer orden
+*
+* Frecuencia de corte: fc = 1 / (2*pi*R*C) = 1 / (2*pi*1600*100n) ~= 994.7 Hz
+*
+* Nodos:
+*   in  -> entrada del filtro (fuente)
+*   out -> salida del filtro (sobre el capacitor)
+
+* Fuente de entrada: 1 V de amplitud para AC (asi v(out) queda en ganancia directa),
+* y una senoidal de 1 kHz para el analisis transitorio.
+Vin in 0 AC 1 SIN(0 1 1k)
+
+R1 in out 1.6k
+C1 out 0 100n
+
+.end

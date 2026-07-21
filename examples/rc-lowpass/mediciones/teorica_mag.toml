@@ -1,0 +1,17 @@
+id = "teorica_mag"
+kind = "theoretical"
+source = "formula"
+label = "Teórica"
+x_unit = "Hz"
+y_unit = "dB"
+
+[formula]
+expr = "-10*math::log10(1 + (f/fc)^2)"
+variable = "f"
+from = 10.0
+to = 100000.0
+points = 300
+scale = "log"
+
+[formula.constants]
+fc = 994.7
