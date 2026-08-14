@@ -92,6 +92,9 @@ xtal run --open
 - `xtal completions <zsh|bash|fish|...> [--out DIR]` — script de autocompletado.
 - `xtal man [--out DIR]` — man page en roff. Los dos son para instalar la herramienta,
   no para el flujo de un informe: rara vez los vas a necesitar.
+- `xtal mcp` — servidor MCP sobre stdio. **No lo uses vos**: es para los clientes de IA
+  que no tienen bash (Claude Desktop, Codex). Vos ya tenés la CLI entera, que es más
+  completa. `xtal mcp install --client <cliente>` lo registra en esos clientes.
 
 ### Circuitos y simulación (`circuit`, `sim`)
 Para correr simulaciones (ngspice) sobre un `.cir` y traer la curva como una medición más.
