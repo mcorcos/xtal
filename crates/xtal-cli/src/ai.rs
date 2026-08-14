@@ -54,6 +54,23 @@ pub fn install_skill() -> Result<Option<PathBuf>> {
     Ok(Some(path))
 }
 
+/// Instala el skill solo si falta o quedó viejo. Devuelve `true` si escribió.
+///
+/// Lo llama cada arranque, así que tiene que ser barato y silencioso. Comparar el
+/// contenido (unos pocos KB) evita reescribir el archivo mil veces, y a la vez hace que
+/// **al actualizar Xtal el skill se actualice solo**: si solo mirara si el archivo
+/// existe, quien viene de una version vieja se quedaría con el skill de esa version.
+fn sync_skill() -> bool {
+    let Some(claude_dir) = claude_home() else {
+        return false;
+    };
+    let path = claude_dir.join("skills").join("xtal").join("SKILL.md");
+    if std::fs::read_to_string(&path).is_ok_and(|actual| actual == SKILL) {
+        return false;
+    }
+    install_skill().ok().flatten().is_some()
+}
+
 /// `~/.claude`, si tiene sentido escribir ahí.
 ///
 /// Existe la carpeta = Claude Code está instalado. Si no está, no inventamos: dejar un
@@ -128,11 +145,25 @@ pub fn register(client: McpClientArg) -> Result<()> {
 pub fn ensure_first_run(quiet: bool) {
     // Todo acá es best-effort: si algo falla, el comando que el usuario pidió tiene que
     // correr igual. Un permiso raro en el home no puede impedirte compilar un informe.
+
+    // El skill se sincroniza SIEMPRE, no solo la primera vez. Alguien que ya tenía Xtal
+    // instalado y actualiza tiene una config global vieja pero ningún skill: si esto
+    // dependiera de la config, nunca lo recibiría.
+    let skill_nuevo = sync_skill();
+
     let Some(config_dir) = xtal_config::paths::config_dir() else {
         return;
     };
     if config_dir.join("config.toml").is_file() {
-        return; // ya está configurada
+        // Ya configurada. Si además acabamos de dejarle el skill, vale avisarlo una vez.
+        if skill_nuevo && !quiet {
+            println!(
+                "  {} Claude Code ya sabe usar Xtal (skill instalado en ~/.claude/skills/xtal).",
+                style("·").dim()
+            );
+            println!();
+        }
+        return;
     }
 
     let cfg = xtal_config::PartialConfig {
@@ -150,7 +181,6 @@ pub fn ensure_first_run(quiet: bool) {
         return;
     }
     let _ = xtal_render::export_embedded_themes(&config_dir.join("themes"), false);
-    let skill = install_skill().ok().flatten();
 
     if quiet {
         return;
@@ -161,7 +191,7 @@ pub fn ensure_first_run(quiet: bool) {
         style("·").dim(),
         style(config_dir.display()).cyan()
     );
-    if skill.is_some() {
+    if skill_nuevo {
         println!(
             "  {} Claude Code ya sabe usar Xtal (skill instalado).",
             style("·").dim()
