@@ -1,5 +1,5 @@
-# Release de Xtal: compila el binario para cada plataforma, arma los tarballs,
-# publica la GitHub Release y actualiza la fórmula del tap de Homebrew.
+# Release de Xtal: compila el binario para cada plataforma, arma los tarballs y
+# publica la GitHub Release.
 #
 # Se dispara al pushear un tag `vX.Y.Z`. El flujo completo es:
 #
@@ -46,7 +46,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: v
         name: Extraer y comparar versiones
@@ -90,7 +90,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Instalar toolchain de Rust
         uses: dtolnay/rust-toolchain@stable
