@@ -38,7 +38,13 @@ encoding_rs = "0.8"    # detección/conversión de encodings (osciloscopios Wind
 encoding_rs_io = "0.1" # envoltorio Read sobre encoding_rs
 
 # --- CLI ---
-clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+# `string`: permite construir nombres de comandos desde String en runtime (lo usa
+# `xtal man` para renombrar cada subcomando a `xtal-<sub>` antes de renderizarlo).
+clap = { version = "4", features = ["derive", "env", "wrap_help", "string"] }
+# Autocompletado de shell y man page, derivados de la MISMA definición de comandos:
+# los genera `xtal completions` / `xtal man` y el workflow de release los empaqueta.
+clap_complete = "4"
+clap_mangen = "0.2"
 
 # --- evaluación de fórmulas teóricas ---
 evalexpr = "12"

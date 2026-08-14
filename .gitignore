@@ -2,6 +2,10 @@
 /target
 **/*.rs.bk
 
+# Tarballs y checksums del empaquetado de release (los arma el workflow, o uno a mano
+# para probar `packaging/homebrew/render-formula.sh`).
+/dist
+
 # Salidas de proyectos de prueba (PDF/aux/log de LaTeX)
 **/salida/*.pdf
 **/salida/*.aux

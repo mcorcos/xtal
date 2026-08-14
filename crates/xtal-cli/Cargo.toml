@@ -22,6 +22,9 @@ xtal-sim = { workspace = true }
 xtal-render = { workspace = true }
 xtal-compile = { workspace = true }
 clap = { workspace = true }
+# Generadores de autocompletado y man page (`xtal completions`, `xtal man`).
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

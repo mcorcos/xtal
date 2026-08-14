@@ -50,7 +50,23 @@ xtal doctor
 
 ## Instalación
 
-Por ahora, desde el código fuente (requiere Rust 1.80+):
+**Homebrew** (macOS y Linux) — instala también Tectonic:
+
+```bash
+brew install mcorcos/xtal/xtal
+```
+
+**Script** (macOS y Linux) — baja el binario ya compilado a `~/.local/bin`, verificando
+el checksum:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh
+```
+
+El script acepta `--version X.Y.Z` para fijar una version y `--dir <ruta>` para elegir
+dónde dejar el binario. También instala los completions de shell y la man page.
+
+**Desde el código fuente** (requiere Rust 1.80+):
 
 ```bash
 git clone https://github.com/mcorcos/xtal.git
@@ -59,10 +75,21 @@ cargo build --release
 # el binario queda en ./target/release/xtal
 ```
 
-Y después, el instalador interactivo (config global, themes, motor LaTeX):
+Y en cualquiera de los tres casos, el instalador interactivo (config global, themes,
+motor LaTeX y warmup de Tectonic):
 
 ```bash
 xtal setup
+```
+
+### Autocompletado y man page
+
+Los paquetes de Homebrew y del script ya los dejan instalados. Si compilaste a mano,
+los genera el propio binario:
+
+```bash
+xtal completions zsh --out ~/.local/share/zsh/site-functions   # o bash, fish, ...
+xtal man --out ~/.local/share/man/man1
 ```
 
 ---
@@ -149,7 +176,8 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 | `xtal run` | Genera el `.tex` y compila el PDF. Flags: `--open`, `--monochrome`, `--pdflatex` |
 
 ### Sistema
-`xtal config get|set|list [--global] [--resolved]` · `xtal doctor` · `xtal setup`
+`xtal config get|set|list [--global] [--resolved]` · `xtal doctor` · `xtal setup` ·
+`xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]`
 
 Todos los comandos aceptan `--json` y `--project <dir>`.
 

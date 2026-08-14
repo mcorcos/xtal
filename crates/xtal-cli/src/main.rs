@@ -8,6 +8,7 @@ mod cli;
 mod commands;
 mod convert;
 mod ctx;
+mod gen;
 mod setup;
 
 use clap::Parser;
@@ -43,5 +44,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Config(cmd) => commands::cmd_config(cmd, &project),
         Command::Doctor => commands::cmd_doctor(),
         Command::Setup(a) => setup::cmd_setup(a),
+        Command::Completions(a) => gen::cmd_completions(a),
+        Command::Man(a) => gen::cmd_man(a),
     }
 }
