@@ -14,6 +14,7 @@
 //!   - con `--print` no escribe nada: muestra el fragmento y listo.
 
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use anyhow::{bail, Context, Result};
 use console::style;
@@ -182,6 +183,21 @@ fn claude_code(exe: &str, name: &str, print_only: bool) -> Result<()> {
         );
     }
 
+    // `claude mcp add` se niega a pisar una entrada que ya existe, así que primero la
+    // sacamos. Sin esto, el comando no puede ACTUALIZAR el registro — y actualizarlo es
+    // justo lo que hace falta después de un `brew upgrade`, que cambia la ruta del
+    // binario. Los otros dos clientes ya reemplazaban su entrada; este quedaba afuera.
+    //
+    // El remove se hace en silencio y sin mirar el resultado: si no había nada que
+    // sacar, falla, y eso está perfecto.
+    let existia = std::process::Command::new("claude")
+        .args(["mcp", "remove", "--scope", "user", name])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
     let status = std::process::Command::new("claude")
         .args(["mcp", "add", "--scope", "user", name, "--", exe, "mcp"])
         .status()
@@ -191,9 +207,10 @@ fn claude_code(exe: &str, name: &str, print_only: bool) -> Result<()> {
         bail!("`claude mcp add` falló. Probá a mano:\n         {command}");
     }
     println!(
-        "  {} `{}` registrado en Claude Code (scope user).",
+        "  {} `{}` {} en Claude Code (scope user).",
         style("✓").green(),
-        name
+        name,
+        if existia { "actualizado" } else { "registrado" }
     );
     Ok(())
 }

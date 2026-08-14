@@ -1096,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "xtal-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1122,14 +1122,14 @@ dependencies = [
 
 [[package]]
 name = "xtal-compile"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "xtal-config"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "directories",
  "serde",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "xtal-data"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "csv",
  "encoding_rs",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "xtal-model"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "serde",
@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "xtal-render"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "insta",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "xtal-sim"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
