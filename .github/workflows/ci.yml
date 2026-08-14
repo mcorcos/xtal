@@ -94,3 +94,8 @@ jobs:
           "$BIN" completions bash > /dev/null
           "$BIN" completions fish > /dev/null
           "$BIN" man > /dev/null
+          # El MCP server: handshake mínimo por stdio. Los tests de integración lo
+          # cubren en serio; esto atrapa el caso "el binario ni arranca en modo mcp".
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
+            | "$BIN" mcp | grep -q '"serverInfo"'
+          "$BIN" mcp install --client codex --print > /dev/null

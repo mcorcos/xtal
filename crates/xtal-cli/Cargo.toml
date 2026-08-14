@@ -29,7 +29,11 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+# `xtal mcp install --client codex` edita ~/.codex/config.toml preservando comentarios.
+toml_edit = { workspace = true }
 indexmap = { workspace = true }
+# Rutas de config por plataforma (dónde guarda su config cada cliente MCP).
+directories = { workspace = true }
 # Instalador interactivo (`xtal setup`).
 dialoguer = { workspace = true }
 indicatif = { workspace = true }

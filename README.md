@@ -82,6 +82,18 @@ motor LaTeX y warmup de Tectonic):
 xtal setup
 ```
 
+### Usarlo desde un cliente de IA sin terminal
+
+Claude Code no necesita nada: corre `xtal` por bash. Para Claude Desktop, Codex y
+similares, Xtal trae un servidor MCP adentro del mismo binario:
+
+```bash
+xtal mcp install --client claude-desktop
+```
+
+Escribe la config del cliente por vos (con backup) y listo: no hay nada que dejar
+corriendo. Detalle completo en [`docs/MCP.md`](docs/MCP.md).
+
 ### Autocompletado y man page
 
 Los paquetes de Homebrew y del script ya los dejan instalados. Si compilaste a mano,
@@ -177,7 +189,8 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor` · `xtal setup` ·
-`xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]`
+`xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
+`xtal mcp [serve] | install --client <cliente>`
 
 Todos los comandos aceptan `--json` y `--project <dir>`.
 

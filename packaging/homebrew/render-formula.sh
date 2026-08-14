@@ -90,6 +90,9 @@ class Xtal < Formula
 
       Configurá Xtal en esta máquina (theme, formato, warmup de Tectonic):
         xtal setup
+
+      Para usarlo desde Claude Desktop o Codex:
+        xtal mcp install --client claude-desktop
     EOS
   end
 

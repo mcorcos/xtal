@@ -92,8 +92,19 @@ El núcleo es análisis de circuitos + consolidación de datos.
     `packaging/homebrew/render-formula.sh`. Necesita el secret `HOMEBREW_TAP_TOKEN`.
   - `xtal completions <shell>` y `xtal man` (crate `xtal-cli`, módulo `gen.rs`): los genera
     el binario, y el workflow los mete en el tarball y en la fórmula.
-- **Falta:** el MCP server (`xtal mcp`, stdio, "Tanda 2"), el pulido de dependencias/watch
-  ("Tanda 3"), y todo lo de circuitos/ngspice de Capa 2+.
+- **MCP server — HECHO (2026-08-14, "Tanda 2").** Ver `docs/MCP.md`. `xtal mcp` levanta un
+  server **stdio** (lo prende el cliente, no hay daemon ni puerto). Módulo
+  `crates/xtal-cli/src/mcp/`: `protocol.rs` (JSON-RPC a mano, sin SDK — no queríamos
+  tokio), `tools.rs` (13 tools), `install.rs`, `mod.rs` (loop + despacho).
+  - **Las tools ejecutan el propio binario como subproceso**, no llaman a `commands.rs`:
+    en modo MCP stdout es el canal del protocolo, y así el MCP no puede desincronizarse
+    de la CLI.
+  - Proyecto: argumento `project` > `xtal_open_project` > cwd del cliente. Varios
+    proyectos a la vez sin levantar varios servers.
+  - `xtal mcp install --client claude-code|claude-desktop|codex` escribe la config del
+    cliente (con backup, preservando el resto del archivo y la ruta absoluta del binario).
+- **Falta:** el pulido ("Tanda 3": que `doctor` ofrezca instalar tectonic/ngspice, modo
+  watch, ejemplo de primer minuto), y todo lo de circuitos/ngspice de Capa 2+.
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
 ### Arquitectura (workspace, 6 crates)

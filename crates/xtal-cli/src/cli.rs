@@ -61,6 +61,9 @@ pub enum Command {
     /// Instalador interactivo: configura Xtal en esta máquina (config global,
     /// themes, motor LaTeX y warmup de Tectonic).
     Setup(SetupArgs),
+    /// Servidor MCP sobre stdio, para clientes de IA que no tienen bash
+    /// (Claude Desktop, Codex). `xtal mcp` a secas arranca el server.
+    Mcp(McpArgs),
     /// Imprime el script de autocompletado para tu shell (zsh, bash, fish, ...).
     Completions(CompletionsArgs),
     /// Imprime la man page de `xtal` en formato roff.
@@ -420,6 +423,51 @@ pub struct SetupArgs {
     /// Re-escribe los themes en disco aunque ya existan (pisa ediciones del usuario).
     #[arg(long = "force-themes")]
     pub force_themes: bool,
+}
+
+// ===========================================================================
+// mcp — servidor Model Context Protocol
+// ===========================================================================
+
+#[derive(Debug, Args)]
+pub struct McpArgs {
+    #[command(subcommand)]
+    pub cmd: Option<McpCmd>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum McpCmd {
+    /// Arranca el server sobre stdio (lo mismo que `xtal mcp` sin subcomando).
+    /// No es para correr a mano: lo levanta el cliente de IA cuando lo necesita.
+    Serve,
+    /// Registra el server en la config de un cliente de IA, con la ruta absoluta
+    /// de este binario. Deja un backup del archivo antes de tocarlo.
+    Install(McpInstallArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct McpInstallArgs {
+    /// Cliente donde registrarlo.
+    #[arg(long, value_enum)]
+    pub client: McpClientArg,
+    /// Nombre con el que queda registrado el server (default: `xtal`). Sirve para
+    /// tener dos versiones del binario registradas a la vez.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// No escribe nada: solo muestra el fragmento de config y dónde iría.
+    #[arg(long)]
+    pub print: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum McpClientArg {
+    /// Claude Code (usa su propio `claude mcp add`). Opcional: Claude Code ya puede
+    /// usar la CLI por bash.
+    ClaudeCode,
+    /// Claude Desktop (edita `claude_desktop_config.json`).
+    ClaudeDesktop,
+    /// Codex (edita `~/.codex/config.toml`).
+    Codex,
 }
 
 #[derive(Debug, Args)]
