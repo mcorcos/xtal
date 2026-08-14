@@ -98,7 +98,7 @@ jobs:
           target/debug/xtal completions fish --out assets/completions
           target/debug/xtal man --out assets/man
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: docs-assets
           path: assets
@@ -149,7 +149,7 @@ jobs:
         run: cargo build --release --bin xtal --target ${{ matrix.target }}
 
       - name: Bajar los completions y la man page
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docs-assets
           path: assets
@@ -177,7 +177,7 @@ jobs:
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Subir el tarball como artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.pack.outputs.name }}
           path: dist/*.tar.gz
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Bajar todos los tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           # Solo los tarballs: `docs-assets` ya viaja adentro de cada uno.
           pattern: xtal-*

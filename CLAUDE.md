@@ -83,15 +83,25 @@ El núcleo es análisis de circuitos + consolidación de datos.
   ITBA + Bode con defaults de buen gusto (teórica sólida, medida punteada, eje log) salen solos.
 - **Repo público en `github.com/mcorcos/xtal`.** (La idea original era `unit-org`; quedó en
   la cuenta personal. El README sigue diciendo "by UNIT".)
+- **PUBLICADO. `v0.1.2` en https://github.com/mcorcos/xtal/releases** — cuatro binarios
+  (mac arm/intel, linux x86/arm) con `SHA256SUMS`. Instalable de verdad:
+  `brew install mcorcos/xtal/xtal` o el `install.sh` por curl.
 - **Distribución — HECHA (2026-08-14, "Tanda 1").** Ver `docs/RELEASING.md`:
   - `.github/workflows/ci.yml` — fmt + clippy + tests (Linux y macOS) + smoke del binario.
-  - `.github/workflows/release.yml` — tag `vX.Y.Z` → 4 binarios (mac arm/intel, linux
-    x86/arm, runners nativos) → tarballs + `SHA256SUMS` → GitHub Release → fórmula de brew.
+  - `.github/workflows/release.yml` — tag `vX.Y.Z` → job `assets` (completions + man, una
+    sola vez) → 4 binarios → tarballs + `SHA256SUMS` → GitHub Release.
+    - **`x86_64-apple-darwin` se cross-compila desde `macos-14`**: GitHub retiró los
+      runners `macos-13` y un job que los pida queda encolado para siempre (nos pasó).
+    - Por eso los completions/man se generan aparte: el job de Mac Intel no puede
+      *ejecutar* lo que compiló.
   - `install.sh` en la raíz — `curl … | sh`, verifica checksum, instala en `~/.local/bin`.
-  - Tap de Homebrew: repo aparte **`mcorcos/homebrew-xtal`**, fórmula generada por
-    `packaging/homebrew/render-formula.sh`. Necesita el secret `HOMEBREW_TAP_TOKEN`.
-  - `xtal completions <shell>` y `xtal man` (crate `xtal-cli`, módulo `gen.rs`): los genera
-    el binario, y el workflow los mete en el tarball y en la fórmula.
+  - Tap de Homebrew: repo aparte **`mcorcos/homebrew-xtal`**, ya creado. **Se actualiza
+    solo**: un workflow suyo mira cada hora la última Release y regenera la fórmula con
+    `packaging/homebrew/render-formula.sh --from-release`, bajado por HTTP desde acá.
+    NO hay ningún secret ni token: se descartó pushear desde este repo justamente para
+    no guardar un PAT de escritura en un repo público. Para forzarlo:
+    `gh workflow run update-formula.yml --repo mcorcos/homebrew-xtal`.
+  - `xtal completions <shell>` y `xtal man` (crate `xtal-cli`, módulo `gen.rs`).
 - **MCP server — HECHO (2026-08-14, "Tanda 2").** Ver `docs/MCP.md`. `xtal mcp` levanta un
   server **stdio** (lo prende el cliente, no hay daemon ni puerto). Módulo
   `crates/xtal-cli/src/mcp/`: `protocol.rs` (JSON-RPC a mano, sin SDK — no queríamos
@@ -115,6 +125,19 @@ El núcleo es análisis de circuitos + consolidación de datos.
     no justifica la dependencia. Ignora `salida/` (si no, se recompila a sí mismo en loop).
   - `xtal update [--check]` — compara con la última Release (vía `curl`) y ofrece correr
     `brew upgrade` o el instalador, según dónde viva el binario. No se reemplaza solo.
+- **Verificado en la máquina de Manu (2026-08-14), con el binario instalado por brew:**
+  `xtal example --run` compila el PDF (carátula ITBA + Bode de las tres fuentes),
+  `xtal sim ac` corre ngspice de verdad, `xtal watch` recompila al cambiar un archivo,
+  `install.sh` baja y verifica el checksum, y el MCP está registrado en Claude Code.
+  Instalados con brew en el proceso: `tectonic`, `ngspice`, `poppler` y el propio `xtal`.
+  Rust (rustup) también, que no estaba.
+- **Dos bugs salieron de instalarlo de verdad** (por eso 0.1.1 y 0.1.2), los dos en
+  `mcp/install.rs` y los dos solo visibles con una instalación por Homebrew:
+  1. `current_exe()` resuelve symlinks → escribía la ruta del Cellar, con la version
+     adentro, que muere en el próximo `brew upgrade`. Ahora reescribe al symlink estable
+     del prefijo (`stable_path`).
+  2. `claude mcp add` se niega a pisar una entrada existente → el comando no podía
+     *actualizar*. Ahora hace `remove` en silencio antes del `add`.
 - **Falta:** todo lo de circuitos/ngspice de Capa 2+, y el `.asc` de LTspice (ver backlog).
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
