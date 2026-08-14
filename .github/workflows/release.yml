@@ -1,0 +1,223 @@
+# Release de Xtal: compila el binario para cada plataforma, arma los tarballs,
+# publica la GitHub Release y actualiza la fórmula del tap de Homebrew.
+#
+# Se dispara al pushear un tag `vX.Y.Z`. El flujo completo es:
+#
+#   1. `check`  — el tag y la version de Cargo.toml tienen que coincidir.
+#   2. `build`  — matriz de 4 targets, cada uno en su runner nativo (sin cross-compilar).
+#                 Cada job produce `xtal-<version>-<target>.tar.gz` con el binario,
+#                 los completions, la man page y la documentación.
+#   3. `release`— junta todos los tarballs, calcula SHA256SUMS y crea la Release.
+#   4. `homebrew` — regenera Formula/xtal.rb con los hashes nuevos y la pushea al tap.
+#
+# Todo lo que el instalador `install.sh` espera encontrar (nombres de los assets y el
+# archivo SHA256SUMS) se define acá: si cambia un nombre, hay que cambiarlo en los dos lados.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Permite ensayar el build sin publicar nada (útil para probar la matriz).
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compilar y empaquetar sin crear la Release"
+        type: boolean
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Repo del tap de Homebrew (formato owner/repo). El nombre TIENE que empezar con
+  # `homebrew-` para que `brew install mcorcos/xtal/xtal` lo resuelva solo.
+  TAP_REPO: mcorcos/homebrew-xtal
+
+permissions:
+  contents: write # necesario para crear la Release y subir los assets
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Coherencia entre el tag y la version del workspace
+  # ---------------------------------------------------------------------------
+  check:
+    name: verificar version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        name: Extraer y comparar versiones
+        run: |
+          set -euo pipefail
+          # En workflow_dispatch no hay tag: usamos la version de Cargo.toml tal cual.
+          CARGO_VERSION="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+              echo "::error::El tag es v$TAG_VERSION pero Cargo.toml dice $CARGO_VERSION. Sincronizalos antes de taggear."
+              exit 1
+            fi
+            echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. Compilar y empaquetar, un job por plataforma
+  # ---------------------------------------------------------------------------
+  build:
+    name: build ${{ matrix.target }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Macs con Apple Silicon (M1 en adelante) — el caso principal de Manu.
+          - target: aarch64-apple-darwin
+            os: macos-14
+          # Macs Intel.
+          - target: x86_64-apple-darwin
+            os: macos-13
+          # Linux x86_64. Runner viejo a propósito: linkea contra una glibc vieja,
+          # así el binario anda también en distros no tan nuevas.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          # Linux ARM (runner nativo, gratis en repos publicos: no hace falta cross).
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Compilar en modo release
+        run: cargo build --release --bin xtal --target ${{ matrix.target }}
+
+      - name: Armar el tarball
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          NAME="xtal-${VERSION}-${TARGET}"
+          BIN="target/${TARGET}/release/xtal"
+
+          # El tarball se descomprime en una carpeta con su propio nombre (nunca
+          # desparrama archivos en el cwd del usuario).
+          mkdir -p "dist/${NAME}/completions" "dist/${NAME}/man"
+          cp "$BIN" "dist/${NAME}/xtal"
+          cp README.md LICENSE SKILL.md "dist/${NAME}/"
+
+          # Los completions y la man page los genera el binario recien compilado:
+          # imposible que queden desfasados de los flags reales.
+          "$BIN" completions zsh  --out "dist/${NAME}/completions"
+          "$BIN" completions bash --out "dist/${NAME}/completions"
+          "$BIN" completions fish --out "dist/${NAME}/completions"
+          "$BIN" man --out "dist/${NAME}/man"
+
+          tar -czf "dist/${NAME}.tar.gz" -C dist "${NAME}"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Subir el tarball como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}
+          path: dist/*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3. Publicar la Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: publicar release
+    needs: [check, build]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Bajar todos los tarballs
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Calcular checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          # Un solo archivo con todos los hashes: es lo que verifica install.sh.
+          sha256sum *.tar.gz | tee SHA256SUMS
+
+      - name: Crear la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Xtal v${{ needs.check.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
+  # ---------------------------------------------------------------------------
+  # 4. Actualizar el tap de Homebrew
+  # ---------------------------------------------------------------------------
+  # Requiere el secret HOMEBREW_TAP_TOKEN (un PAT con permiso de escritura sobre el
+  # repo del tap). Si el secret no está cargado, el paso se saltea y el release
+  # igual queda publicado: brew simplemente sigue apuntando a la version anterior.
+  homebrew:
+    name: actualizar tap de Homebrew
+    needs: [check, release]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Avisar si falta el token
+        if: env.TAP_TOKEN == ''
+        run: echo "::warning::Falta el secret HOMEBREW_TAP_TOKEN — no actualizo el tap."
+
+      - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
+
+      - name: Bajar los tarballs publicados
+        if: env.TAP_TOKEN != ''
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Renderizar la fórmula
+        if: env.TAP_TOKEN != ''
+        run: |
+          set -euo pipefail
+          bash packaging/homebrew/render-formula.sh "$VERSION" dist > /tmp/xtal.rb
+          cat /tmp/xtal.rb
+
+      - name: Pushear la fórmula al tap
+        if: env.TAP_TOKEN != ''
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp /tmp/xtal.rb /tmp/tap/Formula/xtal.rb
+          cd /tmp/tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/xtal.rb
+          # Si el contenido no cambió, no hay nada que commitear (no es un error).
+          git diff --staged --quiet || git commit -m "xtal ${VERSION}"
+          git push

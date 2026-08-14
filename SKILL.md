@@ -89,6 +89,9 @@ xtal run --open
 - `xtal run [--open] [--monochrome] [--pdflatex] [--format ..] [--theme ..]` — genera y compila a PDF.
 - `xtal config get|set <clave> [valor] [--global]` — claves: `theme`, `format`. `config list [--resolved]`.
 - `xtal doctor` — verifica tectonic/pdflatex/ngspice en el PATH.
+- `xtal completions <zsh|bash|fish|...> [--out DIR]` — script de autocompletado.
+- `xtal man [--out DIR]` — man page en roff. Los dos son para instalar la herramienta,
+  no para el flujo de un informe: rara vez los vas a necesitar.
 
 ### Circuitos y simulación (`circuit`, `sim`)
 Para correr simulaciones (ngspice) sobre un `.cir` y traer la curva como una medición más.

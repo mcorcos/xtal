@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 
 /// Xtal — análisis de circuitos y consolidación de datos en informes LaTeX. by UNIT.
 #[derive(Debug, Parser)]
@@ -60,6 +61,10 @@ pub enum Command {
     /// Instalador interactivo: configura Xtal en esta máquina (config global,
     /// themes, motor LaTeX y warmup de Tectonic).
     Setup(SetupArgs),
+    /// Imprime el script de autocompletado para tu shell (zsh, bash, fish, ...).
+    Completions(CompletionsArgs),
+    /// Imprime la man page de `xtal` en formato roff.
+    Man(ManArgs),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -415,6 +420,25 @@ pub struct SetupArgs {
     /// Re-escribe los themes en disco aunque ya existan (pisa ediciones del usuario).
     #[arg(long = "force-themes")]
     pub force_themes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CompletionsArgs {
+    /// Shell destino. `xtal completions zsh` imprime el script a stdout.
+    #[arg(value_enum)]
+    pub shell: Shell,
+    /// En vez de stdout, escribe el archivo con el nombre convencional de cada shell
+    /// adentro de este directorio (lo crea si no existe) e imprime la ruta final.
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct ManArgs {
+    /// En vez de stdout, escribe `xtal.1` y una página por subcomando en este
+    /// directorio (lo crea si no existe).
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<PathBuf>,
 }
 
 // ===========================================================================

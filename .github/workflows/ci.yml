@@ -1,0 +1,96 @@
+# CI de Xtal: formato, lints y tests en cada push a main y en cada PR.
+#
+# Es la red de seguridad del release: el workflow de release NO vuelve a correr los
+# tests, confía en que main está verde. Corre en Linux y macOS porque el binario se
+# distribuye para las dos plataformas y hay código con `#[cfg(target_os = ...)]`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Permite dispararlo a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Los tests no deberían necesitar red; si algo la necesita, que falle rápido.
+  RUST_BACKTRACE: 1
+
+# Si se pushea dos veces seguidas a la misma rama, cancela la corrida vieja.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Formato y lints: una sola vez, en Linux. Son independientes de la plataforma.
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      # -D warnings: cualquier warning de clippy rompe el build. El repo ya está limpio.
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Que un SO falle no cancela al otro: queremos ver los dos resultados.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo test
+        run: cargo test --workspace --all-features
+
+  # Chequeo de que el binario efectivamente arranca y que los generadores andan.
+  # Barato, y atrapa el caso "compila pero explota al primer comando".
+  smoke:
+    name: smoke test del binario
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compilar el binario
+        run: cargo build --bin xtal
+
+      - name: Correr comandos que no tocan el sistema
+        run: |
+          set -euxo pipefail
+          BIN=target/debug/xtal
+          "$BIN" --version
+          "$BIN" --help > /dev/null
+          "$BIN" doctor || true          # doctor sale 0 igual, pero por las dudas
+          "$BIN" completions zsh > /dev/null
+          "$BIN" completions bash > /dev/null
+          "$BIN" completions fish > /dev/null
+          "$BIN" man > /dev/null

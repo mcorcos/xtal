@@ -81,11 +81,20 @@ El núcleo es análisis de circuitos + consolidación de datos.
   tests en verde, clippy limpio. Pipeline end-to-end probado: `new` → `meas import`/`formula`/
   `random` → `plot`/`add-series` → `section` → `run` → **PDF compilado con Tectonic**. Carátula
   ITBA + Bode con defaults de buen gusto (teórica sólida, medida punteada, eje log) salen solos.
-- **Local-only por ahora.** git local inicializado, SIN remoto todavía. Cuando el MVP esté
-  redondo se crea el repo público en `unit-org` (decidido con Manu).
-- Es de **UNIT** (README con "by UNIT" al final, eventual repo `xtal` en `unit-org`).
-- **Falta (decidido dejar para el final):** instalador `curl|sh` + TUII, y todo lo de
-  circuitos/ngspice (Capa 1+). Plan completo en `~/.claude/plans/cozy-snuggling-blum.md`.
+- **Repo público en `github.com/mcorcos/xtal`.** (La idea original era `unit-org`; quedó en
+  la cuenta personal. El README sigue diciendo "by UNIT".)
+- **Distribución — HECHA (2026-08-14, "Tanda 1").** Ver `docs/RELEASING.md`:
+  - `.github/workflows/ci.yml` — fmt + clippy + tests (Linux y macOS) + smoke del binario.
+  - `.github/workflows/release.yml` — tag `vX.Y.Z` → 4 binarios (mac arm/intel, linux
+    x86/arm, runners nativos) → tarballs + `SHA256SUMS` → GitHub Release → fórmula de brew.
+  - `install.sh` en la raíz — `curl … | sh`, verifica checksum, instala en `~/.local/bin`.
+  - Tap de Homebrew: repo aparte **`mcorcos/homebrew-xtal`**, fórmula generada por
+    `packaging/homebrew/render-formula.sh`. Necesita el secret `HOMEBREW_TAP_TOKEN`.
+  - `xtal completions <shell>` y `xtal man` (crate `xtal-cli`, módulo `gen.rs`): los genera
+    el binario, y el workflow los mete en el tarball y en la fórmula.
+- **Falta:** el MCP server (`xtal mcp`, stdio, "Tanda 2"), el pulido de dependencias/watch
+  ("Tanda 3"), y todo lo de circuitos/ngspice de Capa 2+.
+  Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
