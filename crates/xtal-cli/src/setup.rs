@@ -184,10 +184,7 @@ fn farewell(theme: &str, format: DocFormat) {
 
 fn pick_theme(args: &SetupArgs, existing: &PartialConfig) -> Result<String> {
     let themes = xtal_render::embedded_theme_names();
-    let default_theme = existing
-        .theme
-        .clone()
-        .unwrap_or_else(|| "itba".to_string());
+    let default_theme = existing.theme.clone().unwrap_or_else(|| "itba".to_string());
 
     // Con --yes (o si hay un solo theme) no preguntamos.
     if args.yes || themes.len() <= 1 {
@@ -199,10 +196,7 @@ fn pick_theme(args: &SetupArgs, existing: &PartialConfig) -> Result<String> {
         return Ok(chosen);
     }
 
-    let default_idx = themes
-        .iter()
-        .position(|t| *t == default_theme)
-        .unwrap_or(0);
+    let default_idx = themes.iter().position(|t| *t == default_theme).unwrap_or(0);
     let idx = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Institución / theme")
         .items(&themes)
@@ -384,7 +378,10 @@ fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
         println!("        {}", style(format!("brew install {p}")).cyan());
     }
     if let Some(p) = pkgs.apt {
-        println!("        {}", style(format!("sudo apt-get install {p}")).cyan());
+        println!(
+            "        {}",
+            style(format!("sudo apt-get install {p}")).cyan()
+        );
     }
 }
 
@@ -429,7 +426,12 @@ fn install_cmd(mgr: PkgMgr, pkg: &str) -> (String, Vec<String>) {
         ),
         PkgMgr::Pacman => (
             "sudo".into(),
-            vec!["pacman".into(), "-S".into(), "--noconfirm".into(), pkg.into()],
+            vec![
+                "pacman".into(),
+                "-S".into(),
+                "--noconfirm".into(),
+                pkg.into(),
+            ],
         ),
     }
 }

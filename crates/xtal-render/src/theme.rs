@@ -67,11 +67,12 @@ impl Theme {
     }
 
     fn from_disk(name: &str, dir: &Path) -> Result<Theme> {
-        let manifest_text =
-            std::fs::read_to_string(dir.join("theme.toml")).map_err(|e| RenderError::ThemeInvalid {
+        let manifest_text = std::fs::read_to_string(dir.join("theme.toml")).map_err(|e| {
+            RenderError::ThemeInvalid {
                 name: name.to_string(),
                 reason: e.to_string(),
-            })?;
+            }
+        })?;
         let preamble = std::fs::read_to_string(dir.join("preamble.tex")).unwrap_or_default();
         Self::build(name, &manifest_text, preamble)
     }
@@ -102,7 +103,10 @@ impl Theme {
             name: name.to_string(),
             institution_name: manifest.institucion.nombre,
             institution_sigla: manifest.institucion.sigla,
-            primary_hex: manifest.colors.primary.unwrap_or_else(|| "333333".to_string()),
+            primary_hex: manifest
+                .colors
+                .primary
+                .unwrap_or_else(|| "333333".to_string()),
             preamble,
         })
     }

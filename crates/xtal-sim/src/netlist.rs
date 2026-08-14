@@ -15,8 +15,8 @@
 /// Palabras clave de análisis (cards `.`) que removemos del deck original, porque Xtal
 /// inyecta el análisis por su cuenta dentro del `.control`.
 const ANALYSIS_CARDS: &[&str] = &[
-    ".ac", ".tran", ".dc", ".op", ".tf", ".noise", ".disto", ".pz", ".sens", ".sp",
-    ".four", ".fourier",
+    ".ac", ".tran", ".dc", ".op", ".tf", ".noise", ".disto", ".pz", ".sens", ".sp", ".four",
+    ".fourier",
 ];
 
 /// ¿El primer token de la línea es una card de análisis?

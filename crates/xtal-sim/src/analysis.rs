@@ -182,10 +182,7 @@ impl Analysis {
     /// Unidad natural del eje X de la curva.
     pub fn x_unit(&self) -> &'static str {
         match self {
-            Analysis::Ac(_)
-            | Analysis::Noise(_)
-            | Analysis::Disto(_)
-            | Analysis::Sp(_) => "Hz",
+            Analysis::Ac(_) | Analysis::Noise(_) | Analysis::Disto(_) | Analysis::Sp(_) => "Hz",
             Analysis::Tran(_) => "s",
             Analysis::Dc(_) => "V",
             _ => "",

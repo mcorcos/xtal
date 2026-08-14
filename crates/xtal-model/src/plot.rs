@@ -193,12 +193,16 @@ impl Plot {
 
     /// Escala efectiva del eje X: la explícita o el default del tipo.
     pub fn effective_x_scale(&self) -> Scale {
-        self.axes.x_scale.unwrap_or_else(|| self.kind.default_x_scale())
+        self.axes
+            .x_scale
+            .unwrap_or_else(|| self.kind.default_x_scale())
     }
 
     /// Escala efectiva del eje Y: la explícita o el default del tipo.
     pub fn effective_y_scale(&self) -> Scale {
-        self.axes.y_scale.unwrap_or_else(|| self.kind.default_y_scale())
+        self.axes
+            .y_scale
+            .unwrap_or_else(|| self.kind.default_y_scale())
     }
 
     /// Grilla efectiva (default: mayor).

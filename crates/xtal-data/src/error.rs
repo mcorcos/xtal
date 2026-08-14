@@ -32,7 +32,9 @@ pub enum DataError {
     #[error("fórmula inválida: {0}")]
     Formula(String),
 
-    #[error("dominio inválido: para escala log, 'from' y 'to' deben ser > 0 (from={from}, to={to})")]
+    #[error(
+        "dominio inválido: para escala log, 'from' y 'to' deben ser > 0 (from={from}, to={to})"
+    )]
     LogDomain { from: f64, to: f64 },
 
     #[error("error de TOML en {path}: {source}")]
@@ -51,7 +53,9 @@ pub enum DataError {
     #[error("no encontré el circuito '{0}' (revisá `xtal circuit list`)")]
     CircuitNotFound(String),
 
-    #[error("no estás dentro de un proyecto Xtal (falta xtal.toml). Probá `xtal new` o `xtal init`)")]
+    #[error(
+        "no estás dentro de un proyecto Xtal (falta xtal.toml). Probá `xtal new` o `xtal init`)"
+    )]
     NoProject,
 }
 

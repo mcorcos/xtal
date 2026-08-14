@@ -77,8 +77,11 @@ impl RawFile {
         let enc = detect_enc(bytes);
 
         // Ubicamos el marcador que separa header de datos (`Binary:` o `Values:`).
-        let (marker, data_start) = find_marker(bytes, enc)
-            .ok_or_else(|| SimError::RawParse("no encontré 'Binary:' ni 'Values:' (¿es un rawfile de SPICE?)".into()))?;
+        let (marker, data_start) = find_marker(bytes, enc).ok_or_else(|| {
+            SimError::RawParse(
+                "no encontré 'Binary:' ni 'Values:' (¿es un rawfile de SPICE?)".into(),
+            )
+        })?;
         let header_text = decode_header(&bytes[..data_start], enc);
         let header = Header::parse(&header_text)?;
 
@@ -177,14 +180,14 @@ impl Header {
                 "plotname" => plotname = value.to_string(),
                 "flags" => complex = value.to_ascii_lowercase().contains("complex"),
                 "no. variables" => {
-                    n_vars = value
-                        .parse()
-                        .map_err(|_| SimError::RawParse(format!("'No. Variables' inválido: {value}")))?
+                    n_vars = value.parse().map_err(|_| {
+                        SimError::RawParse(format!("'No. Variables' inválido: {value}"))
+                    })?
                 }
                 "no. points" => {
-                    n_points = value
-                        .parse()
-                        .map_err(|_| SimError::RawParse(format!("'No. Points' inválido: {value}")))?
+                    n_points = value.parse().map_err(|_| {
+                        SimError::RawParse(format!("'No. Points' inválido: {value}"))
+                    })?
                 }
                 "variables" => var_section = Some(i),
                 _ => {}
@@ -312,7 +315,11 @@ fn decode_header(bytes: &[u8], enc: Enc) -> String {
         Enc::Utf8 => String::from_utf8_lossy(bytes).into_owned(),
         Enc::Utf16Le => {
             // Saltamos el BOM si está, juntamos pares LE en u16 y decodificamos.
-            let start = if bytes.starts_with(&[0xFF, 0xFE]) { 2 } else { 0 };
+            let start = if bytes.starts_with(&[0xFF, 0xFE]) {
+                2
+            } else {
+                0
+            };
             let units: Vec<u16> = bytes[start..]
                 .chunks_exact(2)
                 .map(|c| u16::from_le_bytes([c[0], c[1]]))

@@ -24,7 +24,7 @@ pub fn color_preamble() -> String {
     s.push_str("\\definecolor{xtalInput}{HTML}{C28800}\n"); // ámbar/dorado
     s.push_str("\\definecolor{xtalOutput}{HTML}{2E7D32}\n"); // verde bosque
     s.push_str("\\definecolor{xtalThird}{HTML}{1565C0}\n"); // azul
-    // Paleta extendida para gráficos con muchas curvas (>3, sin rol).
+                                                            // Paleta extendida para gráficos con muchas curvas (>3, sin rol).
     let palette = [
         "1565C0", "C28800", "2E7D32", "C62828", "6A1B9A", "00838F", "E65100", "455A64",
     ];
@@ -43,8 +43,8 @@ pub fn render_plot(
     measurements: &IndexMap<String, Measurement>,
     monochrome: bool,
 ) -> Result<String> {
-    let has_phase = plot.kind == PlotKind::Bode
-        && plot.series.iter().any(|s| s.panel == Panel::Phase);
+    let has_phase =
+        plot.kind == PlotKind::Bode && plot.series.iter().any(|s| s.panel == Panel::Phase);
     if has_phase {
         render_bode_with_phase(plot, measurements, monochrome)
     } else {
@@ -107,8 +107,14 @@ fn render_single_axis(
     let mut out = String::new();
     out.push_str("\\begin{tikzpicture}\n");
     out.push_str("\\begin{axis}[\n");
-    out.push_str(&format!("    xmode={},\n", pgf_mode(plot.effective_x_scale())));
-    out.push_str(&format!("    ymode={},\n", pgf_mode(plot.effective_y_scale())));
+    out.push_str(&format!(
+        "    xmode={},\n",
+        pgf_mode(plot.effective_x_scale())
+    ));
+    out.push_str(&format!(
+        "    ymode={},\n",
+        pgf_mode(plot.effective_y_scale())
+    ));
     out.push_str(&format!(
         "    xlabel={{{}}},\n",
         crate::escape::latex_escape(&xlabel)
@@ -147,7 +153,9 @@ fn render_single_axis(
 
     for (index, series) in plot.series.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, xfactor, yfactor, true);
+        render_series(
+            &mut out, series, meas, index, monochrome, xfactor, yfactor, true,
+        );
     }
 
     out.push_str("\\end{axis}\n");
@@ -162,13 +170,23 @@ fn render_bode_with_phase(
     measurements: &IndexMap<String, Measurement>,
     monochrome: bool,
 ) -> Result<String> {
-    let mag: Vec<&Series> = plot.series.iter().filter(|s| s.panel == Panel::Magnitude).collect();
-    let phase: Vec<&Series> = plot.series.iter().filter(|s| s.panel == Panel::Phase).collect();
+    let mag: Vec<&Series> = plot
+        .series
+        .iter()
+        .filter(|s| s.panel == Panel::Magnitude)
+        .collect();
+    let phase: Vec<&Series> = plot
+        .series
+        .iter()
+        .filter(|s| s.panel == Panel::Phase)
+        .collect();
 
     let mut out = String::new();
     out.push_str("\\begin{tikzpicture}\n");
     out.push_str("\\begin{groupplot}[\n");
-    out.push_str("    group style={group size=1 by 2, vertical sep=0.5cm, x descriptions at=edge bottom},\n");
+    out.push_str(
+        "    group style={group size=1 by 2, vertical sep=0.5cm, x descriptions at=edge bottom},\n",
+    );
     // Sin `scale only axis`: el ancho total entra en \linewidth y queda centrado.
     out.push_str("    width=\\linewidth,\n    height=4.6cm,\n");
     out.push_str("    xmode=log,\n");
@@ -422,10 +440,26 @@ fn auto_legend_pos(
 
     let mut best = ("north east", usize::MAX);
     for (name, right, top) in corners {
-        let x_lo = if right { xmax - w * LEGEND_BOX_FRAC } else { xmin };
-        let x_hi = if right { xmax } else { xmin + w * LEGEND_BOX_FRAC };
-        let y_lo = if top { ymax - h * LEGEND_BOX_FRAC } else { ymin };
-        let y_hi = if top { ymax } else { ymin + h * LEGEND_BOX_FRAC };
+        let x_lo = if right {
+            xmax - w * LEGEND_BOX_FRAC
+        } else {
+            xmin
+        };
+        let x_hi = if right {
+            xmax
+        } else {
+            xmin + w * LEGEND_BOX_FRAC
+        };
+        let y_lo = if top {
+            ymax - h * LEGEND_BOX_FRAC
+        } else {
+            ymin
+        };
+        let y_hi = if top {
+            ymax
+        } else {
+            ymin + h * LEGEND_BOX_FRAC
+        };
         let count = pts
             .iter()
             .filter(|(x, y)| *x >= x_lo && *x <= x_hi && *y >= y_lo && *y <= y_hi)
@@ -507,8 +541,7 @@ fn resolve_axis(
 /// No escala unidades que no llevan prefijo (dB, grados, %) ni unidades vacías.
 fn choose_si_prefix(max_abs: f64, unit: &str) -> (f64, String) {
     let u = unit.trim();
-    let non_scalable = u.is_empty()
-        || matches!(u, "dB" | "dBm" | "deg" | "°" | "%" | "rad");
+    let non_scalable = u.is_empty() || matches!(u, "dB" | "dBm" | "deg" | "°" | "%" | "rad");
     if non_scalable || !max_abs.is_finite() || max_abs == 0.0 {
         return (1.0, u.to_string());
     }
@@ -604,10 +637,7 @@ mod tests {
         let mut plot = Plot::new("resp", PlotKind::Bode);
         plot.series.push(Series::new("no_existe"));
         let err = render_plot(&plot, &sample_measurements(), false);
-        assert!(matches!(
-            err,
-            Err(RenderError::MissingMeasurement { .. })
-        ));
+        assert!(matches!(err, Err(RenderError::MissingMeasurement { .. })));
     }
 
     #[test]
@@ -740,7 +770,8 @@ mod tests {
     /// Pero si el usuario ya escribió la unidad, manda la suya y no se reescala nada.
     #[test]
     fn explicit_label_with_unit_is_respected_verbatim() {
-        let (label, factor) = resolve_axis(Some("Tensión [V]"), None, None, Some("V"), true, 1.2e-3);
+        let (label, factor) =
+            resolve_axis(Some("Tensión [V]"), None, None, Some("V"), true, 1.2e-3);
         assert_eq!(label, "Tensión [V]");
         assert!((factor - 1.0).abs() < 1e-12);
     }

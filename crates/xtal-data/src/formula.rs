@@ -93,9 +93,7 @@ impl FormulaSpec {
                 let log_from = self.from.ln();
                 let log_to = self.to.ln();
                 let step = (log_to - log_from) / (n as f64 - 1.0);
-                Ok((0..n)
-                    .map(|i| (log_from + step * i as f64).exp())
-                    .collect())
+                Ok((0..n).map(|i| (log_from + step * i as f64).exp()).collect())
             }
         }
     }
