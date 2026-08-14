@@ -8,7 +8,11 @@
 #                 Cada job produce `xtal-<version>-<target>.tar.gz` con el binario,
 #                 los completions, la man page y la documentación.
 #   3. `release`— junta todos los tarballs, calcula SHA256SUMS y crea la Release.
-#   4. `homebrew` — regenera Formula/xtal.rb con los hashes nuevos y la pushea al tap.
+#
+# El paquete de Homebrew NO se actualiza desde acá: el repo del tap
+# (mcorcos/homebrew-xtal) mira esta Release por su cuenta y regenera su fórmula. Así no
+# hace falta guardar un token con permiso de escritura sobre otro repo en los secrets de
+# este. Ver docs/RELEASING.md.
 #
 # Todo lo que el instalador `install.sh` espera encontrar (nombres de los assets y el
 # archivo SHA256SUMS) se define acá: si cambia un nombre, hay que cambiarlo en los dos lados.
@@ -28,9 +32,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Repo del tap de Homebrew (formato owner/repo). El nombre TIENE que empezar con
-  # `homebrew-` para que `brew install mcorcos/xtal/xtal` lo resuelva solo.
-  TAP_REPO: mcorcos/homebrew-xtal
 
 permissions:
   contents: write # necesario para crear la Release y subir los assets
@@ -146,8 +147,6 @@ jobs:
     needs: [check, build]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ needs.check.outputs.version }}
     steps:
       - name: Bajar todos los tarballs
         uses: actions/download-artifact@v4
@@ -170,54 +169,3 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/SHA256SUMS
-
-  # ---------------------------------------------------------------------------
-  # 4. Actualizar el tap de Homebrew
-  # ---------------------------------------------------------------------------
-  # Requiere el secret HOMEBREW_TAP_TOKEN (un PAT con permiso de escritura sobre el
-  # repo del tap). Si el secret no está cargado, el paso se saltea y el release
-  # igual queda publicado: brew simplemente sigue apuntando a la version anterior.
-  homebrew:
-    name: actualizar tap de Homebrew
-    needs: [check, release]
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    env:
-      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-      VERSION: ${{ needs.check.outputs.version }}
-    steps:
-      - name: Avisar si falta el token
-        if: env.TAP_TOKEN == ''
-        run: echo "::warning::Falta el secret HOMEBREW_TAP_TOKEN — no actualizo el tap."
-
-      - uses: actions/checkout@v4
-        if: env.TAP_TOKEN != ''
-
-      - name: Bajar los tarballs publicados
-        if: env.TAP_TOKEN != ''
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Renderizar la fórmula
-        if: env.TAP_TOKEN != ''
-        run: |
-          set -euo pipefail
-          bash packaging/homebrew/render-formula.sh "$VERSION" dist > /tmp/xtal.rb
-          cat /tmp/xtal.rb
-
-      - name: Pushear la fórmula al tap
-        if: env.TAP_TOKEN != ''
-        run: |
-          set -euo pipefail
-          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" /tmp/tap
-          mkdir -p /tmp/tap/Formula
-          cp /tmp/xtal.rb /tmp/tap/Formula/xtal.rb
-          cd /tmp/tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/xtal.rb
-          # Si el contenido no cambió, no hay nada que commitear (no es un error).
-          git diff --staged --quiet || git commit -m "xtal ${VERSION}"
-          git push

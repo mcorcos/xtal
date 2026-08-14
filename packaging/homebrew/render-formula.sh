@@ -1,25 +1,55 @@
 #!/usr/bin/env bash
 # Genera la fórmula de Homebrew de Xtal a stdout.
 #
-#   ./render-formula.sh <version> <dir-con-los-tarballs>
+#   ./render-formula.sh <version> <dir-con-los-tarballs>   # desde archivos locales
+#   ./render-formula.sh <version> --from-release           # desde la Release publicada
 #
 # La fórmula es "binaria": no compila nada en la máquina del usuario, solo baja el
 # tarball que corresponde a su plataforma desde la GitHub Release. Por eso necesita
-# el SHA256 de cada uno de los cuatro tarballs, que se calculan acá a partir de los
-# archivos que ya produjo el workflow de release.
+# el SHA256 de cada uno de los cuatro tarballs.
 #
-# Lo llama .github/workflows/release.yml, pero se puede correr a mano para revisar
-# cómo va a quedar la fórmula antes de publicarla.
+# Los dos modos existen porque hay dos caminos hasta el tap:
+#   - `<dir>`         — lo usa .github/workflows/release.yml, que ya tiene los tarballs
+#                       recién compilados en disco;
+#   - `--from-release`— lo usa el workflow del repo del tap, que se actualiza solo
+#                       leyendo el archivo SHA256SUMS de la Release ya publicada.
+#
+# Que los dos caminos usen ESTE script es a propósito: la plantilla de la fórmula vive
+# en un solo lugar y no puede desincronizarse entre uno y otro.
 set -euo pipefail
 
 VERSION="${1:?falta la version (ej. 0.1.0)}"
-DIST="${2:?falta el directorio con los tarballs}"
+SOURCE="${2:?falta el directorio con los tarballs, o --from-release}"
 REPO="mcorcos/xtal"
 
-# Devuelve el SHA256 del tarball de un target, o corta si el archivo no está.
+# En modo --from-release bajamos el SHA256SUMS una sola vez y sacamos los hashes de ahí.
+SUMS=""
+if [ "$SOURCE" = "--from-release" ]; then
+  SUMS="$(curl -fsSL "https://github.com/${REPO}/releases/download/v${VERSION}/SHA256SUMS")"
+  if [ -z "$SUMS" ]; then
+    echo "la Release v${VERSION} no publica SHA256SUMS" >&2
+    exit 1
+  fi
+fi
+
+# Devuelve el SHA256 del tarball de un target. Corta si no lo encuentra: una fórmula
+# con un hash vacío o inventado le rompe la instalación a todo el mundo.
 sha_for() {
   local target="$1"
-  local file="${DIST}/xtal-${VERSION}-${target}.tar.gz"
+  local name="xtal-${VERSION}-${target}.tar.gz"
+
+  if [ -n "$SUMS" ]; then
+    local hash
+    hash="$(printf '%s\n' "$SUMS" | grep " ${name}\$" | cut -d' ' -f1)"
+    if [ -z "$hash" ]; then
+      echo "SHA256SUMS de v${VERSION} no lista $name" >&2
+      exit 1
+    fi
+    printf '%s' "$hash"
+    return
+  fi
+
+  local file="${SOURCE}/${name}"
   if [ ! -f "$file" ]; then
     echo "no encuentro $file" >&2
     exit 1

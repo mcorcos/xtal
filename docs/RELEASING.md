@@ -28,7 +28,6 @@ es subir la version y pushear el tag.
 | `check` | Valida que `vX.Y.Z` coincida con la version del workspace |
 | `build` | Un tarball por plataforma (4 targets, runners nativos, sin cross-compilar) |
 | `release` | `SHA256SUMS` + la GitHub Release con todos los assets |
-| `homebrew` | `Formula/xtal.rb` regenerada y pusheada al tap |
 
 Cada tarball contiene el binario `xtal`, los completions de zsh/bash/fish, las man
 pages, el `README.md`, el `SKILL.md` y el `LICENSE`. Los completions y las man pages
@@ -49,24 +48,29 @@ ese target hay que cross-compilarlo (con `cross` o `cargo-zigbuild`) o sacarlo.
 
 ## El tap de Homebrew
 
-La fórmula vive en un repo aparte: **`mcorcos/homebrew-xtal`**. El nombre tiene que
-empezar con `homebrew-` para que `brew install mcorcos/xtal/xtal` lo resuelva solo.
+La fórmula vive en un repo aparte: **[`mcorcos/homebrew-xtal`](https://github.com/mcorcos/homebrew-xtal)**.
+El nombre tiene que empezar con `homebrew-` para que `brew install mcorcos/xtal/xtal` lo
+resuelva solo.
 
-Setup, una sola vez:
+**No hay nada que hacer al publicar.** El tap se actualiza a sí mismo: tiene un workflow
+que cada hora mira la última Release de este repo, se baja su `SHA256SUMS` y regenera
+`Formula/xtal.rb` con la plantilla de `packaging/homebrew/render-formula.sh` — o sea,
+con la de acá, bajada por HTTP. La plantilla está en un solo lugar.
 
-1. Crear el repo `homebrew-xtal` público, con un `README.md` cualquiera.
-2. Generar un Personal Access Token (fine-grained) con permiso **Contents: read/write**
-   sobre ese repo.
-3. Cargarlo en este repo como secret `HOMEBREW_TAP_TOKEN`
-   (Settings → Secrets and variables → Actions).
+Se hace así, y no pusheando la fórmula desde este repo, porque escribir en otro
+repositorio necesita un Personal Access Token guardado como secret. Un token con permiso
+de escritura viviendo en los secrets de un repo público es un riesgo evitable, y esto lo
+evita: el tap usa el `GITHUB_TOKEN` de su propio repo, que solo puede escribirse a sí
+mismo.
 
-Si el secret no está, el release igual se publica: el job del tap avisa con un warning
-y se saltea. `brew` sigue apuntando a la version anterior hasta que se cargue el token.
+El costo es que la fórmula puede tardar hasta una hora. Para que salga ya, se dispara el
+workflow a mano desde Actions en el repo del tap (o con `gh workflow run`).
 
-Para revisar cómo va a quedar la fórmula sin publicar nada:
+Para revisar cómo va a quedar la fórmula, en cualquiera de los dos modos:
 
 ```bash
-bash packaging/homebrew/render-formula.sh 0.1.0 dist/
+bash packaging/homebrew/render-formula.sh 0.1.0 dist/            # desde tarballs locales
+bash packaging/homebrew/render-formula.sh 0.1.0 --from-release   # desde la Release
 ```
 
 ## El instalador por curl
