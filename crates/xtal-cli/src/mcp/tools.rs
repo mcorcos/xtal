@@ -189,9 +189,10 @@ pub fn all() -> Vec<Tool> {
             title: "Verificar el entorno",
             description: "Verifica qué dependencias externas están instaladas: tectonic \
                           (motor LaTeX), pdflatex (fallback), ngspice (simulación) y LTspice. \
-                          Usala primero si un informe no compila o una simulación no corre.",
+                          Mirá `can_build`: si es false, xtal_build_report va a fallar y hay \
+                          que instalar un motor LaTeX antes de intentarlo.",
             schema: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-            handler: |s, _| s.exec(None, None, &["doctor".into()]),
+            handler: |s, _| s.exec(None, None, &["doctor".into(), "--json".into()]),
         },
         Tool {
             name: "xtal_list_projects",

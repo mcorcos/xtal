@@ -34,6 +34,8 @@ toml_edit = { workspace = true }
 indexmap = { workspace = true }
 # Rutas de config por plataforma (dónde guarda su config cada cliente MCP).
 directories = { workspace = true }
+# El proyecto de ejemplo va embebido en el binario (`xtal example`), como los themes.
+rust-embed = { workspace = true }
 # Instalador interactivo (`xtal setup`).
 dialoguer = { workspace = true }
 indicatif = { workspace = true }

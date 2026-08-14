@@ -88,7 +88,13 @@ xtal run --open
 - `xtal export [--output salida/main.tex] [--monochrome] [--format ..] [--theme ..]` — genera el `.tex` sin compilar.
 - `xtal run [--open] [--monochrome] [--pdflatex] [--format ..] [--theme ..]` — genera y compila a PDF.
 - `xtal config get|set <clave> [valor] [--global]` — claves: `theme`, `format`. `config list [--resolved]`.
-- `xtal doctor` — verifica tectonic/pdflatex/ngspice en el PATH.
+- `xtal doctor [--fix]` — verifica dependencias, config y proyecto actual. Con `--json`
+  devuelve `can_build`, que es lo que te conviene chequear antes de compilar. **No uses
+  `--fix`**: pregunta de forma interactiva y se va a colgar esperando una respuesta.
+- `xtal example [nombre] [--run]` — crea un proyecto de ejemplo completo (filtro RC con
+  las tres fuentes). Útil si el usuario quiere ver cómo se ve un proyecto armado.
+- `xtal watch` — recompila al vuelo. **No lo corras vos**: no termina nunca.
+- `xtal update [--check]` — avisa si hay version nueva.
 - `xtal completions <zsh|bash|fish|...> [--out DIR]` — script de autocompletado.
 - `xtal man [--out DIR]` — man page en roff. Los dos son para instalar la herramienta,
   no para el flujo de un informe: rara vez los vas a necesitar.

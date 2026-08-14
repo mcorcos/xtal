@@ -103,8 +103,19 @@ El núcleo es análisis de circuitos + consolidación de datos.
     proyectos a la vez sin levantar varios servers.
   - `xtal mcp install --client claude-code|claude-desktop|codex` escribe la config del
     cliente (con backup, preservando el resto del archivo y la ruta absoluta del binario).
-- **Falta:** el pulido ("Tanda 3": que `doctor` ofrezca instalar tectonic/ngspice, modo
-  watch, ejemplo de primer minuto), y todo lo de circuitos/ngspice de Capa 2+.
+- **Pulido de usabilidad — HECHO (2026-08-14, "Tanda 3").**
+  - `deps.rs` — detección e instalación de dependencias, **compartida** entre `xtal setup`
+    y `xtal doctor --fix` (antes vivía adentro de setup.rs). Nunca toca el sistema sin
+    confirmación; en modo no interactivo solo reporta.
+  - `xtal doctor [--fix]` — dependencias con su propósito, config, proyecto actual y un
+    resumen accionable. Con `--json` expone `can_build` (lo que mira el MCP).
+  - `xtal example [nombre] [--run|--open]` — materializa `examples/rc-lowpass`, **embebido
+    en el binario** con rust-embed (excluyendo `salida/`). Resuelve el primer minuto.
+  - `xtal watch` — recompila al cambiar algo. **Polling de mtime**, no inotify/FSEvents:
+    no justifica la dependencia. Ignora `salida/` (si no, se recompila a sí mismo en loop).
+  - `xtal update [--check]` — compara con la última Release (vía `curl`) y ofrece correr
+    `brew upgrade` o el instalador, según dónde viva el binario. No se reemplaza solo.
+- **Falta:** todo lo de circuitos/ngspice de Capa 2+, y el `.asc` de LTspice (ver backlog).
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
 ### Arquitectura (workspace, 6 crates)
@@ -119,7 +130,8 @@ El núcleo es análisis de circuitos + consolidación de datos.
 `xtal new|init` · `meas import|formula|random|list|show` · `plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `run [--open] [--monochrome]
-[--pdflatex]` · `config get|set|list [--global] [--resolved]` · `doctor` · `setup`.
+[--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
+`example` · `update` · `setup` · `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
 `xtal raw import <archivo.raw>` lee el resultado de una corrida hecha en **LTspice/ngspice**

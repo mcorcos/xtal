@@ -89,7 +89,13 @@ jobs:
           BIN=target/debug/xtal
           "$BIN" --version
           "$BIN" --help > /dev/null
-          "$BIN" doctor || true          # doctor sale 0 igual, pero por las dudas
+          "$BIN" doctor
+          "$BIN" --json doctor | grep -q '"can_build"'
+          # El ejemplo embebido: que se materialice y que sea un proyecto de verdad.
+          "$BIN" example ci-ejemplo > /dev/null
+          test -f ci-ejemplo/xtal.toml
+          "$BIN" --project ci-ejemplo export > /dev/null
+          rm -rf ci-ejemplo
           "$BIN" completions zsh > /dev/null
           "$BIN" completions bash > /dev/null
           "$BIN" completions fish > /dev/null

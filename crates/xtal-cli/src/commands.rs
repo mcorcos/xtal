@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use console::style;
 
 use xtal_compile::Engine;
 use xtal_config::{PartialConfig, ResolvedConfig};
@@ -977,29 +978,200 @@ fn parse_format(value: &str) -> Result<DocFormat> {
 // doctor
 // ---------------------------------------------------------------------------
 
-pub fn cmd_doctor() -> Result<()> {
-    println!("Xtal doctor — entorno:");
-    check(
-        "tectonic (motor LaTeX recomendado)",
-        xtal_compile::is_available("tectonic"),
+/// Una dependencia externa, con para qué sirve y qué pasa si falta.
+struct Dep {
+    bin: &'static str,
+    purpose: &'static str,
+    kind: crate::deps::DepKind,
+}
+
+/// Las dependencias que Xtal necesita del sistema, en orden de importancia.
+///
+/// `pdflatex` figura como opcional a propósito: es el fallback de Tectonic, así que
+/// solo lo necesitás si elegiste no usar Tectonic. Que falten los dos sí es un problema,
+/// y el resumen del final lo dice.
+fn dependencies() -> [Dep; 3] {
+    use crate::deps::DepKind;
+    [
+        Dep {
+            bin: "tectonic",
+            purpose: "compilar el informe a PDF (motor recomendado)",
+            kind: DepKind::Core,
+        },
+        Dep {
+            bin: "pdflatex",
+            purpose: "compilar con TeX Live, si preferís no usar Tectonic",
+            kind: DepKind::Optional,
+        },
+        Dep {
+            bin: "ngspice",
+            purpose: "simular circuitos (`xtal sim`)",
+            kind: DepKind::Optional,
+        },
+    ]
+}
+
+pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
+    let deps = dependencies();
+
+    if json {
+        return doctor_json(&deps);
+    }
+
+    println!();
+    println!(
+        "  {} {}",
+        style("Xtal").cyan().bold(),
+        style(env!("CARGO_PKG_VERSION")).dim()
     );
-    check(
-        "pdflatex (TeX Live, fallback)",
-        xtal_compile::is_available("pdflatex"),
+
+    // --- Dependencias ---
+    println!();
+    println!("  {}", style("Dependencias del sistema").bold());
+    for dep in &deps {
+        let ok = crate::deps::is_available(dep.bin);
+        println!(
+            "    {} {:<10} {}",
+            if ok {
+                style("✓").green().bold()
+            } else {
+                style("✗").red().bold()
+            },
+            dep.bin,
+            style(dep.purpose).dim()
+        );
+    }
+    // LTspice no es un binario del PATH (en macOS es una .app), así que se detecta aparte.
+    println!(
+        "    {} {:<10} {}",
+        if xtal_sim::ltspice::is_available() {
+            style("✓").green().bold()
+        } else {
+            style("·").dim()
+        },
+        "LTspice",
+        style("netlistar esquemáticos .asc (opcional)").dim()
     );
-    check(
-        "ngspice (simulación de circuitos)",
-        xtal_compile::is_available("ngspice"),
-    );
-    check(
-        "LTspice (netlistar .asc — opcional)",
-        xtal_sim::ltspice::is_available(),
-    );
+
+    // --- Config ---
+    println!();
+    println!("  {}", style("Configuración").bold());
+    match xtal_config::paths::config_dir() {
+        Some(dir) => {
+            let file = dir.join("config.toml");
+            report_path("config global", &file, file.is_file());
+            let themes = dir.join("themes");
+            report_path("themes", &themes, themes.is_dir());
+        }
+        None => println!(
+            "    {} no pude resolver el home del usuario",
+            style("✗").red()
+        ),
+    }
+
+    // --- Proyecto (solo si estamos parados adentro de uno) ---
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Ok(root) = store::find_project_root(&cwd) {
+            let meas = store::list_measurements(&root)
+                .map(|v| v.len())
+                .unwrap_or(0);
+            let plots = store::list_plots(&root).map(|v| v.len()).unwrap_or(0);
+            println!();
+            println!("  {}", style("Proyecto acá").bold());
+            println!("    {} {}", style("·").dim(), style(root.display()).cyan());
+            println!(
+                "    {} {meas} mediciones · {plots} gráficos",
+                style("·").dim()
+            );
+        }
+    }
+
+    // --- Resumen y arreglo ---
+    let faltantes: Vec<&Dep> = deps
+        .iter()
+        .filter(|d| !crate::deps::is_available(d.bin))
+        .collect();
+    let sin_latex =
+        !crate::deps::is_available("tectonic") && !crate::deps::is_available("pdflatex");
+
+    println!();
+    if faltantes.is_empty() {
+        println!("  {} Todo listo.", style("✓").green().bold());
+        println!();
+        return Ok(());
+    }
+
+    if sin_latex {
+        println!(
+            "  {} No hay motor LaTeX: `xtal run` no va a poder compilar el PDF.",
+            style("!").red().bold()
+        );
+    } else {
+        println!(
+            "  {} Falta lo opcional; el informe compila igual.",
+            style("·").yellow()
+        );
+    }
+
+    if !args.fix {
+        println!(
+            "    {} {}",
+            style("→").dim(),
+            style("corré `xtal doctor --fix` para instalarlo").cyan()
+        );
+        println!();
+        return Ok(());
+    }
+
+    // --fix: mismo camino que `xtal setup`, con confirmación por dependencia.
+    println!();
+    println!("  {}", style("Instalando lo que falta").bold());
+    for dep in faltantes {
+        let pkgs = match dep.bin {
+            "tectonic" => crate::deps::tectonic_pkgs(),
+            "pdflatex" => crate::deps::texlive_pkgs(),
+            _ => crate::deps::ngspice_pkgs(),
+        };
+        crate::deps::ensure_one(dep.bin, dep.kind, &pkgs, true)?;
+    }
+    println!();
     Ok(())
 }
 
-fn check(label: &str, ok: bool) {
-    println!("  [{}] {label}", if ok { "✓" } else { "✗" });
+/// La misma información en JSON, para que la parsee una IA o un script de CI.
+fn doctor_json(deps: &[Dep]) -> Result<()> {
+    let config_dir = xtal_config::paths::config_dir();
+    let value = serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "dependencies": deps.iter().map(|d| serde_json::json!({
+            "name": d.bin,
+            "available": crate::deps::is_available(d.bin),
+            "required": matches!(d.kind, crate::deps::DepKind::Core),
+            "purpose": d.purpose,
+        })).collect::<Vec<_>>(),
+        "ltspice": xtal_sim::ltspice::is_available(),
+        "config": {
+            "dir": config_dir.as_ref().map(|d| d.display().to_string()),
+            "file_exists": config_dir.as_ref().is_some_and(|d| d.join("config.toml").is_file()),
+        },
+        // El dato que de verdad importa: ¿puede compilar un informe?
+        "can_build": crate::deps::is_available("tectonic") || crate::deps::is_available("pdflatex"),
+    });
+    println!("{value}");
+    Ok(())
+}
+
+fn report_path(label: &str, path: &Path, exists: bool) {
+    println!(
+        "    {} {:<14} {}",
+        if exists {
+            style("✓").green().bold()
+        } else {
+            style("·").dim()
+        },
+        label,
+        style(path.display()).dim()
+    );
 }
 
 // ---------------------------------------------------------------------------

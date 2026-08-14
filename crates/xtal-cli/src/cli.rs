@@ -53,11 +53,17 @@ pub enum Command {
     Export(ExportArgs),
     /// Genera el .tex y compila a PDF.
     Run(RunArgs),
+    /// Recompila el PDF cada vez que cambia un archivo del proyecto.
+    Watch(WatchArgs),
     /// Configuración (cascada: global vs proyecto).
     #[command(subcommand)]
     Config(ConfigCmd),
-    /// Verifica el entorno (tectonic, pdflatex, ngspice).
-    Doctor,
+    /// Verifica el entorno: dependencias, config y proyecto actual.
+    Doctor(DoctorArgs),
+    /// Crea un proyecto de ejemplo, completo y listo para compilar.
+    Example(ExampleArgs),
+    /// Chequea si hay una version nueva y ofrece actualizar.
+    Update(UpdateArgs),
     /// Instalador interactivo: configura Xtal en esta máquina (config global,
     /// themes, motor LaTeX y warmup de Tectonic).
     Setup(SetupArgs),
@@ -423,6 +429,50 @@ pub struct SetupArgs {
     /// Re-escribe los themes en disco aunque ya existan (pisa ediciones del usuario).
     #[arg(long = "force-themes")]
     pub force_themes: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct WatchArgs {
+    /// Abre el PDF después de la primera compilación exitosa.
+    #[arg(long)]
+    pub open: bool,
+    /// Cada cuánto revisa si algo cambió, en milisegundos.
+    #[arg(long, default_value = "700")]
+    pub interval: u64,
+    #[arg(long)]
+    pub monochrome: bool,
+    #[arg(long)]
+    pub pdflatex: bool,
+    #[arg(long, value_enum)]
+    pub format: Option<FormatArg>,
+    #[arg(long)]
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct DoctorArgs {
+    /// Ofrece instalar las dependencias que falten, preguntando una por una.
+    #[arg(long)]
+    pub fix: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ExampleArgs {
+    /// Nombre de la carpeta a crear (default: `xtal-ejemplo`).
+    pub name: Option<String>,
+    /// Compila el PDF apenas termina de crear el proyecto.
+    #[arg(long)]
+    pub run: bool,
+    /// Abre el PDF al terminar (implica --run).
+    #[arg(long)]
+    pub open: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    /// Solo informa si hay version nueva; no ofrece ni ejecuta nada.
+    #[arg(long)]
+    pub check: bool,
 }
 
 // ===========================================================================
