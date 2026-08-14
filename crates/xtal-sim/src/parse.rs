@@ -79,17 +79,17 @@ mod tests {
     fn parses_real_two_columns() {
         let txt = "0.0 1.0\n1.0 2.0\n2.0 3.0\n";
         let col = parse_wrdata(txt).unwrap();
-        assert_eq!(
-            col,
-            Column::Real(vec![(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)])
-        );
+        assert_eq!(col, Column::Real(vec![(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]));
     }
 
     #[test]
     fn parses_complex_three_columns() {
         let txt = "1.0 0.5 -0.5\n10.0 0.1 -0.2\n";
         let col = parse_wrdata(txt).unwrap();
-        assert_eq!(col, Column::Complex(vec![(1.0, 0.5, -0.5), (10.0, 0.1, -0.2)]));
+        assert_eq!(
+            col,
+            Column::Complex(vec![(1.0, 0.5, -0.5), (10.0, 0.1, -0.2)])
+        );
     }
 
     #[test]

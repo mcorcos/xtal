@@ -64,9 +64,7 @@ struct MeasurementRecord {
 
 /// Busca la raíz del proyecto subiendo desde `start` hasta encontrar `xtal.toml`.
 pub fn find_project_root(start: &Path) -> Result<PathBuf> {
-    let mut dir = start
-        .canonicalize()
-        .unwrap_or_else(|_| start.to_path_buf());
+    let mut dir = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
     loop {
         if dir.join(PROJECT_FILE).is_file() {
             return Ok(dir);
@@ -140,8 +138,10 @@ pub fn load_measurement(root: &Path, id: &str) -> Result<Measurement> {
         return Err(DataError::MeasurementNotFound(id.to_string()));
     }
     let text = read(&toml_path)?;
-    let record: MeasurementRecord =
-        toml::from_str(&text).map_err(|e| DataError::Toml { path: toml_path, source: e })?;
+    let record: MeasurementRecord = toml::from_str(&text).map_err(|e| DataError::Toml {
+        path: toml_path,
+        source: e,
+    })?;
 
     let csv_path = dir.join(format!("{id}.csv"));
     let data = if csv_path.is_file() {

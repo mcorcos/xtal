@@ -19,6 +19,4 @@ pub mod style;
 pub use measurement::{Measurement, Source};
 pub use plot::{Axes, Grid, Panel, Plot, PlotKind, Scale, Series};
 pub use project::{DocFormat, DocumentMeta, Project, ProjectMeta, Section};
-pub use style::{
-    resolve_style, LineDash, Mark, MeasurementKind, ResolvedStyle, Role, PALETTE,
-};
+pub use style::{resolve_style, LineDash, Mark, MeasurementKind, ResolvedStyle, Role, PALETTE};

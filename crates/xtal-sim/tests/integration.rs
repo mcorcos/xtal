@@ -36,7 +36,9 @@ fn columns_close(a: &RawColumn, b: &RawColumn) -> bool {
         }
         (RawColumn::Complex(x), RawColumn::Complex(y)) => {
             x.len() == y.len()
-                && x.iter().zip(y).all(|((re1, im1), (re2, im2))| close(*re1, *re2) && close(*im1, *im2))
+                && x.iter()
+                    .zip(y)
+                    .all(|((re1, im1), (re2, im2))| close(*re1, *re2) && close(*im1, *im2))
         }
         _ => false,
     }
@@ -83,7 +85,8 @@ fn raw_ac_becomes_magnitude_and_phase() {
     // Un rawfile AC (complejo) → dos mediciones por vector: magnitud (dB) + fase (deg).
     let raw = RawFile::parse(&fixture("ac_bin.raw"), false).unwrap();
     let meta = CurveMeta::default();
-    let res = raw_to_measurements(&raw, "ac_bin.raw", &["v(out)".to_string()], "bode", &meta).unwrap();
+    let res =
+        raw_to_measurements(&raw, "ac_bin.raw", &["v(out)".to_string()], "bode", &meta).unwrap();
     assert_eq!(res.len(), 2);
     assert_eq!(res[0].measurement.id, "bode");
     assert_eq!(res[0].measurement.y_unit.as_deref(), Some("dB"));
@@ -157,8 +160,14 @@ fn ac_produces_magnitude_and_phase() {
     // A baja frecuencia la ganancia es ~0 dB; cerca de fc cae. Chequeo grueso:
     let first_db = res[0].measurement.data.first().unwrap().1;
     let last_db = res[0].measurement.data.last().unwrap().1;
-    assert!(first_db > -3.0, "baja frecuencia debería ser ~0 dB, fue {first_db}");
-    assert!(last_db < -20.0, "alta frecuencia debería estar atenuada, fue {last_db}");
+    assert!(
+        first_db > -3.0,
+        "baja frecuencia debería ser ~0 dB, fue {first_db}"
+    );
+    assert!(
+        last_db < -20.0,
+        "alta frecuencia debería estar atenuada, fue {last_db}"
+    );
 }
 
 #[test]

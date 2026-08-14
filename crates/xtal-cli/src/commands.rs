@@ -5,13 +5,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use xtal_config::{PartialConfig, ResolvedConfig};
 use xtal_compile::Engine;
+use xtal_config::{PartialConfig, ResolvedConfig};
 use xtal_data::csv_scope::{ColumnRef, CsvImportOptions};
 use xtal_data::{store, FormulaSpec, RandomSpec};
-use xtal_model::{
-    DocFormat, Measurement, Panel, Plot, PlotKind, Project, Section, Series, Source,
-};
+use xtal_model::{DocFormat, Measurement, Panel, Plot, PlotKind, Project, Section, Series, Source};
 use xtal_sim::analysis::{Ac, Dc, Disto, Four, Noise, Pz, Sp, Tf, Tran};
 use xtal_sim::{Analysis, CurveMeta, Quantity, RawFile};
 
@@ -192,7 +190,10 @@ fn meas_random(a: MeasRandomArgs, project: &Option<PathBuf>, json: bool) -> Resu
 
 fn report_measurement_saved(id: &str, points: usize, json: bool) {
     if json {
-        println!("{}", serde_json::json!({ "measurement": id, "points": points }));
+        println!(
+            "{}",
+            serde_json::json!({ "measurement": id, "points": points })
+        );
     } else {
         println!("✓ Medición '{id}' guardada ({points} puntos)");
     }
@@ -227,9 +228,15 @@ fn meas_show(id: &str, project: &Option<PathBuf>, json: bool) -> Result<()> {
         println!(
             "ejes:  X={}{} Y={}{}",
             m.x_label.as_deref().unwrap_or("-"),
-            m.x_unit.as_deref().map(|u| format!(" [{u}]")).unwrap_or_default(),
+            m.x_unit
+                .as_deref()
+                .map(|u| format!(" [{u}]"))
+                .unwrap_or_default(),
             m.y_label.as_deref().unwrap_or("-"),
-            m.y_unit.as_deref().map(|u| format!(" [{u}]")).unwrap_or_default(),
+            m.y_unit
+                .as_deref()
+                .map(|u| format!(" [{u}]"))
+                .unwrap_or_default(),
         );
         println!("puntos: {}", m.data.len());
     }
@@ -273,7 +280,10 @@ fn plot_add_series(a: PlotAddSeriesArgs, project: &Option<PathBuf>, json: bool) 
     let mut plot = store::load_plot(&root, &a.plot)?;
     // Validamos que la medición exista para fallar temprano y claro.
     if store::load_measurement(&root, &a.measurement).is_err() {
-        bail!("la medición '{}' no existe (revisá `xtal meas list`)", a.measurement);
+        bail!(
+            "la medición '{}' no existe (revisá `xtal meas list`)",
+            a.measurement
+        );
     }
     let mut series = Series::new(&a.measurement);
     series.role = a.role.into();
@@ -620,12 +630,7 @@ fn sim_workdir(root: &Path) -> Result<PathBuf> {
 }
 
 /// Corre un análisis de curva y guarda la(s) medición(es) resultante(s).
-fn run_curve_cmd(
-    root: &Path,
-    common: &CurveCommon,
-    analysis: Analysis,
-    json: bool,
-) -> Result<()> {
+fn run_curve_cmd(root: &Path, common: &CurveCommon, analysis: Analysis, json: bool) -> Result<()> {
     let circuit_text = store::load_circuit(root, &common.circuit)?;
     let workdir = sim_workdir(root)?;
     let meta = CurveMeta {
@@ -692,19 +697,25 @@ pub fn cmd_raw(cmd: RawCmd, project: &Option<PathBuf>, json: bool) -> Result<()>
 }
 
 fn raw_import(a: RawImportArgs, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    let bytes = std::fs::read(&a.file)
-        .with_context(|| format!("leyendo {}", a.file.display()))?;
+    let bytes = std::fs::read(&a.file).with_context(|| format!("leyendo {}", a.file.display()))?;
     let raw = RawFile::parse(&bytes, a.double)
         .with_context(|| format!("parseando {}", a.file.display()))?;
 
     // Modo inspección: no importa, solo muestra qué hay adentro del rawfile.
     if a.inspect {
         println!("plot:     {}", raw.plotname);
-        println!("tipo:     {}", if raw.complex { "complejo (AC)" } else { "real" });
+        println!(
+            "tipo:     {}",
+            if raw.complex { "complejo (AC)" } else { "real" }
+        );
         println!("puntos:   {}", raw.n_points);
         println!("variables:");
         for (i, v) in raw.vars.iter().enumerate() {
-            let tag = if i == raw.independent_index() { "  (eje X)" } else { "" };
+            let tag = if i == raw.independent_index() {
+                "  (eje X)"
+            } else {
+                ""
+            };
             println!("  {:<2} {:<16} [{}]{}", i, v.name, v.kind, tag);
         }
         return Ok(());
@@ -734,7 +745,8 @@ fn raw_import(a: RawImportArgs, project: &Option<PathBuf>, json: bool) -> Result
             .plot_kind
             .map(Into::into)
             .unwrap_or_else(|| infer_plot_kind(&raw));
-        let mut plot = store::load_plot(&root, plot_id).unwrap_or_else(|_| Plot::new(plot_id, kind));
+        let mut plot =
+            store::load_plot(&root, plot_id).unwrap_or_else(|_| Plot::new(plot_id, kind));
         for r in &results {
             let mut series = Series::new(&r.measurement.id);
             // Las series de fase van al panel de fase del Bode; el resto al de magnitud.
@@ -816,9 +828,12 @@ pub fn cmd_run(a: RunArgs, project: &Option<PathBuf>) -> Result<()> {
     let tex_path = outdir.join("main.tex");
     std::fs::write(&tex_path, &tex)?;
 
-    let engine = if a.pdflatex { Engine::Pdflatex } else { Engine::Tectonic };
-    let pdf = xtal_compile::compile(&tex_path, &outdir, engine)
-        .context("compilando el informe")?;
+    let engine = if a.pdflatex {
+        Engine::Pdflatex
+    } else {
+        Engine::Tectonic
+    };
+    let pdf = xtal_compile::compile(&tex_path, &outdir, engine).context("compilando el informe")?;
     println!("✓ PDF generado: {}", pdf.display());
     if a.open {
         open_file(&pdf);
@@ -840,7 +855,10 @@ fn render_project(root: &Path, overrides: &PartialConfig) -> Result<String> {
 fn load_theme(root: &Path) -> Result<xtal_render::Theme> {
     let project = store::load_project(root)?;
     let resolved = ctx::resolve_config(&project, &PartialConfig::default())?;
-    Ok(xtal_render::Theme::load(&resolved.theme, themes_dir().as_deref())?)
+    Ok(xtal_render::Theme::load(
+        &resolved.theme,
+        themes_dir().as_deref(),
+    )?)
 }
 
 fn themes_dir() -> Option<PathBuf> {
@@ -913,10 +931,15 @@ fn config_list(resolved: bool, project: &Option<PathBuf>) -> Result<()> {
         if let Some(p) = &path {
             let cfg = xtal_config::load_global(p)?;
             println!("[global] {}", p.display());
-            println!("  theme:  {}", cfg.theme.unwrap_or_else(|| "(default)".into()));
+            println!(
+                "  theme:  {}",
+                cfg.theme.unwrap_or_else(|| "(default)".into())
+            );
             println!(
                 "  format: {}",
-                cfg.format.map(|f| format!("{f:?}")).unwrap_or_else(|| "(default)".into())
+                cfg.format
+                    .map(|f| format!("{f:?}"))
+                    .unwrap_or_else(|| "(default)".into())
             );
         }
     }
@@ -956,10 +979,22 @@ fn parse_format(value: &str) -> Result<DocFormat> {
 
 pub fn cmd_doctor() -> Result<()> {
     println!("Xtal doctor — entorno:");
-    check("tectonic (motor LaTeX recomendado)", xtal_compile::is_available("tectonic"));
-    check("pdflatex (TeX Live, fallback)", xtal_compile::is_available("pdflatex"));
-    check("ngspice (simulación de circuitos)", xtal_compile::is_available("ngspice"));
-    check("LTspice (netlistar .asc — opcional)", xtal_sim::ltspice::is_available());
+    check(
+        "tectonic (motor LaTeX recomendado)",
+        xtal_compile::is_available("tectonic"),
+    );
+    check(
+        "pdflatex (TeX Live, fallback)",
+        xtal_compile::is_available("pdflatex"),
+    );
+    check(
+        "ngspice (simulación de circuitos)",
+        xtal_compile::is_available("ngspice"),
+    );
+    check(
+        "LTspice (netlistar .asc — opcional)",
+        xtal_sim::ltspice::is_available(),
+    );
     Ok(())
 }
 

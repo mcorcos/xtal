@@ -121,7 +121,13 @@ mod tests {
     use super::*;
     use xtal_model::{MeasurementKind, PlotKind, Role, Section, Series, Source};
 
-    fn fixture() -> (Project, ResolvedConfig, Theme, IndexMap<String, Measurement>, IndexMap<String, Plot>) {
+    fn fixture() -> (
+        Project,
+        ResolvedConfig,
+        Theme,
+        IndexMap<String, Measurement>,
+        IndexMap<String, Plot>,
+    ) {
         let mut project = Project::new("TP4 - Filtro pasabajos");
         project.project.authors = vec!["Manu Corcos".to_string()];
         project.document.course = Some("Electrónica I".to_string());

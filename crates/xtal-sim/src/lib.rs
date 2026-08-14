@@ -128,13 +128,18 @@ pub fn simulate_curve(
                     default_y_unit(analysis),
                     meta,
                 );
-                out.push(sim_measurement(m, circuit_id, analysis, vec, Quantity::Value));
+                out.push(sim_measurement(
+                    m,
+                    circuit_id,
+                    analysis,
+                    vec,
+                    Quantity::Value,
+                ));
             }
             Column::Complex(rows) => {
                 let (db, phase) = parse::to_db_phase(&rows);
                 // Magnitud en dB.
-                let m_db =
-                    build_measurement(&vid, db, analysis.x_unit(), Some("dB"), meta);
+                let m_db = build_measurement(&vid, db, analysis.x_unit(), Some("dB"), meta);
                 out.push(sim_measurement(
                     m_db,
                     circuit_id,
@@ -258,8 +263,20 @@ pub fn raw_to_measurements(
         match &raw.columns[vi] {
             RawColumn::Real(ys) => {
                 let data: Vec<(f64, f64)> = xs.iter().copied().zip(ys.iter().copied()).collect();
-                let m = build_measurement(&vid, data, x_unit.as_deref().unwrap_or(""), y_unit_default, &series_meta);
-                out.push(raw_measurement(m, file_ref, raw, &var.name, Quantity::Value));
+                let m = build_measurement(
+                    &vid,
+                    data,
+                    x_unit.as_deref().unwrap_or(""),
+                    y_unit_default,
+                    &series_meta,
+                );
+                out.push(raw_measurement(
+                    m,
+                    file_ref,
+                    raw,
+                    &var.name,
+                    Quantity::Value,
+                ));
             }
             RawColumn::Complex(pairs) => {
                 let rows: Vec<(f64, f64, f64)> = xs
@@ -270,8 +287,20 @@ pub fn raw_to_measurements(
                     .collect();
                 let (db, phase) = parse::to_db_phase(&rows);
                 // Magnitud en dB.
-                let m_db = build_measurement(&vid, db, x_unit.as_deref().unwrap_or(""), Some("dB"), &series_meta);
-                out.push(raw_measurement(m_db, file_ref, raw, &var.name, Quantity::Magnitude));
+                let m_db = build_measurement(
+                    &vid,
+                    db,
+                    x_unit.as_deref().unwrap_or(""),
+                    Some("dB"),
+                    &series_meta,
+                );
+                out.push(raw_measurement(
+                    m_db,
+                    file_ref,
+                    raw,
+                    &var.name,
+                    Quantity::Magnitude,
+                ));
                 // Fase en grados (id sufijado, sin heredar la unidad Y del usuario).
                 let phase_id = format!("{vid}_fase");
                 let phase_meta = CurveMeta {
@@ -279,8 +308,20 @@ pub fn raw_to_measurements(
                     y_unit: None,
                     ..meta.clone()
                 };
-                let m_ph = build_measurement(&phase_id, phase, x_unit.as_deref().unwrap_or(""), Some("deg"), &phase_meta);
-                out.push(raw_measurement(m_ph, file_ref, raw, &var.name, Quantity::Phase));
+                let m_ph = build_measurement(
+                    &phase_id,
+                    phase,
+                    x_unit.as_deref().unwrap_or(""),
+                    Some("deg"),
+                    &phase_meta,
+                );
+                out.push(raw_measurement(
+                    m_ph,
+                    file_ref,
+                    raw,
+                    &var.name,
+                    Quantity::Phase,
+                ));
             }
         }
     }

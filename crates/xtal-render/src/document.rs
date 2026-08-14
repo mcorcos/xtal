@@ -27,9 +27,9 @@ pub fn build_preamble(theme: &Theme) -> String {
     p.push_str("\\usepackage{pgfplots}\n");
     p.push_str("\\pgfplotsset{compat=1.18}\n");
     p.push_str("\\usepgfplotslibrary{groupplots}\n"); // Bode magnitud+fase apilados
-    // `hidelinks`: los links del índice y las referencias siguen siendo clickeables,
-    // pero sin el recuadro rojo que hyperref dibuja por default (se ve impreso y queda
-    // horrible en un informe).
+                                                      // `hidelinks`: los links del índice y las referencias siguen siendo clickeables,
+                                                      // pero sin el recuadro rojo que hyperref dibuja por default (se ve impreso y queda
+                                                      // horrible en un informe).
     p.push_str("\\usepackage[hidelinks]{hyperref}\n");
     p.push('\n');
     p.push_str("% Paleta de colores de Xtal (roles de señal + paleta extendida)\n");
@@ -81,7 +81,10 @@ pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> Strin
                 latex_escape(&title)
             ));
             if let Some(subtitle) = &doc.subtitle {
-                c.push_str(&format!("{{\\Large {}}}\\\\[0.2cm]\n", latex_escape(subtitle)));
+                c.push_str(&format!(
+                    "{{\\Large {}}}\\\\[0.2cm]\n",
+                    latex_escape(subtitle)
+                ));
             }
             c.push_str("\\rule{\\linewidth}{0.4pt}\\\\[2cm]\n");
             if !authors.is_empty() {
@@ -162,10 +165,7 @@ fn render_section(
         1 => "subsection",
         _ => "subsubsection",
     };
-    out.push_str(&format!(
-        "\\{cmd}{{{}}}\n",
-        latex_escape(&section.title)
-    ));
+    out.push_str(&format!("\\{cmd}{{{}}}\n", latex_escape(&section.title)));
 
     // Cuerpo: LaTeX que escribe el usuario, va crudo.
     if !section.body.trim().is_empty() {
@@ -222,7 +222,14 @@ pub fn render_used_plots(
     format: DocFormat,
 ) -> crate::error::Result<IndexMap<String, RenderedFigure>> {
     let mut used = IndexMap::new();
-    collect_used_plots(&project.sections, plots, measurements, monochrome, format, &mut used)?;
+    collect_used_plots(
+        &project.sections,
+        plots,
+        measurements,
+        monochrome,
+        format,
+        &mut used,
+    )?;
     Ok(used)
 }
 
@@ -249,12 +256,29 @@ fn collect_used_plots(
                 // Un Bode con fase es alto: en paper (2 columnas) lo mandamos a figure*
                 // (ancho completo) para que no quede apretado en una sola columna.
                 let has_phase = plot.kind == xtal_model::PlotKind::Bode
-                    && plot.series.iter().any(|s| s.panel == xtal_model::Panel::Phase);
+                    && plot
+                        .series
+                        .iter()
+                        .any(|s| s.panel == xtal_model::Panel::Phase);
                 let wide = matches!(format, DocFormat::Paper) && has_phase;
-                out.insert(fig_id.clone(), RenderedFigure { tikz, caption, wide });
+                out.insert(
+                    fig_id.clone(),
+                    RenderedFigure {
+                        tikz,
+                        caption,
+                        wide,
+                    },
+                );
             }
         }
-        collect_used_plots(&section.subsections, plots, measurements, monochrome, format, out)?;
+        collect_used_plots(
+            &section.subsections,
+            plots,
+            measurements,
+            monochrome,
+            format,
+            out,
+        )?;
     }
     Ok(())
 }

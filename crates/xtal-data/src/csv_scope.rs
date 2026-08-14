@@ -80,16 +80,19 @@ fn decode_to_utf8(path: &Path) -> Result<String> {
     // para Latin-1 sin BOM, los bytes >127 se manejan de forma tolerante.
     let mut decoder = DecodeReaderBytes::new(file);
     let mut out = String::new();
-    decoder.read_to_string(&mut out).map_err(|e| DataError::Io {
-        path: path.to_path_buf(),
-        source: e,
-    })?;
+    decoder
+        .read_to_string(&mut out)
+        .map_err(|e| DataError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
     Ok(out)
 }
 
 /// Auto-detecta el delimitador contando candidatos en la primera línea con datos.
 fn sniff_delimiter(line: &str) -> u8 {
-    let candidates = [b',', b';', b'\t'];
+    // Byte string en vez de array de bytes: es lo que pide clippy (byte_char_slices).
+    let candidates = *b",;\t";
     let mut best = b',';
     let mut best_count = 0usize;
     for &c in &candidates {
@@ -158,8 +161,14 @@ fn read_records(text: &str, delimiter: u8) -> Result<Vec<Vec<String>>> {
 pub fn inspect(path: &Path, opts: &CsvImportOptions, max_rows: usize) -> Result<CsvInspection> {
     let text = decode_to_utf8(path)?;
     let lines = lines_after_skip(&text, opts.skip_rows);
-    let first_data_line = lines.iter().find(|l| !l.trim().is_empty()).copied().unwrap_or("");
-    let delimiter = opts.delimiter.unwrap_or_else(|| sniff_delimiter(first_data_line));
+    let first_data_line = lines
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .copied()
+        .unwrap_or("");
+    let delimiter = opts
+        .delimiter
+        .unwrap_or_else(|| sniff_delimiter(first_data_line));
 
     let joined = lines.join("\n");
     let records = read_records(&joined, delimiter)?;
@@ -185,8 +194,14 @@ pub fn inspect(path: &Path, opts: &CsvImportOptions, max_rows: usize) -> Result<
 pub fn read_csv_xy(path: &Path, opts: &CsvImportOptions) -> Result<Vec<(f64, f64)>> {
     let text = decode_to_utf8(path)?;
     let lines = lines_after_skip(&text, opts.skip_rows);
-    let first_data_line = lines.iter().find(|l| !l.trim().is_empty()).copied().unwrap_or("");
-    let delimiter = opts.delimiter.unwrap_or_else(|| sniff_delimiter(first_data_line));
+    let first_data_line = lines
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .copied()
+        .unwrap_or("");
+    let delimiter = opts
+        .delimiter
+        .unwrap_or_else(|| sniff_delimiter(first_data_line));
 
     let joined = lines.join("\n");
     let mut records = read_records(&joined, delimiter)?;
@@ -195,8 +210,8 @@ pub fn read_csv_xy(path: &Path, opts: &CsvImportOptions) -> Result<Vec<(f64, f64
     }
 
     // Si las columnas se piden por nombre, la primera fila ES el header.
-    let needs_header = matches!(opts.x_col, ColumnRef::Name(_))
-        || matches!(opts.y_col, ColumnRef::Name(_));
+    let needs_header =
+        matches!(opts.x_col, ColumnRef::Name(_)) || matches!(opts.y_col, ColumnRef::Name(_));
 
     let header: Option<Vec<String>> = if needs_header {
         Some(records.remove(0))
