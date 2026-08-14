@@ -169,8 +169,11 @@ El núcleo es análisis de circuitos + consolidación de datos.
     los clientes detectados (pregunta en interactivo; en `--yes` lo hace). `--no-ai` saltea.
   - `install.sh` corre `xtal setup --yes` al final: después de instalar no queda ningún
     paso manual.
-- **Falta:** todo lo de circuitos/ngspice de Capa 2+, y el `.asc` de LTspice (ver backlog).
-  Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
+- **Qué falta → `docs/PENDIENTES.md`.** Ahí está todo: lo que preocupa (el CI nunca
+  compila un PDF, nadie más que Manu lo usó, la entrevista de `plan` sin probar), lo
+  acotado (doctor que reporte la integración con IA, desinstalador, segundo theme), el
+  backlog de producto, las decisiones ya tomadas para no re-discutirlas, y las trampas
+  conocidas. Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
