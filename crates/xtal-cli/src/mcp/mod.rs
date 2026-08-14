@@ -69,6 +69,18 @@ Flujo típico: xtal_status → planificar los gráficos → cargar las medicione
 agregarlas a su gráfico → escribir las secciones → xtal_build_report. Volvé a llamar a \
 xtal_status después de cada paso.";
 
+/// Registra el server MCP en un cliente, sin pasar por la línea de comandos.
+///
+/// Lo usa `xtal setup` para dejar todo enchufado de una. Es el mismo camino que
+/// `xtal mcp install`: mismos backups, misma ruta estable del binario.
+pub(crate) fn register_client(client: crate::cli::McpClientArg) -> Result<()> {
+    install::cmd_install(crate::cli::McpInstallArgs {
+        client,
+        name: None,
+        print: false,
+    })
+}
+
 pub fn cmd_mcp(args: McpArgs) -> Result<()> {
     match args.cmd {
         Some(McpCmd::Install(a)) => install::cmd_install(a),

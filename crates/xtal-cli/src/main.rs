@@ -4,6 +4,7 @@
 //! se imprimen de forma legible (con su cadena de contexto) y salen con código 1, en
 //! vez de hacer panic: importante porque el cliente principal es Claude orquestando.
 
+mod ai;
 mod cli;
 mod commands;
 mod convert;
@@ -36,6 +37,17 @@ fn main() {
 fn run(cli: Cli) -> anyhow::Result<()> {
     let project = cli.project;
     let json = cli.json;
+
+    // Configuración de la primera corrida. Va acá y no en un post-install porque
+    // Homebrew no puede escribir en el home del usuario: si esto no existiera, instalar
+    // por brew dejaría a Xtal sin config y a Claude sin enterarse de que existe.
+    //
+    // En modo MCP se saltea entero: ahí stdout es el canal del protocolo y una línea
+    // impresa de más corta la sesión. Con `--json`, se hace pero en silencio.
+    if !matches!(cli.command, Command::Mcp(_)) {
+        ai::ensure_first_run(json);
+    }
+
     match cli.command {
         Command::New(a) => commands::cmd_new(a, json),
         Command::Init(a) => commands::cmd_init(a, json),

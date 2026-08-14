@@ -434,6 +434,9 @@ pub struct SetupArgs {
     /// Re-escribe los themes en disco aunque ya existan (pisa ediciones del usuario).
     #[arg(long = "force-themes")]
     pub force_themes: bool,
+    /// No toca la config de los clientes de IA (no instala el skill ni registra el MCP).
+    #[arg(long = "no-ai")]
+    pub no_ai: bool,
 }
 
 // ===========================================================================

@@ -22,6 +22,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use xtal_config::PartialConfig;
 use xtal_model::DocFormat;
 
+use crate::ai;
 use crate::cli::SetupArgs;
 use crate::deps;
 
@@ -109,6 +110,9 @@ pub fn cmd_setup(args: SetupArgs) -> Result<()> {
 
     // --- Dependencias del sistema ---
     ensure_dependencies(&args, engine)?;
+
+    // --- Integración con los clientes de IA ---
+    ai_integration(&args)?;
 
     // --- Warmup de Tectonic ---
     if engine == LatexEngine::Tectonic {
@@ -291,6 +295,70 @@ fn ensure_dependencies(args: &SetupArgs, engine: LatexEngine) -> Result<()> {
         &deps::ngspice_pkgs(),
         interactive,
     )?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Integración con los clientes de IA
+// ---------------------------------------------------------------------------
+
+/// Deja Xtal enchufado a los clientes de IA que haya en la máquina.
+///
+/// Son dos cosas distintas:
+///   - el **skill** de Claude Code (`~/.claude/skills/xtal/`), que es un archivo nuestro
+///     en el home del usuario. Se instala siempre, sin preguntar: es lo que hace que
+///     Claude sepa que Xtal existe sin que nadie se lo cuente.
+///   - el **server MCP**, que se registra en la config de OTRO programa. Eso sí se
+///     pregunta en modo interactivo, porque estamos editando algo que no es nuestro.
+///
+/// En `--yes` se registra igual: ese modo es "instalá y dejámelo listo", y es el que
+/// corre `install.sh`. Con `--no-ai` no se toca nada de esto.
+fn ai_integration(args: &SetupArgs) -> Result<()> {
+    if args.no_ai {
+        return Ok(());
+    }
+
+    println!();
+    println!("  {}", style("Clientes de IA:").bold());
+
+    match ai::install_skill() {
+        Ok(Some(path)) => {
+            println!(
+                "    {} skill de Claude Code → {}",
+                style("✓").green().bold(),
+                style(path.display()).cyan()
+            );
+            println!(
+                "      {}",
+                style("Claude ya sabe que Xtal existe y cómo usarlo.").dim()
+            );
+        }
+        Ok(None) => println!(
+            "    {} no encontré Claude Code; salteo el skill.",
+            style("·").dim()
+        ),
+        Err(e) => println!("    {} no pude escribir el skill: {e}", style("!").yellow()),
+    }
+
+    let clientes = ai::detect_clients();
+    if clientes.is_empty() {
+        return Ok(());
+    }
+
+    for cliente in clientes {
+        let pregunta = format!("¿Registrar el server MCP en {}?", cliente.label);
+        // En modo silencioso no hay a quién preguntarle: se hace.
+        if !args.yes && !deps::confirm(&pregunta, true)? {
+            continue;
+        }
+        if let Err(e) = ai::register(cliente.arg) {
+            println!(
+                "    {} no pude registrarlo en {}: {e}",
+                style("!").yellow(),
+                cliente.label
+            );
+        }
+    }
     Ok(())
 }
 

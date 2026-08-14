@@ -268,8 +268,22 @@ fi
 command -v tectonic >/dev/null 2>&1 || warn "falta tectonic (motor LaTeX). \`xtal setup\` te lo ofrece instalar."
 command -v ngspice  >/dev/null 2>&1 || warn "falta ngspice (simulación). Es opcional."
 
-say "${BOLD}Listo.${RESET} Próximo paso:"
+# ---------------------------------------------------------------------------
+# 7. dejarlo configurado y enchufado, sin que el usuario tenga que saber nada
+# ---------------------------------------------------------------------------
+# `xtal setup --yes` toma todos los defaults sin preguntar (no puede preguntar: este
+# script se corre por una tubería, no hay terminal del otro lado). Escribe la config
+# global, los themes, el skill de Claude Code y registra el server MCP en los clientes
+# que encuentre. Es lo que hace que después de instalar no haya ningún paso manual.
 say ""
-say "  xtal setup            ${DIM}# configura theme, formato y precalienta LaTeX${RESET}"
-say "  xtal new \"Mi TP\"      ${DIM}# crea tu primer proyecto${RESET}"
+say "  ${DIM}Configurando…${RESET}"
+"${INSTALL_DIR}/xtal" setup --yes 2>&1 | sed 's/^/  /' || warn "el setup automático falló; corré \`xtal setup\` a mano."
+
+say ""
+say "${BOLD}Listo.${RESET} Ya está todo configurado. Empezá por:"
+say ""
+say "  xtal example --open   ${DIM}# un informe de ejemplo, compilado y abierto${RESET}"
+say "  xtal new \"Mi TP\"      ${DIM}# tu primer proyecto${RESET}"
+say ""
+say "  ${DIM}Si usás Claude Code, ya sabe usar Xtal: pedile el informe y listo.${RESET}"
 say ""

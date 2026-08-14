@@ -75,11 +75,21 @@ cargo build --release
 # el binario queda en ./target/release/xtal
 ```
 
-Y en cualquiera de los tres casos, el instalador interactivo (config global, themes,
-motor LaTeX y warmup de Tectonic):
+### No hay paso siguiente
+
+Xtal **se configura solo**. El script corre el instalador al terminar; con Homebrew, se
+configura en la primera corrida de cualquier comando. Eso deja la config global, los
+themes, y —si tenés Claude Code— un skill en `~/.claude/skills/xtal/`.
+
+Ese skill es la parte que importa: **Claude se entera solo de que Xtal existe**. No hay
+que explicarle nada ni acordarse de ningún comando. Le decís "tengo que armar el TP de
+electrónica, tengo el CSV del osciloscopio" y ya sabe por dónde empezar.
+
+Si querés elegir theme y formato a mano, o enchufarlo a Claude Desktop y Codex:
 
 ```bash
-xtal setup
+xtal setup           # pregunta y registra el MCP en los clientes que encuentre
+xtal setup --no-ai   # solo lo de Xtal, sin tocar la config de otros programas
 ```
 
 ### Usarlo desde un cliente de IA sin terminal

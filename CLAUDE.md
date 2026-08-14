@@ -153,6 +153,22 @@ El núcleo es análisis de circuitos + consolidación de datos.
     con `include_str!`). Los escribe `xtal new`/`init`/`example`, nunca pisa uno existente.
     Es lo que hace que abrir la carpeta con una IA funcione sin explicarle nada.
   - MCP: tools `xtal_status` y `xtal_plan_add`; las instructions ahora arrancan por status.
+- **Que se instale solo — HECHO (2026-08-14, "Tanda 5"), pedido de Manu.** El hueco era:
+  instalás y te queda un comando, pero Claude no se entera de que existe, y para usarlo
+  tenés que saber de antemano que hay que correr `xtal new`, `xtal plan`, etc.
+  - `crates/xtal-cli/src/ai.rs` — deja un **skill en `~/.claude/skills/xtal/SKILL.md`**
+    (template `templates/skill.md`, con frontmatter `name`/`description`). Claude Code lo
+    descubre solo. **Ese es el eslabón que faltaba**; la `description` lista los
+    disparadores reales (TP, Bode, osciloscopio, .raw, .cir), no solo el nombre.
+  - `ai::ensure_first_run()` corre desde `main.rs` **antes de cada comando**: si no hay
+    config global, la escribe junto con los themes y el skill. Existe porque Homebrew no
+    puede escribir en el home del usuario en el post-install.
+    - **Se saltea entero en modo MCP** (stdout es el protocolo) y no imprime con `--json`.
+      Hay tests que lo fijan.
+  - `xtal setup` suma el paso "Clientes de IA": instala el skill y **registra el MCP** en
+    los clientes detectados (pregunta en interactivo; en `--yes` lo hace). `--no-ai` saltea.
+  - `install.sh` corre `xtal setup --yes` al final: después de instalar no queda ningún
+    paso manual.
 - **Falta:** todo lo de circuitos/ngspice de Capa 2+, y el `.asc` de LTspice (ver backlog).
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
