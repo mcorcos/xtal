@@ -4,10 +4,12 @@
 # Se dispara al pushear un tag `vX.Y.Z`. El flujo completo es:
 #
 #   1. `check`  — el tag y la version de Cargo.toml tienen que coincidir.
-#   2. `build`  — matriz de 4 targets, cada uno en su runner nativo (sin cross-compilar).
-#                 Cada job produce `xtal-<version>-<target>.tar.gz` con el binario,
-#                 los completions, la man page y la documentación.
-#   3. `release`— junta todos los tarballs, calcula SHA256SUMS y crea la Release.
+#   2. `assets` — genera los completions y las man pages UNA vez. No dependen de la
+#                 plataforma, y generarlos acá evita tener que ejecutar un binario
+#                 cross-compilado (ver el job `build`).
+#   3. `build`  — matriz de 4 targets. Cada job produce
+#                 `xtal-<version>-<target>.tar.gz` con el binario, los assets y la doc.
+#   4. `release`— junta todos los tarballs, calcula SHA256SUMS y crea la Release.
 #
 # El paquete de Homebrew NO se actualiza desde acá: el repo del tap
 # (mcorcos/homebrew-xtal) mira esta Release por su cuenta y regenera su fórmula. Así no
@@ -66,11 +68,49 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # 2. Compilar y empaquetar, un job por plataforma
+  # 2. Completions y man pages, una sola vez
+  # ---------------------------------------------------------------------------
+  # Los genera el binario a partir de su propia definición de comandos, así que son
+  # idénticos en las cuatro plataformas. Hacerlos acá, en un build nativo, evita que
+  # los jobs de `build` tengan que EJECUTAR el binario que acaban de compilar: el de
+  # Mac Intel se cross-compila desde un runner ARM y no se puede correr ahí.
+  assets:
+    name: completions + man page
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      - name: Generar
+        run: |
+          set -euo pipefail
+          # Build de debug a propósito: es más rápido y el output es el mismo.
+          cargo build --bin xtal
+          mkdir -p assets/completions assets/man
+          target/debug/xtal completions zsh  --out assets/completions
+          target/debug/xtal completions bash --out assets/completions
+          target/debug/xtal completions fish --out assets/completions
+          target/debug/xtal man --out assets/man
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-assets
+          path: assets
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3. Compilar y empaquetar, un job por plataforma
   # ---------------------------------------------------------------------------
   build:
     name: build ${{ matrix.target }}
-    needs: check
+    needs: [check, assets]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -79,9 +119,12 @@ jobs:
           # Macs con Apple Silicon (M1 en adelante) — el caso principal de Manu.
           - target: aarch64-apple-darwin
             os: macos-14
-          # Macs Intel.
+          # Macs Intel. Se CROSS-COMPILA desde el runner ARM: los runners `macos-13`
+          # fueron retirados por GitHub y un job que los pida queda encolado para
+          # siempre. El clang de Apple compila x86_64 desde arm64 sin configurar nada,
+          # así que alcanza con pedirle el target a rustup.
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-14
           # Linux x86_64. Runner viejo a propósito: linkea contra una glibc vieja,
           # así el binario anda también en distros no tan nuevas.
           - target: x86_64-unknown-linux-gnu
@@ -105,6 +148,12 @@ jobs:
       - name: Compilar en modo release
         run: cargo build --release --bin xtal --target ${{ matrix.target }}
 
+      - name: Bajar los completions y la man page
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-assets
+          path: assets
+
       - name: Armar el tarball
         id: pack
         shell: bash
@@ -117,16 +166,12 @@ jobs:
 
           # El tarball se descomprime en una carpeta con su propio nombre (nunca
           # desparrama archivos en el cwd del usuario).
-          mkdir -p "dist/${NAME}/completions" "dist/${NAME}/man"
+          mkdir -p "dist/${NAME}"
           cp "$BIN" "dist/${NAME}/xtal"
           cp README.md LICENSE SKILL.md "dist/${NAME}/"
-
-          # Los completions y la man page los genera el binario recien compilado:
-          # imposible que queden desfasados de los flags reales.
-          "$BIN" completions zsh  --out "dist/${NAME}/completions"
-          "$BIN" completions bash --out "dist/${NAME}/completions"
-          "$BIN" completions fish --out "dist/${NAME}/completions"
-          "$BIN" man --out "dist/${NAME}/man"
+          # Los completions y la man page vienen del job `assets`, generados por el
+          # binario a partir de la misma definición de comandos que los flags reales.
+          cp -R assets/completions assets/man "dist/${NAME}/"
 
           tar -czf "dist/${NAME}.tar.gz" -C dist "${NAME}"
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
@@ -140,7 +185,7 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # 3. Publicar la Release
+  # 4. Publicar la Release
   # ---------------------------------------------------------------------------
   release:
     name: publicar release
@@ -151,6 +196,8 @@ jobs:
       - name: Bajar todos los tarballs
         uses: actions/download-artifact@v4
         with:
+          # Solo los tarballs: `docs-assets` ya viaja adentro de cada uno.
+          pattern: xtal-*
           path: dist
           merge-multiple: true
 

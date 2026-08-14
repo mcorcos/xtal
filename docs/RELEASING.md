@@ -39,9 +39,19 @@ pueden quedar desfasados de los flags reales.
 | Target | Runner | Para quién |
 |---|---|---|
 | `aarch64-apple-darwin` | `macos-14` | Macs con Apple Silicon |
-| `x86_64-apple-darwin` | `macos-13` | Macs Intel |
+| `x86_64-apple-darwin` | `macos-14` (cross) | Macs Intel |
 | `x86_64-unknown-linux-gnu` | `ubuntu-22.04` | Linux x86 (glibc vieja a propósito) |
 | `aarch64-unknown-linux-gnu` | `ubuntu-22.04-arm` | Linux ARM |
+
+El binario de Mac Intel se **cross-compila** desde el runner ARM: GitHub retiró los
+runners `macos-13`, y un job que los pida se queda encolado para siempre (nos pasó en el
+primer intento de publicar la 0.1.0). El clang de Apple compila x86_64 desde arm64 sin
+configurar nada; alcanza con pedirle el target a rustup.
+
+Ese cross-compilado es la razón de que los completions y las man pages se generen en un
+job aparte (`assets`) y no adentro de cada build: el job de Mac Intel no puede *ejecutar*
+el binario que acaba de compilar. Como no dependen de la plataforma, generarlos una sola
+vez es además más rápido.
 
 Los runners ARM de Linux son gratis en repos públicos. Si el repo pasara a privado,
 ese target hay que cross-compilarlo (con `cross` o `cargo-zigbuild`) o sacarlo.
