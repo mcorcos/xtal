@@ -22,9 +22,10 @@ use serde_json::{json, Value};
 use crate::cli::{McpClientArg, McpInstallArgs};
 
 pub fn cmd_install(args: McpInstallArgs) -> Result<()> {
-    // Ruta absoluta y canónica del binario en ejecución: es lo que va a la config.
+    // Ruta absoluta del binario en ejecución: es lo que va a la config del cliente.
     let exe = std::env::current_exe().context("no pude resolver la ruta del binario xtal")?;
     let exe = exe.canonicalize().unwrap_or(exe);
+    let exe = stable_path(&exe);
     let exe = exe.display().to_string();
     let name = args.name.clone().unwrap_or_else(|| "xtal".to_string());
 
@@ -206,6 +207,37 @@ fn server_entry(exe: &str) -> Value {
     json!({ "command": exe, "args": ["mcp"] })
 }
 
+/// Devuelve una ruta al binario que siga siendo válida después de actualizarlo.
+///
+/// El problema: `current_exe()` resuelve los symlinks. En una instalación por Homebrew
+/// eso devuelve `/opt/homebrew/Cellar/xtal/0.1.0/bin/xtal` — con la version adentro. Esa
+/// carpeta **desaparece** en el próximo `brew upgrade`, y el cliente queda apuntando a
+/// un archivo que no existe: el MCP deja de levantar sin decir por qué.
+///
+/// La solución es escribir el symlink estable que Homebrew mantiene en su prefijo
+/// (`/opt/homebrew/bin/xtal`), que siempre apunta a la version instalada. Para el resto
+/// de las instalaciones (el script, `cargo build`) la ruta ya es estable y no se toca.
+fn stable_path(exe: &Path) -> PathBuf {
+    let mut prefix = PathBuf::new();
+    let mut componentes = exe.components();
+
+    // Todo lo que está antes de `Cellar` es el prefijo de Homebrew.
+    for componente in componentes.by_ref() {
+        if componente.as_os_str() == "Cellar" {
+            let candidato = prefix.join("bin").join(exe.file_name().unwrap_or_default());
+            // Solo si el symlink existe de verdad: si alguien copió el árbol del Cellar
+            // a mano, es mejor la ruta original que una que no apunta a nada.
+            return if candidato.is_file() {
+                candidato
+            } else {
+                exe.to_path_buf()
+            };
+        }
+        prefix.push(componente);
+    }
+    exe.to_path_buf()
+}
+
 /// Copia el archivo a `<archivo>.bak` antes de tocarlo. Si no existe, no hay nada
 /// que respaldar y seguimos.
 fn backup(path: &Path) -> Result<()> {
@@ -247,4 +279,50 @@ fn which(program: &str) -> Option<PathBuf> {
         let candidate = dir.join(program);
         candidate.is_file().then_some(candidate)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn una_ruta_normal_no_se_toca() {
+        let p = PathBuf::from("/Users/alguien/.local/bin/xtal");
+        assert_eq!(stable_path(&p), p);
+    }
+
+    #[test]
+    fn una_ruta_del_cellar_se_reescribe_al_symlink_estable() {
+        // Armamos un Homebrew de mentira en un tempdir: el symlink tiene que existir
+        // para que valga la pena reescribir la ruta.
+        let prefix = std::env::temp_dir().join("xtal-brew-test");
+        let cellar = prefix.join("Cellar/xtal/0.1.0/bin");
+        std::fs::create_dir_all(&cellar).unwrap();
+        std::fs::create_dir_all(prefix.join("bin")).unwrap();
+        std::fs::write(cellar.join("xtal"), b"binario").unwrap();
+        std::fs::write(prefix.join("bin/xtal"), b"symlink").unwrap();
+
+        assert_eq!(
+            stable_path(&cellar.join("xtal")),
+            prefix.join("bin/xtal"),
+            "una ruta del Cellar tiene la version adentro y muere en el próximo upgrade"
+        );
+
+        let _ = std::fs::remove_dir_all(&prefix);
+    }
+
+    #[test]
+    fn si_el_symlink_no_existe_se_queda_con_la_ruta_original() {
+        // Mejor una ruta que apunta a algo que una inventada que no existe.
+        let p = PathBuf::from("/tmp/xtal-brew-inexistente/Cellar/xtal/9.9.9/bin/xtal");
+        assert_eq!(stable_path(&p), p);
+    }
+
+    #[test]
+    fn sin_cellar_en_el_medio_devuelve_lo_mismo() {
+        let p = PathBuf::from("/usr/local/bin/xtal");
+        assert_eq!(stable_path(&p), p);
+        let p = PathBuf::from("xtal");
+        assert_eq!(stable_path(&p), p);
+    }
 }
