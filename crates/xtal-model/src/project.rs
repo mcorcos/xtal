@@ -6,6 +6,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::plot::PlotKind;
+use crate::style::MeasurementKind;
+
 /// Formato del documento: elige la plantilla maestra de LaTeX.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -83,12 +86,61 @@ pub struct DocumentMeta {
     pub date: Option<String>,
 }
 
+/// Un gráfico **planificado**: qué se quiere mostrar, antes de tener los datos.
+///
+/// Existe porque el objetivo de un proyecto no es un gráfico suelto: es el informe, y
+/// un informe son varios gráficos, cada uno con dos o tres curvas que hay que ir
+/// consiguiendo de lugares distintos. Sin anotar el plan en algún lado, "qué me falta"
+/// vive en la cabeza de quien lo está haciendo.
+///
+/// Escribirlo acá, en el `xtal.toml`, en vez de en un markdown aparte, es a propósito:
+/// un archivo suelto se desactualiza, y este lo lee `xtal status` para comparar el plan
+/// contra lo que hay de verdad en disco.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlannedPlot {
+    /// Id (slug) del gráfico que va a existir en `graficos/`.
+    pub id: String,
+    /// Título legible. Si falta, se deriva del id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Tipo de gráfico previsto.
+    #[serde(default = "default_plot_kind")]
+    pub kind: PlotKind,
+    /// Qué fuentes se esperan en este gráfico: teórica, simulada, medida.
+    /// Es contra esto que `xtal status` dice qué falta.
+    #[serde(default)]
+    pub sources: Vec<MeasurementKind>,
+    /// Nota libre: de dónde sale el dato, qué instrumento, lo que sea.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+fn default_plot_kind() -> PlotKind {
+    PlotKind::Generic
+}
+
+impl PlannedPlot {
+    pub fn new(id: impl Into<String>) -> Self {
+        PlannedPlot {
+            id: id.into(),
+            title: None,
+            kind: PlotKind::Generic,
+            sources: Vec::new(),
+            note: None,
+        }
+    }
+}
+
 /// El `xtal.toml` completo.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
     pub project: ProjectMeta,
     #[serde(default)]
     pub document: DocumentMeta,
+    /// Los gráficos que el informe va a tener, con o sin datos todavía.
+    /// Lo escribe `xtal plan` y lo lee `xtal status`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<PlannedPlot>,
     /// Estructura de secciones del informe.
     #[serde(default)]
     pub sections: Vec<Section>,
@@ -104,6 +156,7 @@ impl Project {
                 theme: None,
             },
             document: DocumentMeta::default(),
+            plan: Vec::new(),
             sections: Vec::new(),
         }
     }

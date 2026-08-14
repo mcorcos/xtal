@@ -138,6 +138,21 @@ El núcleo es análisis de circuitos + consolidación de datos.
      del prefijo (`stable_path`).
   2. `claude mcp add` se niega a pisar una entrada existente → el comando no podía
      *actualizar*. Ahora hace `remove` en silencio antes del `add`.
+- **Plan del informe — HECHO (2026-08-14, "Tanda 4"), idea de Manu.** El objetivo no es un
+  gráfico: es el informe, y son varios gráficos con curvas que se consiguen en días
+  distintos. Sin registrarlo, "qué me falta" vive en la cabeza del que lo hace.
+  - `PlannedPlot` en `xtal-model/project.rs` → `[[plan]]` **adentro del `xtal.toml`**, no
+    en un markdown aparte (un archivo suelto se desactualiza; esto lo lee un comando).
+  - `xtal plan` — entrevista interactiva (cuántos gráficos, qué fuentes tiene cada uno).
+    Deja el plan, un gráfico vacío por entrada y una sección por gráfico: el esqueleto.
+  - `xtal plan add|list|remove` — la versión atómica, para IAs y scripts.
+  - `xtal status [--json]` — cruza el plan contra el disco. Cada falta viene con **el
+    comando que la resuelve** (ver `pista()` en `plan.rs`); un "falta la simulada" sin
+    decir cómo obliga a ir a buscar la doc.
+  - **`AGENTS.md` + `CLAUDE.md` adentro de cada proyecto** (`templates/` en `xtal-cli`,
+    con `include_str!`). Los escribe `xtal new`/`init`/`example`, nunca pisa uno existente.
+    Es lo que hace que abrir la carpeta con una IA funcione sin explicarle nada.
+  - MCP: tools `xtal_status` y `xtal_plan_add`; las instructions ahora arrancan por status.
 - **Falta:** todo lo de circuitos/ngspice de Capa 2+, y el `.asc` de LTspice (ver backlog).
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
@@ -150,7 +165,8 @@ El núcleo es análisis de circuitos + consolidación de datos.
 - `xtal-cli` — binario `xtal` (clap), orquesta todo, salida `--json` para Claude.
 
 ### Comandos
-`xtal new|init` · `meas import|formula|random|list|show` · `plot new|add-series|list|show|preview`
+`xtal new|init` · `plan [add|list|remove]` · `status` · `meas import|formula|random|list|show` ·
+`plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·

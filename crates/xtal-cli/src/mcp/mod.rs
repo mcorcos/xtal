@@ -57,12 +57,17 @@ mismo gráfico como tres series.
 punteada; entrada amarilla, salida verde; Bode en escala logarítmica. No pases color \
 ni estilo salvo que quieras pisar eso a propósito.
 
-3. Un proyecto es una carpeta de archivos planos. Empezá por xtal_project_status (o \
-xtal_list_projects + xtal_open_project si no sabés dónde está) para ver qué hay antes \
-de agregar nada.
+3. Un proyecto es una carpeta de archivos planos. Empezá SIEMPRE por xtal_status (o \
+xtal_list_projects + xtal_open_project si no sabés dónde está el proyecto). Te dice, \
+gráfico por gráfico, qué curvas ya están y cuáles faltan.
 
-Flujo típico: cargar mediciones → crear un gráfico → agregarle series → escribir las \
-secciones → xtal_build_report.";
+El objetivo no es un gráfico suelto: es el informe. Por eso conviene planificarlo \
+entero primero, con xtal_plan_add por cada gráfico, y recién después salir a conseguir \
+los datos. Así xtal_status puede decirte qué queda.
+
+Flujo típico: xtal_status → planificar los gráficos → cargar las mediciones → \
+agregarlas a su gráfico → escribir las secciones → xtal_build_report. Volvé a llamar a \
+xtal_status después de cada paso.";
 
 pub fn cmd_mcp(args: McpArgs) -> Result<()> {
     match args.cmd {

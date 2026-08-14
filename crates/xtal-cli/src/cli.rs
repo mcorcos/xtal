@@ -37,6 +37,11 @@ pub enum Command {
     /// Gráficos (vistas sobre mediciones).
     #[command(subcommand)]
     Plot(PlotCmd),
+    /// Planifica el informe: qué gráficos va a tener y qué curvas lleva cada uno.
+    /// Sin subcomando arranca una entrevista.
+    Plan(PlanArgs),
+    /// Qué hay y qué falta para que el informe esté completo.
+    Status(StatusArgs),
     /// Secciones del informe.
     #[command(subcommand)]
     Section(SectionCmd),
@@ -430,6 +435,51 @@ pub struct SetupArgs {
     #[arg(long = "force-themes")]
     pub force_themes: bool,
 }
+
+// ===========================================================================
+// plan / status — planificar el informe y ver qué falta
+// ===========================================================================
+
+#[derive(Debug, Args)]
+pub struct PlanArgs {
+    #[command(subcommand)]
+    pub cmd: Option<PlanCmd>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PlanCmd {
+    /// Agrega (o actualiza) un gráfico planificado. Crea el gráfico vacío si no existe.
+    Add(PlanAddArgs),
+    /// Saca un gráfico del plan. No borra el gráfico ni sus datos.
+    Remove {
+        /// Id del gráfico planificado.
+        id: String,
+    },
+    /// Lista el plan.
+    List,
+}
+
+#[derive(Debug, Args)]
+pub struct PlanAddArgs {
+    /// Id (slug) del gráfico.
+    pub id: String,
+    /// Título legible, por ejemplo "Respuesta en frecuencia".
+    #[arg(long)]
+    pub title: Option<String>,
+    /// Tipo de gráfico previsto.
+    #[arg(long, value_enum)]
+    pub kind: Option<PlotKindArg>,
+    /// Fuente esperada, repetible: --source theoretical --source measured.
+    /// Es contra esto que `xtal status` dice qué falta.
+    #[arg(long = "source", value_enum)]
+    pub sources: Vec<KindArg>,
+    /// Nota libre: de dónde sale el dato, con qué instrumento, lo que sea.
+    #[arg(long)]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct StatusArgs {}
 
 #[derive(Debug, Args)]
 pub struct WatchArgs {

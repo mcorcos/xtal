@@ -136,11 +136,47 @@ xtal watch --open
 Deja el PDF abierto y lo recompila cada vez que tocás un dato o un texto. Un error de LaTeX
 no corta el watch: lo muestra y sigue esperando.
 
+## Planificar primero
+
+El objetivo no es un gráfico: es el informe. Y un informe son varios gráficos, cada uno
+con dos o tres curvas que hay que ir consiguiendo de lugares distintos, muchas veces en
+días distintos.
+
+```bash
+xtal plan     # ¿cuántos gráficos? ¿qué lleva cada uno?
+xtal status   # qué está cargado y qué falta
+```
+
+`xtal plan` pregunta cuántos gráficos va a tener el informe y, por cada uno, si lleva
+curva teórica, simulada y/o medida. Deja los gráficos creados y una sección por cada uno:
+el esqueleto del trabajo, listo para ir llenando.
+
+`xtal status` compara ese plan contra lo que hay de verdad en la carpeta:
+
+```
+  ○ Respuesta en frecuencia  (bode)
+      ✓ teórica    teorica
+      ✗ simulada   xtal sim ac <circuito> --as <id> --node "v(out)" --from .. --to ..
+      ✗ medida     xtal meas import <archivo.csv> --id <id> --kind measured
+```
+
+Cada falta viene con el comando que la resuelve.
+
+El plan se guarda adentro de `xtal.toml`, no en un archivo aparte: así no se
+desactualiza. Para scripts o IAs está `xtal plan add|list|remove`.
+
+## El proyecto se explica solo
+
+`xtal new` deja un `AGENTS.md` (y un `CLAUDE.md`) adentro de la carpeta. Quien la abra
+con Claude Code, Codex o similar no tiene que explicarle nada al modelo: ya está escrito
+qué es el proyecto, cuál es el modelo de datos y qué comandos existen.
+
 ## Flujo típico
 
 ```bash
-# 1. Crear el proyecto (carpeta de archivos planos)
+# 1. Crear el proyecto (carpeta de archivos planos) y planificar el informe
 xtal new mi-ensayo && cd mi-ensayo
+xtal plan
 
 # 2. Meter las tres fuentes como mediciones
 xtal meas import osciloscopio.csv --id salida --kind measured \
@@ -166,8 +202,11 @@ xtal run --open
 ### Proyecto
 | Comando | Descripción |
 |---|---|
-| `xtal new` | Crea un proyecto nuevo con plantilla |
+| `xtal new` | Crea un proyecto nuevo con plantilla y su `AGENTS.md` |
 | `xtal init` | Inicializa un proyecto en el directorio actual |
+| `xtal plan` | Entrevista: qué gráficos va a tener el informe y qué lleva cada uno |
+| `xtal plan add\|list\|remove` | Lo mismo, atómico, para scripts o IAs |
+| `xtal status` | Qué está cargado y qué falta, con el comando que resuelve cada falta |
 
 ### Mediciones — `xtal meas`
 | Subcomando | Descripción |

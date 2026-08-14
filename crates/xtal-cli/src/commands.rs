@@ -62,6 +62,35 @@ fn scaffold_project(
     project.project.theme = theme;
     project.document.format = format;
     store::save_project(root, &project)?;
+    write_agent_brief(root)?;
+    Ok(())
+}
+
+/// El manual del proyecto para la IA que lo abra.
+///
+/// Va **adentro de la carpeta**, no en la documentación de Xtal, porque es ahí donde se
+/// lo va a encontrar: alguien abre el proyecto con Claude Code o Codex y el modelo ya
+/// sabe qué es esto, cuál es el modelo de datos y qué comandos existen, sin que nadie se
+/// lo explique. Es la diferencia entre "acá hay archivos raros" y "puedo trabajar".
+///
+/// Se escriben dos archivos con el mismo contenido efectivo porque cada herramienta
+/// busca el suyo: `AGENTS.md` es la convención que comparten varias, `CLAUDE.md` es la
+/// de Claude Code y solo apunta al primero.
+///
+/// Nunca pisa un archivo existente: si el usuario lo editó, ese texto es más valioso
+/// que el nuestro.
+pub(crate) fn write_agent_brief(root: &Path) -> Result<()> {
+    const AGENTS: &str = include_str!("../templates/AGENTS.md");
+    const CLAUDE: &str = include_str!("../templates/CLAUDE.md");
+
+    for (nombre, contenido) in [("AGENTS.md", AGENTS), ("CLAUDE.md", CLAUDE)] {
+        let destino = root.join(nombre);
+        if destino.exists() {
+            continue;
+        }
+        std::fs::write(&destino, contenido)
+            .with_context(|| format!("escribiendo {}", destino.display()))?;
+    }
     Ok(())
 }
 
@@ -1179,7 +1208,7 @@ fn report_path(label: &str, path: &Path, exists: bool) {
 // ---------------------------------------------------------------------------
 
 /// Convierte un nombre en slug: minúsculas, alfanumérico, guiones.
-fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     let mut out = String::new();
     let mut prev_dash = false;
     for c in name.chars() {

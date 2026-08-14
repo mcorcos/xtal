@@ -252,11 +252,69 @@ pub fn all() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "xtal_status",
+            title: "Qué falta para el informe",
+            description: "LO PRIMERO QUE HAY QUE LLAMAR. Compara el plan del informe contra \
+                          lo que hay en disco y devuelve, gráfico por gráfico, qué curvas ya \
+                          están y cuáles faltan. Si `complete` es true, el informe se puede \
+                          compilar. Volvé a llamarla después de cada paso.",
+            schema: || {
+                json!({
+                    "type": "object",
+                    "properties": { "project": project_prop() },
+                    "additionalProperties": false
+                })
+            },
+            handler: |s, args| {
+                s.exec(
+                    s.project_for(args).as_deref(),
+                    None,
+                    &["status".into(), "--json".into()],
+                )
+            },
+        },
+        Tool {
+            name: "xtal_plan_add",
+            title: "Planificar un gráfico",
+            description: "Anota que el informe va a tener este gráfico y qué curvas se \
+                          esperan en él; crea además el gráfico vacío. Es contra este plan \
+                          que xtal_status dice qué falta, así que conviene planificar TODO \
+                          el informe antes de empezar a cargar datos. Correrlo dos veces con \
+                          el mismo id actualiza la entrada, no la duplica.",
+            schema: || {
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "description": "Id (slug) del gráfico." },
+                        "title": { "type": "string", "description": "Título legible, por ejemplo \"Respuesta en frecuencia\"." },
+                        "kind": { "type": "string", "enum": ["bode", "time", "xy", "generic"] },
+                        "sources": {
+                            "type": "array",
+                            "items": { "type": "string", "enum": ["theoretical", "simulated", "measured"] },
+                            "description": "Curvas esperadas en este gráfico. El caso típico de un TP son las tres."
+                        },
+                        "note": { "type": "string", "description": "Nota libre: de dónde sale el dato, con qué instrumento." },
+                        "project": project_prop()
+                    },
+                    "required": ["id"],
+                    "additionalProperties": false
+                })
+            },
+            handler: |s, args| {
+                let mut argv = vec!["plan".to_string(), "add".to_string(), req_str(args, "id")?];
+                push_opt(&mut argv, "--title", opt_str(args, "title"));
+                push_opt(&mut argv, "--kind", opt_str(args, "kind"));
+                push_each(&mut argv, "--source", opt_list(args, "sources"));
+                push_opt(&mut argv, "--note", opt_str(args, "note"));
+                argv.push("--json".to_string());
+                s.exec(s.project_for(args).as_deref(), None, &argv)
+            },
+        },
+        Tool {
             name: "xtal_project_status",
-            title: "Estado del proyecto",
-            description: "Devuelve qué hay en el proyecto: mediciones cargadas, gráficos \
-                          definidos y la config resuelta (theme y formato). Es lo primero \
-                          que conviene mirar antes de agregar nada.",
+            title: "Contenido del proyecto",
+            description: "Lista el inventario crudo: mediciones, gráficos y secciones que \
+                          ya existen. Para saber qué FALTA, usá xtal_status.",
             schema: || {
                 json!({
                     "type": "object",

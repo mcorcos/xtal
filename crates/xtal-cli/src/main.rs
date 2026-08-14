@@ -12,6 +12,7 @@ mod deps;
 mod example;
 mod gen;
 mod mcp;
+mod plan;
 mod setup;
 mod update;
 mod watch;
@@ -40,6 +41,8 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Init(a) => commands::cmd_init(a, json),
         Command::Meas(cmd) => commands::cmd_meas(cmd, &project, json),
         Command::Plot(cmd) => commands::cmd_plot(cmd, &project, json),
+        Command::Plan(a) => plan::cmd_plan(a, &project, json),
+        Command::Status(a) => plan::cmd_status(a, &project, json),
         Command::Section(cmd) => commands::cmd_section(cmd, &project, json),
         Command::Circuit(cmd) => commands::cmd_circuit(cmd, &project, json),
         Command::Sim(cmd) => commands::cmd_sim(cmd, &project, json),

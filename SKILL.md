@@ -30,6 +30,28 @@
 
 ---
 
+## Lo primero, siempre
+
+```bash
+xtal status --json
+```
+
+Compara el plan del informe contra lo que hay en disco: por cada gráfico planificado, qué
+curvas están cargadas y cuáles faltan. Mirá `complete`. Volvé a correrlo después de cada
+paso.
+
+Si el proyecto todavía no tiene plan, armalo antes de cargar datos — el objetivo no es un
+gráfico suelto, es el informe entero:
+
+```bash
+xtal plan add bode --title "Respuesta en frecuencia" --kind bode \
+  --source theoretical --source simulated --source measured
+```
+
+`plan add` crea también el gráfico vacío. Correrlo dos veces con el mismo id actualiza la
+entrada, no la duplica. **No corras `xtal plan` sin subcomando**: abre una entrevista
+interactiva y se cuelga esperando respuestas.
+
 ## Workflow típico
 
 ```bash

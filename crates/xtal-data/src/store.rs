@@ -318,6 +318,50 @@ mod tests {
     }
 
     #[test]
+    fn el_plan_del_informe_sobrevive_al_disco() {
+        // El plan vive adentro del xtal.toml como [[plan]]. Si no serializara bien,
+        // `xtal status` no tendría contra qué comparar y el comando entero no serviría.
+        use xtal_model::PlannedPlot;
+
+        let root = temp_root("plan");
+        let mut project = Project::new("TP4");
+        let mut bode = PlannedPlot::new("bode");
+        bode.title = Some("Respuesta en frecuencia".to_string());
+        bode.kind = xtal_model::PlotKind::Bode;
+        bode.sources = vec![MeasurementKind::Theoretical, MeasurementKind::Measured];
+        bode.note = Some("medida con el osciloscopio del labo".to_string());
+        project.plan.push(bode);
+        save_project(&root, &project).unwrap();
+
+        let loaded = load_project(&root).unwrap();
+        assert_eq!(loaded.plan.len(), 1);
+        assert_eq!(loaded.plan[0].id, "bode");
+        assert_eq!(loaded.plan[0].kind, xtal_model::PlotKind::Bode);
+        assert_eq!(loaded.plan[0].sources.len(), 2);
+        assert_eq!(loaded.plan[0].sources[0], MeasurementKind::Theoretical);
+        assert_eq!(
+            loaded.plan[0].note.as_deref(),
+            Some("medida con el osciloscopio del labo")
+        );
+    }
+
+    #[test]
+    fn un_proyecto_sin_plan_no_escribe_la_clave() {
+        // Los proyectos que existían antes de que el plan existiera tienen que seguir
+        // cargando, y uno nuevo sin plan no debería ensuciar el archivo con `plan = []`.
+        let root = temp_root("sin_plan");
+        let project = Project::new("TP viejo");
+        save_project(&root, &project).unwrap();
+
+        let texto = fs::read_to_string(root.join(PROJECT_FILE)).unwrap();
+        assert!(
+            !texto.contains("plan"),
+            "no debería escribir un plan vacío:\n{texto}"
+        );
+        assert!(load_project(&root).unwrap().plan.is_empty());
+    }
+
+    #[test]
     fn roundtrip_measurement() {
         let root = temp_root("meas");
         let mut m = Measurement::new("v_out", MeasurementKind::Measured, Source::Csv);

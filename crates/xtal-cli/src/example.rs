@@ -107,6 +107,10 @@ fn materialize(root: &Path) -> Result<usize> {
     // `salida/` no viene embebida (excluida arriba), pero el proyecto la necesita para
     // que `xtal run` tenga dónde escribir.
     std::fs::create_dir_all(root.join("salida")).context("creando salida/")?;
+
+    // El ejemplo también es un proyecto: quien lo abra con una IA tiene que encontrar
+    // las mismas instrucciones que en uno creado con `xtal new`.
+    commands::write_agent_brief(root)?;
     Ok(count)
 }
 
