@@ -142,8 +142,14 @@ step "plataforma: $TARGET"
 
 if [ -z "$VERSION" ]; then
   # La API de GitHub devuelve JSON; sacamos el tag_name sin depender de jq.
-  TAG="$(fetch_stdout "https://api.github.com/repos/${REPO}/releases/latest" \
-        | grep -m1 '"tag_name"' \
+  #
+  # La respuesta se guarda ENTERA y recién después se filtra. Con `curl | grep -m1`,
+  # grep cierra el pipe apenas encuentra el match y curl muere con SIGPIPE: acá no
+  # rompería (no usamos `pipefail`), pero puede dejar la respuesta truncada.
+  RELEASE_JSON="$(fetch_stdout "https://api.github.com/repos/${REPO}/releases/latest")" \
+    || die "no pude consultar la última version. ¿Hay conexión?"
+  TAG="$(printf '%s' "$RELEASE_JSON" \
+        | grep '"tag_name"' | head -1 \
         | sed -E 's/.*"tag_name" *: *"([^"]+)".*/\1/')"
   [ -n "$TAG" ] || die "no pude averiguar la última version. Probá con --version X.Y.Z."
   VERSION="${TAG#v}"
