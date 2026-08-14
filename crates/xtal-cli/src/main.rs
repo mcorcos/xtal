@@ -8,9 +8,13 @@ mod cli;
 mod commands;
 mod convert;
 mod ctx;
+mod deps;
+mod example;
 mod gen;
 mod mcp;
 mod setup;
+mod update;
+mod watch;
 
 use clap::Parser;
 
@@ -42,8 +46,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Raw(cmd) => commands::cmd_raw(cmd, &project, json),
         Command::Export(a) => commands::cmd_export(a, &project),
         Command::Run(a) => commands::cmd_run(a, &project),
+        Command::Watch(a) => watch::cmd_watch(a, &project),
         Command::Config(cmd) => commands::cmd_config(cmd, &project),
-        Command::Doctor => commands::cmd_doctor(),
+        Command::Doctor(a) => commands::cmd_doctor(a, json),
+        Command::Example(a) => example::cmd_example(a),
+        Command::Update(a) => update::cmd_update(a),
         Command::Setup(a) => setup::cmd_setup(a),
         Command::Mcp(a) => mcp::cmd_mcp(a),
         Command::Completions(a) => gen::cmd_completions(a),

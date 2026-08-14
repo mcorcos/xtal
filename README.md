@@ -106,12 +106,35 @@ xtal man --out ~/.local/share/man/man1
 
 ---
 
-## Ejemplo completo
+## El primer minuto
 
-En [`examples/rc-lowpass/`](examples/rc-lowpass/) hay un ejemplo de punta a punta: un filtro
-pasabajos RC caracterizado con las tres fuentes (teórica, simulada con ngspice y medida desde
-un CSV), consolidadas en un Bode de dos paneles y compiladas en un informe con carátula.
-Incluye el PDF resultante y un `reproducir.sh` comentado paso a paso.
+```bash
+xtal example --open
+```
+
+Crea un proyecto de ejemplo completo en tu disco, lo compila y te abre el PDF. Es un filtro
+pasabajos RC caracterizado con las tres fuentes —teórica, simulada con ngspice y medida desde
+un CSV— consolidadas en un Bode de dos paneles, con carátula. El ejemplo viene adentro del
+binario: no hace falta clonar nada.
+
+Si algo no compila:
+
+```bash
+xtal doctor        # qué falta y para qué sirve
+xtal doctor --fix  # te ofrece instalarlo, preguntando una por una
+```
+
+El mismo ejemplo está en [`examples/rc-lowpass/`](examples/rc-lowpass/), con un
+`reproducir.sh` comentado paso a paso que lo arma desde cero.
+
+## Mientras trabajás
+
+```bash
+xtal watch --open
+```
+
+Deja el PDF abierto y lo recompila cada vez que tocás un dato o un texto. Un error de LaTeX
+no corta el watch: lo muestra y sigue esperando.
 
 ## Flujo típico
 
@@ -186,9 +209,11 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 |---|---|
 | `xtal export` | Genera el `.tex` sin compilar |
 | `xtal run` | Genera el `.tex` y compila el PDF. Flags: `--open`, `--monochrome`, `--pdflatex` |
+| `xtal watch` | Recompila solo cuando cambia algo. Mismos flags que `run`, más `--interval` |
 
 ### Sistema
-`xtal config get|set|list [--global] [--resolved]` · `xtal doctor` · `xtal setup` ·
+`xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
+`xtal example [nombre] [--run] [--open]` · `xtal update [--check]` ·
 `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`
 

@@ -13,17 +13,17 @@
 //! (`--yes`: agarra todos los defaults y NO toca el sistema — para IAs/scripts y CI).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::{Context, Result};
 use console::style;
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+use dialoguer::{theme::ColorfulTheme, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use xtal_config::PartialConfig;
 use xtal_model::DocFormat;
 
 use crate::cli::SetupArgs;
+use crate::deps;
 
 /// Motor LaTeX elegido en el setup. No se persiste en la config (el run decide con
 /// `--pdflatex`): acá solo guía qué dependencia chequear/instalar y si hacer warmup.
@@ -40,13 +40,6 @@ impl LatexEngine {
             LatexEngine::Pdflatex => "pdflatex",
         }
     }
-}
-
-/// ¿La dependencia es imprescindible o es opcional (capa futura)?
-#[derive(Clone, Copy)]
-enum DepKind {
-    Core,
-    Optional,
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +63,7 @@ pub fn cmd_setup(args: SetupArgs) -> Result<()> {
             style("·").dim(),
             style(config_file.display()).cyan()
         );
-        if !confirm("¿Reconfigurar?", true)? {
+        if !deps::confirm("¿Reconfigurar?", true)? {
             println!("  Listo, no toqué nada.");
             return Ok(());
         }
@@ -254,14 +247,6 @@ fn pick_engine(args: &SetupArgs) -> Result<LatexEngine> {
     })
 }
 
-/// Pregunta sí/no (Confirm de dialoguer) con un default.
-fn confirm(prompt: &str, default: bool) -> Result<bool> {
-    Ok(Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
-        .default(default)
-        .interact()?)
-}
-
 // ---------------------------------------------------------------------------
 // Config global
 // ---------------------------------------------------------------------------
@@ -277,202 +262,36 @@ fn write_global_config(dir: &Path, file: &Path, cfg: &PartialConfig) -> Result<(
 // Dependencias del sistema (detectar + ofrecer instalar con confirmación)
 // ---------------------------------------------------------------------------
 
+// La detección y la instalación viven en `deps.rs`, compartidas con `xtal doctor --fix`:
+// los dos comandos tienen que decir y hacer exactamente lo mismo.
 fn ensure_dependencies(args: &SetupArgs, engine: LatexEngine) -> Result<()> {
     println!();
     println!("  {}", style("Dependencias del sistema:").bold());
 
+    // `--yes` no es interactivo: reporta lo que falta y no toca el sistema.
+    let interactive = !args.yes;
+
     // Motor LaTeX (core): Tectonic o pdflatex según lo elegido.
-    ensure_one(args, engine.binary(), DepKind::Core, engine_pkg(engine))?;
+    let engine_pkgs = match engine {
+        LatexEngine::Tectonic => deps::tectonic_pkgs(),
+        LatexEngine::Pdflatex => deps::texlive_pkgs(),
+    };
+    deps::ensure_one(
+        engine.binary(),
+        deps::DepKind::Core,
+        &engine_pkgs,
+        interactive,
+    )?;
 
     // ngspice (opcional): el simulador que usa `xtal sim`. Opcional porque la Capa 0
     // (mediciones + gráficos + informe) anda sin él; necesario para simular circuitos.
-    ensure_one(
-        args,
+    deps::ensure_one(
         "ngspice",
-        DepKind::Optional,
-        PkgNames {
-            brew: Some("ngspice"),
-            apt: Some("ngspice"),
-            dnf: Some("ngspice"),
-            pacman: Some("ngspice"),
-        },
+        deps::DepKind::Optional,
+        &deps::ngspice_pkgs(),
+        interactive,
     )?;
     Ok(())
-}
-
-/// Chequea un binario; si falta y estamos en modo interactivo, ofrece instalarlo con
-/// el package manager detectado (previa confirmación). En `--yes` solo reporta.
-fn ensure_one(args: &SetupArgs, bin: &str, kind: DepKind, pkgs: PkgNames) -> Result<()> {
-    if xtal_compile::is_available(bin) {
-        println!("    {} {bin}", style("✓").green().bold());
-        return Ok(());
-    }
-
-    let tag = match kind {
-        DepKind::Core => style("falta (necesario para compilar)").red(),
-        DepKind::Optional => style("falta (opcional — necesario para `xtal sim`)").yellow(),
-    };
-    println!("    {} {bin} — {tag}", style("✗").red().bold());
-
-    // Modo silencioso: no tocamos el sistema, solo dejamos el aviso.
-    if args.yes {
-        return Ok(());
-    }
-
-    let mgr = detect_pkg_mgr();
-    match mgr.and_then(|m| pkgs.for_mgr(m).map(|p| (m, p))) {
-        Some((m, pkg)) => {
-            let (cmd, cmd_args) = install_cmd(m, &pkg);
-            let pretty = format!("{cmd} {}", cmd_args.join(" "));
-            println!(
-                "      {} {}",
-                style("→ se instalaría con:").dim(),
-                style(&pretty).cyan()
-            );
-            let default_yes = matches!(kind, DepKind::Core);
-            if confirm(&format!("¿Instalar {bin} ahora?"), default_yes)? {
-                run_install(&cmd, &cmd_args, bin)?;
-            } else if matches!(kind, DepKind::Core) {
-                println!(
-                    "      {}",
-                    style("Ojo: sin este motor, `xtal run` no va a compilar.").yellow()
-                );
-            }
-        }
-        None => print_manual_hint(bin, &pkgs),
-    }
-    Ok(())
-}
-
-/// Corre el comando de instalación heredando la terminal (para ver el progreso de
-/// brew/apt) y reverifica que el binario haya quedado disponible.
-fn run_install(cmd: &str, cmd_args: &[String], bin: &str) -> Result<()> {
-    println!("      {}", style(format!("Instalando {bin}…")).dim());
-    let status = Command::new(cmd)
-        .args(cmd_args)
-        .status()
-        .with_context(|| format!("ejecutando '{cmd}'"))?;
-    if status.success() && xtal_compile::is_available(bin) {
-        println!("      {} {bin} instalado", style("✓").green().bold());
-    } else {
-        println!(
-            "      {} no pude confirmar {bin} (seguí a mano).",
-            style("✗").red().bold()
-        );
-    }
-    Ok(())
-}
-
-/// Cuando no hay package manager (o el paquete no está mapeado), damos instrucciones.
-fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
-    println!("      {} instalá {bin} a mano:", style("→").dim());
-    if bin == "tectonic" {
-        println!(
-            "        {}",
-            style("https://tectonic-typesetting.github.io/install.html").cyan()
-        );
-        println!("        {}", style("o: cargo install tectonic").cyan());
-        return;
-    }
-    if let Some(p) = pkgs.brew {
-        println!("        {}", style(format!("brew install {p}")).cyan());
-    }
-    if let Some(p) = pkgs.apt {
-        println!(
-            "        {}",
-            style(format!("sudo apt-get install {p}")).cyan()
-        );
-    }
-}
-
-/// Package managers que sabemos manejar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PkgMgr {
-    Brew,
-    Apt,
-    Dnf,
-    Pacman,
-}
-
-/// Detecta el package manager del sistema. En macOS, Homebrew; en Linux, el primero
-/// que exista entre apt/dnf/pacman.
-fn detect_pkg_mgr() -> Option<PkgMgr> {
-    if cfg!(target_os = "macos") {
-        return xtal_compile::is_available("brew").then_some(PkgMgr::Brew);
-    }
-    for (bin, mgr) in [
-        ("apt-get", PkgMgr::Apt),
-        ("dnf", PkgMgr::Dnf),
-        ("pacman", PkgMgr::Pacman),
-    ] {
-        if xtal_compile::is_available(bin) {
-            return Some(mgr);
-        }
-    }
-    None
-}
-
-/// Construye el comando de instalación (binario + args) para un manager y paquete.
-fn install_cmd(mgr: PkgMgr, pkg: &str) -> (String, Vec<String>) {
-    match mgr {
-        PkgMgr::Brew => ("brew".into(), vec!["install".into(), pkg.into()]),
-        PkgMgr::Apt => (
-            "sudo".into(),
-            vec!["apt-get".into(), "install".into(), "-y".into(), pkg.into()],
-        ),
-        PkgMgr::Dnf => (
-            "sudo".into(),
-            vec!["dnf".into(), "install".into(), "-y".into(), pkg.into()],
-        ),
-        PkgMgr::Pacman => (
-            "sudo".into(),
-            vec![
-                "pacman".into(),
-                "-S".into(),
-                "--noconfirm".into(),
-                pkg.into(),
-            ],
-        ),
-    }
-}
-
-/// Nombre del paquete por package manager (algunos no lo traen → `None`).
-struct PkgNames {
-    brew: Option<&'static str>,
-    apt: Option<&'static str>,
-    dnf: Option<&'static str>,
-    pacman: Option<&'static str>,
-}
-
-impl PkgNames {
-    fn for_mgr(&self, m: PkgMgr) -> Option<String> {
-        match m {
-            PkgMgr::Brew => self.brew,
-            PkgMgr::Apt => self.apt,
-            PkgMgr::Dnf => self.dnf,
-            PkgMgr::Pacman => self.pacman,
-        }
-        .map(|s| s.to_string())
-    }
-}
-
-/// Mapeo de paquetes para el motor LaTeX elegido. Tectonic no está en los repos por
-/// default de Debian/Ubuntu (apt = None → cae a instrucciones manuales).
-fn engine_pkg(engine: LatexEngine) -> PkgNames {
-    match engine {
-        LatexEngine::Tectonic => PkgNames {
-            brew: Some("tectonic"),
-            apt: None,
-            dnf: Some("tectonic"),
-            pacman: Some("tectonic"),
-        },
-        LatexEngine::Pdflatex => PkgNames {
-            brew: Some("texlive"),
-            apt: Some("texlive-latex-extra"),
-            dnf: Some("texlive-scheme-medium"),
-            pacman: Some("texlive-core"),
-        },
-    }
 }
 
 // ---------------------------------------------------------------------------
