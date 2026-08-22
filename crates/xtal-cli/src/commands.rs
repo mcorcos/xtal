@@ -1098,6 +1098,74 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
         ),
     }
 
+    // --- Integración con IA ---
+    //
+    // Es tan importante como las dependencias: si el skill no está, Claude no se
+    // entera de que Xtal existe, y no hay forma de darse cuenta mirando. Esto es el
+    // único lugar donde alguien lo va a ver.
+    println!();
+    println!("  {}", style("Integración con IA").bold());
+    let (skill, skill_path) = crate::ai::skill_status();
+    match skill {
+        crate::ai::SkillState::SinCliente => println!(
+            "    {} {:<14} {}",
+            style("·").dim(),
+            "skill",
+            style("no hay Claude Code en esta máquina").dim()
+        ),
+        crate::ai::SkillState::AlDia => report_path(
+            "skill",
+            skill_path.as_deref().unwrap_or(Path::new("")),
+            true,
+        ),
+        crate::ai::SkillState::Falta => println!(
+            "    {} {:<14} {}",
+            style("✗").red().bold(),
+            "skill",
+            style("falta — Claude no sabe que Xtal existe").yellow()
+        ),
+        crate::ai::SkillState::Viejo => println!(
+            "    {} {:<14} {}",
+            style("!").yellow().bold(),
+            "skill",
+            style("es de otra version de Xtal").yellow()
+        ),
+    }
+
+    let clientes = crate::ai::detect_clients();
+    if clientes.is_empty() {
+        println!(
+            "    {} {:<14} {}",
+            style("·").dim(),
+            "MCP",
+            style("no encontré ningún cliente de IA instalado").dim()
+        );
+    }
+    for cliente in &clientes {
+        match crate::ai::mcp_status(cliente.arg) {
+            crate::ai::McpState::Ok(path) => println!(
+                "    {} {:<14} {}",
+                style("✓").green().bold(),
+                cliente.label,
+                style(path.display()).dim()
+            ),
+            crate::ai::McpState::NoRegistrado => println!(
+                "    {} {:<14} {}",
+                style("·").dim(),
+                cliente.label,
+                style("el MCP no está registrado").yellow()
+            ),
+            // Este es el que vale la pena cazar: el registro está, pero apunta a un
+            // binario que ya no existe. El cliente falla en silencio.
+            crate::ai::McpState::Roto(path) => println!(
+                "    {} {:<14} {}",
+                style("✗").red().bold(),
+                cliente.label,
+                style(format!("apunta a {} y ahí no hay nada", path.display())).red()
+            ),
+        }
+    }
+
     // --- Proyecto (solo si estamos parados adentro de uno) ---
     if let Ok(cwd) = std::env::current_dir() {
         if let Ok(root) = store::find_project_root(&cwd) {
@@ -1123,11 +1191,27 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
     let sin_latex =
         !crate::deps::is_available("tectonic") && !crate::deps::is_available("pdflatex");
 
+    // La integración con IA cuenta para el resumen: "todo listo" con el skill sin
+    // instalar es mentira, porque la mitad del producto es que Claude lo maneje.
+    let ia_rota = matches!(
+        crate::ai::skill_status().0,
+        crate::ai::SkillState::Falta | crate::ai::SkillState::Viejo
+    ) || crate::ai::detect_clients()
+        .iter()
+        .any(|c| matches!(crate::ai::mcp_status(c.arg), crate::ai::McpState::Roto(_)));
+
     println!();
-    if faltantes.is_empty() {
+    if faltantes.is_empty() && !ia_rota {
         println!("  {} Todo listo.", style("✓").green().bold());
         println!();
         return Ok(());
+    }
+
+    if ia_rota {
+        println!(
+            "  {} La integración con IA está incompleta: Claude no va a poder usar Xtal solo.",
+            style("!").yellow().bold()
+        );
     }
 
     if sin_latex {
@@ -1135,7 +1219,7 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
             "  {} No hay motor LaTeX: `xtal run` no va a poder compilar el PDF.",
             style("!").red().bold()
         );
-    } else {
+    } else if !faltantes.is_empty() {
         println!(
             "  {} Falta lo opcional; el informe compila igual.",
             style("·").yellow()
@@ -1146,24 +1230,75 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
         println!(
             "    {} {}",
             style("→").dim(),
-            style("corré `xtal doctor --fix` para instalarlo").cyan()
+            style("corré `xtal doctor --fix` para arreglarlo").cyan()
         );
         println!();
         return Ok(());
     }
 
     // --fix: mismo camino que `xtal setup`, con confirmación por dependencia.
-    println!();
-    println!("  {}", style("Instalando lo que falta").bold());
-    for dep in faltantes {
-        let pkgs = match dep.bin {
-            "tectonic" => crate::deps::tectonic_pkgs(),
-            "pdflatex" => crate::deps::texlive_pkgs(),
-            _ => crate::deps::ngspice_pkgs(),
-        };
-        crate::deps::ensure_one(dep.bin, dep.kind, &pkgs, true)?;
+    if !faltantes.is_empty() {
+        println!();
+        println!("  {}", style("Instalando lo que falta").bold());
+        for dep in faltantes {
+            let pkgs = match dep.bin {
+                "tectonic" => crate::deps::tectonic_pkgs(),
+                "pdflatex" => crate::deps::texlive_pkgs(),
+                _ => crate::deps::ngspice_pkgs(),
+            };
+            crate::deps::ensure_one(dep.bin, dep.kind, &pkgs, true)?;
+        }
     }
+
+    if ia_rota {
+        arreglar_ia()?;
+    }
+
     println!();
+    Ok(())
+}
+
+/// Reinstala el skill y vuelve a registrar el MCP donde haga falta.
+///
+/// Escribe sin preguntar, a diferencia de las dependencias: acá no se instala nada en
+/// el sistema, solo archivos propios de Xtal en el home del usuario. Y quien corrió
+/// `--fix` ya dijo que sí.
+///
+/// Registra el MCP en **todos** los clientes que no lo tengan, aunque el resumen solo
+/// marque como roto el que apunta a un binario muerto: no registrarlo no rompe nada,
+/// pero si ya estás arreglando, dejarlo a medias no tiene sentido.
+fn arreglar_ia() -> Result<()> {
+    println!();
+    println!("  {}", style("Arreglando la integración con IA").bold());
+
+    if matches!(
+        crate::ai::skill_status().0,
+        crate::ai::SkillState::Falta | crate::ai::SkillState::Viejo
+    ) {
+        match crate::ai::install_skill()? {
+            Some(path) => println!("    {} skill → {}", style("✓").green(), path.display()),
+            None => println!("    {} no hay dónde instalar el skill", style("·").dim()),
+        }
+    }
+
+    for cliente in crate::ai::detect_clients() {
+        if matches!(
+            crate::ai::mcp_status(cliente.arg),
+            crate::ai::McpState::Ok(_)
+        ) {
+            continue;
+        }
+        // Un cliente que falla no puede cortar a los otros: si Claude Code no está en
+        // el PATH, Codex igual tiene que quedar registrado.
+        if let Err(e) = crate::ai::register(cliente.arg) {
+            println!(
+                "    {} {}: {}",
+                style("✗").red(),
+                cliente.label,
+                style(e).dim()
+            );
+        }
+    }
     Ok(())
 }
 
@@ -1182,6 +1317,28 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
         "config": {
             "dir": config_dir.as_ref().map(|d| d.display().to_string()),
             "file_exists": config_dir.as_ref().is_some_and(|d| d.join("config.toml").is_file()),
+        },
+        // El estado de la integración con IA, para que un agente pueda darse cuenta
+        // solo de que está mal enchufado y ofrecer `xtal doctor --fix`.
+        "ai": {
+            "skill": match crate::ai::skill_status().0 {
+                crate::ai::SkillState::SinCliente => "sin_cliente",
+                crate::ai::SkillState::Falta => "falta",
+                crate::ai::SkillState::Viejo => "viejo",
+                crate::ai::SkillState::AlDia => "al_dia",
+            },
+            "clients": crate::ai::detect_clients().iter().map(|c| {
+                let (estado, path) = match crate::ai::mcp_status(c.arg) {
+                    crate::ai::McpState::Ok(p) => ("ok", Some(p)),
+                    crate::ai::McpState::Roto(p) => ("roto", Some(p)),
+                    crate::ai::McpState::NoRegistrado => ("no_registrado", None),
+                };
+                serde_json::json!({
+                    "name": c.label,
+                    "mcp": estado,
+                    "command": path.map(|p| p.display().to_string()),
+                })
+            }).collect::<Vec<_>>(),
         },
         // El dato que de verdad importa: ¿puede compilar un informe?
         "can_build": crate::deps::is_available("tectonic") || crate::deps::is_available("pdflatex"),

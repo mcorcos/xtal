@@ -26,28 +26,27 @@ Funciona de punta a punta y está publicado:
 
 ## Lo que más me preocupa
 
-### 1. El CI nunca compila un PDF
+### 1. El CI compila un PDF — HECHO (22 de agosto de 2026)
 
-**El problema.** `ci.yml` corre tests, lints y un smoke del binario, pero **no instala
-Tectonic**. O sea que ninguna corrida de CI compila LaTeX de verdad. Si alguien rompe
-una plantilla de `xtal-render` —un `\usepackage` mal, una llave de más en el `.j2`— los
-tests pasan igual y te enterás cuando no te compila el TP a las tres de la mañana.
+Era el único agujero que podía romper el producto sin que nadie se entere: `ci.yml`
+corría tests, lints y un smoke, pero **nunca compilaba LaTeX**. Romper una plantilla de
+`xtal-render` —un `\usepackage` mal, una llave de más en el `.j2`— pasaba todos los
+tests y se descubría cuando no compilaba el TP.
 
-Es el único agujero que puede romper el producto sin que nadie se entere.
+El job `pdf` de `.github/workflows/ci.yml` ahora, en Linux y en macOS:
 
-**Cómo se hace.** Un job nuevo en `.github/workflows/ci.yml`:
+1. baja **Tectonic 0.17.0** del release de GitHub (no está en apt, ver `tectonic_pkgs()`
+   en `deps.rs`), con la version pinneada a propósito;
+2. cachea el bundle de LaTeX de Tectonic (`~/.cache/Tectonic` en Linux,
+   `~/Library/Caches/Tectonic` en macOS) — sin eso cada corrida se come varios minutos
+   bajando paquetes;
+3. compila el binario y corre `xtal example ci-demo && xtal --project ci-demo run`;
+4. verifica que `ci-demo/salida/main.pdf` arranca con `%PDF-` y pesa más de 10 KB
+   (que el archivo exista no alcanza: un PDF truncado también existe);
+5. sube `salida/` como artifact aunque falle, para poder mirar el `.log` de LaTeX.
 
-1. instalar Tectonic en el runner (en Ubuntu: bajar el binario de su release, no hay
-   paquete en apt — ojo, es lo mismo que documenta `deps.rs`);
-2. `cargo build --bin xtal`;
-3. `xtal example ci-demo && xtal --project ci-demo run`;
-4. verificar que `ci-demo/salida/main.pdf` existe y pesa más que, digamos, 10 KB.
-
-**Cuidado con la primera compilación**: Tectonic baja los paquetes de LaTeX de internet
-y tarda. Conviene cachear su directorio de cache entre corridas (`~/.cache/Tectonic` en
-Linux) con `actions/cache`, si no cada CI se come varios minutos.
-
-Vale la pena hacerlo también en macOS, que es donde corre el 100% del uso real.
+Corre en las dos plataformas: Linux es donde vive el CI, macOS es donde está el uso real.
+Probado a mano antes de subirlo: el ejemplo compila un PDF de 82 KB.
 
 ### 2. Nadie más que Manu lo usó
 
@@ -74,16 +73,29 @@ cantidad no acepte Enter, o que el `MultiSelect` no se entienda sin instruccione
 
 ## Cosas concretas y acotadas
 
-### 4. `xtal doctor` no dice si Claude está enchufado
+### 4. `xtal doctor` reporta la integración con IA — HECHO (22 de agosto de 2026)
 
-Hoy reporta Tectonic, ngspice, LTspice, la config y el proyecto. **No dice si el skill
-está instalado ni si el MCP está registrado**, que desde la 0.3.0 es igual de importante:
-si el skill no está, Claude no se entera de que Xtal existe y no hay forma de darse
-cuenta mirando.
+Desde la 0.3.0 tener el binario instalado no alcanza, y las dos formas de quedar mal
+enchufado fallan **en silencio**: si el skill no está, Claude no se entera de que Xtal
+existe; si el MCP apunta a un binario que ya no existe, el cliente no levanta el server
+y no dice por qué.
 
-Agregar una sección "Integración con IA" en `commands.rs::cmd_doctor` y su equivalente
-en el `--json`, usando lo que ya está en `ai.rs` (`claude_home`, `detect_clients`). Y
-que `--fix` lo arregle.
+- `ai.rs` suma una sección de diagnóstico que solo **lee**: `skill_status()` (sin
+  cliente / falta / viejo / al día, comparando contenido igual que `sync_skill`) y
+  `mcp_status(cliente)` (no registrado / ok / **roto**, o sea registrado apuntando a una
+  ruta donde no hay nada — el clásico Cellar muerto después de un `brew upgrade`).
+- Se lee el archivo de config de cada cliente, no su CLI: `claude mcp get` devuelve exit
+  code 0 tanto si el server existe como si no, así que no sirve para decidir. Claude Code
+  guarda los servers de scope user en `~/.claude.json`. **Escribir sigue siendo tarea de
+  `mcp/install.rs`**, que para Claude Code sí usa `claude mcp add`.
+- `xtal doctor` muestra el bloque "Integración con IA"; `--json` expone `ai.skill` y
+  `ai.clients[]`.
+- **Un MCP sin registrar no cuenta como roto** en el resumen: en Claude Code el MCP es
+  opcional, ya puede usar la CLI por bash. Lo que sí rompe el resumen es el skill
+  ausente o viejo, y un registro que apunta a un binario muerto.
+- `--fix` reinstala el skill y registra el MCP en los clientes detectados. Ahí sí
+  registra **todos** los que falten, no solo los rotos: si ya estás arreglando, dejarlo
+  a medias no tiene sentido.
 
 ### 5. No hay desinstalador
 

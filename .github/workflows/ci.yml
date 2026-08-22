@@ -91,6 +91,9 @@ jobs:
           "$BIN" --help > /dev/null
           "$BIN" doctor
           "$BIN" --json doctor | grep -q '"can_build"'
+          # El bloque de integración con IA: es lo que mira un agente para darse
+          # cuenta solo de que Xtal no está enchufado a su cliente.
+          "$BIN" --json doctor | grep -q '"skill"'
           # El ejemplo embebido: que se materialice y que sea un proyecto de verdad.
           "$BIN" example ci-ejemplo > /dev/null
           test -f ci-ejemplo/xtal.toml
@@ -105,3 +108,90 @@ jobs:
           echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
             | "$BIN" mcp | grep -q '"serverInfo"'
           "$BIN" mcp install --client codex --print > /dev/null
+
+  # El único job que compila un PDF de verdad. Sin esto, romper una plantilla de
+  # `xtal-render` —un \usepackage mal, una llave de más en el .j2— pasa todos los
+  # tests y se descubre recién cuando no compila el TP.
+  #
+  # Corre en las dos plataformas: Linux es donde vive el CI, pero macOS es donde
+  # está el 100% del uso real.
+  pdf:
+    name: compilar un PDF de verdad (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            tectonic_target: x86_64-unknown-linux-gnu
+            tectonic_cache: ~/.cache/Tectonic
+          - os: macos-latest
+            tectonic_target: aarch64-apple-darwin
+            tectonic_cache: ~/Library/Caches/Tectonic
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      # Tectonic no está en apt (ver `tectonic_pkgs()` en deps.rs), así que se baja
+      # el binario de su release. La version va pinneada a propósito: que Tectonic
+      # saque una version nueva no tiene por qué romper el CI de Xtal un martes.
+      - name: Instalar Tectonic
+        env:
+          TECTONIC_VERSION: 0.17.0
+          TECTONIC_TARGET: ${{ matrix.tectonic_target }}
+        run: |
+          set -euxo pipefail
+          url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic@${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-${TECTONIC_TARGET}.tar.gz"
+          curl -fsSL "$url" -o tectonic.tar.gz
+          tar -xzf tectonic.tar.gz
+          sudo install -m 0755 tectonic /usr/local/bin/tectonic
+          rm -f tectonic tectonic.tar.gz
+          tectonic --version
+
+      # Tectonic baja los paquetes de LaTeX de internet en la primera corrida y tarda
+      # varios minutos. Sin este cache, cada CI los vuelve a bajar.
+      - name: Cachear los paquetes de LaTeX de Tectonic
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.tectonic_cache }}
+          key: tectonic-bundle-${{ matrix.os }}-v1
+
+      - name: Compilar el binario
+        run: cargo build --bin xtal
+
+      # El ejemplo embebido es el mismo que recibe cualquiera que instale Xtal:
+      # carátula ITBA + Bode con las tres fuentes. Si esto no compila, el producto
+      # está roto para el primer minuto de todo el mundo.
+      - name: Compilar el PDF del ejemplo
+        run: |
+          set -euxo pipefail
+          BIN=target/debug/xtal
+          "$BIN" example ci-demo
+          "$BIN" --project ci-demo run
+
+      # Que el archivo exista no alcanza: un PDF vacío o truncado también existe.
+      # 10 KB es un piso holgado — el ejemplo real pesa bastante más.
+      - name: Verificar que el PDF es un PDF y no está vacío
+        run: |
+          set -euxo pipefail
+          pdf=ci-demo/salida/main.pdf
+          test -f "$pdf"
+          head -c 5 "$pdf" | grep -q '%PDF-'
+          size=$(wc -c < "$pdf")
+          echo "El PDF pesa $size bytes."
+          test "$size" -gt 10240
+
+      # Si falla, poder abrir el PDF (o el .log de LaTeX) vale más que leer el stdout.
+      - name: Guardar la salida para poder mirarla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-${{ matrix.os }}
+          path: ci-demo/salida/
+          if-no-files-found: warn
+          retention-days: 7

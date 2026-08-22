@@ -21,7 +21,7 @@
 //!     encuentre — eso sí toca la config de otro programa, así que va en el instalador
 //!     y no en un arranque cualquiera.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use console::style;
@@ -130,6 +130,120 @@ pub fn register(client: McpClientArg) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Diagnóstico: ¿está Xtal enchufado, de verdad?
+// ---------------------------------------------------------------------------
+//
+// Desde la 0.3.0, tener el binario instalado NO alcanza. Si el skill no está,
+// Claude no se entera de que Xtal existe; si el MCP quedó apuntando a una ruta
+// muerta, el cliente no levanta el server y no dice por qué. Las dos cosas fallan
+// en silencio y no hay forma de darse cuenta mirando. Por eso `xtal doctor` las
+// reporta: es el único lugar donde alguien va a buscar cuando algo no anda.
+
+/// Nombre con el que registramos el server en los clientes. Es el default de
+/// `xtal mcp install`; si alguien usó `--name` a mano, lo damos por no registrado
+/// y como mucho se registra de nuevo, que es inocuo.
+pub const MCP_SERVER_NAME: &str = "xtal";
+
+/// En qué estado está el skill de Claude Code.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SkillState {
+    /// No hay Claude Code en esta máquina. No es un problema: no hay nada que arreglar.
+    SinCliente,
+    /// Claude Code está, pero el skill no. Claude no sabe que Xtal existe.
+    Falta,
+    /// Está, pero es el de otra version de Xtal. Puede documentar comandos que ya no
+    /// existen, o no nombrar los que sí.
+    Viejo,
+    /// Al día.
+    AlDia,
+}
+
+/// El estado del skill, con la ruta donde iría o donde está.
+pub fn skill_status() -> (SkillState, Option<PathBuf>) {
+    let Some(claude_dir) = claude_home() else {
+        return (SkillState::SinCliente, None);
+    };
+    let path = claude_dir.join("skills").join("xtal").join("SKILL.md");
+    let state = match std::fs::read_to_string(&path) {
+        Ok(actual) if actual == SKILL => SkillState::AlDia,
+        Ok(_) => SkillState::Viejo,
+        Err(_) => SkillState::Falta,
+    };
+    (state, Some(path))
+}
+
+/// Cómo quedó el registro del MCP en un cliente.
+#[derive(Debug, PartialEq, Eq)]
+pub enum McpState {
+    /// El cliente no tiene ninguna entrada para Xtal.
+    NoRegistrado,
+    /// Registrado y apuntando a un binario que existe.
+    Ok(PathBuf),
+    /// Registrado, pero el binario de esa ruta ya no está. Es el caso clásico: una
+    /// ruta del Cellar de Homebrew, con la version adentro, que murió en el último
+    /// `brew upgrade`. El cliente falla al levantar el server y no dice nada.
+    Roto(PathBuf),
+}
+
+/// Lee la config del cliente y devuelve cómo quedó el registro del MCP.
+///
+/// **Solo lee.** Escribir sigue siendo tarea de `mcp/install.rs`, que para Claude Code
+/// usa su propia CLI. Acá leemos el archivo directo porque `claude mcp get` devuelve
+/// exit code 0 tanto si el server existe como si no, así que no sirve para decidir.
+pub fn mcp_status(client: McpClientArg) -> McpState {
+    let comando = match client {
+        // Claude Code guarda los servers de scope user en `~/.claude.json`.
+        McpClientArg::ClaudeCode => directories::BaseDirs::new()
+            .map(|d| d.home_dir().join(".claude.json"))
+            .and_then(|p| comando_en_json(&p)),
+        McpClientArg::ClaudeDesktop => directories::BaseDirs::new()
+            .map(|d| {
+                d.config_dir()
+                    .join("Claude")
+                    .join("claude_desktop_config.json")
+            })
+            .and_then(|p| comando_en_json(&p)),
+        McpClientArg::Codex => directories::BaseDirs::new()
+            .map(|d| d.home_dir().join(".codex").join("config.toml"))
+            .and_then(|p| comando_en_toml(&p)),
+    };
+
+    match comando {
+        None => McpState::NoRegistrado,
+        Some(cmd) => {
+            let path = PathBuf::from(&cmd);
+            if path.is_file() {
+                McpState::Ok(path)
+            } else {
+                McpState::Roto(path)
+            }
+        }
+    }
+}
+
+/// `mcpServers.<nombre>.command` de un archivo JSON, si está.
+fn comando_en_json(path: &Path) -> Option<String> {
+    let texto = std::fs::read_to_string(path).ok()?;
+    let root: serde_json::Value = serde_json::from_str(&texto).ok()?;
+    root.get("mcpServers")?
+        .get(MCP_SERVER_NAME)?
+        .get("command")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// `mcp_servers.<nombre>.command` de un archivo TOML, si está.
+fn comando_en_toml(path: &Path) -> Option<String> {
+    let texto = std::fs::read_to_string(path).ok()?;
+    let doc: toml::Value = toml::from_str(&texto).ok()?;
+    doc.get("mcp_servers")?
+        .get(MCP_SERVER_NAME)?
+        .get("command")?
+        .as_str()
+        .map(str::to_string)
+}
+
+// ---------------------------------------------------------------------------
 // Primera corrida
 // ---------------------------------------------------------------------------
 
@@ -234,6 +348,70 @@ mod tests {
         // La description es lo que decide si el skill se activa: tiene que nombrar los
         // disparadores reales, no solo el nombre del producto.
         assert!(front.contains("osciloscopio") && front.contains("Bode"));
+    }
+
+    #[test]
+    fn lee_el_comando_del_json_de_un_cliente() {
+        // El formato que escribe `mcp/install.rs` para Claude Desktop, y el mismo que
+        // usa Claude Code en `~/.claude.json`.
+        let dir = std::env::temp_dir().join("xtal-test-mcp-json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"otraCosa": 1, "mcpServers": {"xtal": {"command": "/usr/local/bin/xtal", "args": ["mcp"]}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            comando_en_json(&path).as_deref(),
+            Some("/usr/local/bin/xtal")
+        );
+
+        // Un archivo sin nuestra entrada no es un error: es "no registrado".
+        std::fs::write(&path, r#"{"mcpServers": {"otro": {"command": "x"}}}"#).unwrap();
+        assert_eq!(comando_en_json(&path), None);
+
+        // Un archivo roto tampoco puede hacer explotar a `xtal doctor`.
+        std::fs::write(&path, "{ esto no es json").unwrap();
+        assert_eq!(comando_en_json(&path), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lee_el_comando_del_toml_de_codex() {
+        let dir = std::env::temp_dir().join("xtal-test-mcp-toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(
+            &path,
+            "model = \"gpt\"\n\n[mcp_servers.xtal]\ncommand = \"/opt/homebrew/bin/xtal\"\nargs = [\"mcp\"]\n",
+        )
+        .unwrap();
+        assert_eq!(
+            comando_en_toml(&path).as_deref(),
+            Some("/opt/homebrew/bin/xtal")
+        );
+
+        std::fs::write(&path, "model = \"gpt\"\n").unwrap();
+        assert_eq!(comando_en_toml(&path), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn un_archivo_que_no_existe_es_no_registrado() {
+        // Ni panic ni error: el cliente simplemente no tiene nada configurado.
+        let inexistente = std::env::temp_dir().join("xtal-no-existe-jamas.json");
+        assert_eq!(comando_en_json(&inexistente), None);
+        assert_eq!(comando_en_toml(&inexistente), None);
+    }
+
+    #[test]
+    fn el_nombre_del_server_es_el_que_escribe_mcp_install() {
+        // Si esto se desincroniza, `xtal doctor` reporta "no registrado" para algo que
+        // sí está registrado, y `--fix` lo registra de nuevo con otro nombre.
+        assert_eq!(MCP_SERVER_NAME, "xtal");
     }
 
     #[test]
