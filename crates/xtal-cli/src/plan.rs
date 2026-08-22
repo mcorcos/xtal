@@ -234,8 +234,23 @@ fn plan_interview(root: &Path) -> Result<()> {
         println!();
         println!("  {}", style(format!("Gráfico {i} de {cuantos}")).bold());
 
+        // Sin validador, dialoguer vuelve a preguntar en silencio si le das Enter en
+        // blanco: la pregunta se repite sola y no dice por qué. Y un título que es
+        // todo símbolos (`???`) deja `slugify` en vacío, o sea un gráfico con id
+        // vacío y un archivo `graficos/.toml`. Las dos cosas se cortan acá.
         let titulo_grafico: String = Input::with_theme(&theme)
             .with_prompt("  ¿Qué muestra?")
+            // `allow_empty` no es que acepte vacío: es que deja que el vacío LLEGUE al
+            // validador. Sin esto dialoguer se lo come antes y vuelve a preguntar sin
+            // decir nada, que es justo el silencio que queremos sacar.
+            .allow_empty(true)
+            .validate_with(|s: &String| {
+                if crate::commands::slugify(s).is_empty() {
+                    Err("poné un nombre con letras o números, por ejemplo \"Bode de salida\"")
+                } else {
+                    Ok(())
+                }
+            })
             .interact_text()?;
 
         let idx_tipo = Select::with_theme(&theme)
@@ -252,7 +267,10 @@ fn plan_interview(root: &Path) -> Result<()> {
             .defaults(&[true, true, true])
             .interact()?;
 
-        let mut entry = PlannedPlot::new(crate::commands::slugify(&titulo_grafico));
+        // Dos gráficos con el mismo nombre dan el mismo slug, y el segundo pisaría al
+        // primero sin decir nada: la entrevista diría "3 gráficos" y quedarían 2.
+        let id = id_unico(crate::commands::slugify(&titulo_grafico), &nuevos);
+        let mut entry = PlannedPlot::new(id);
         entry.title = Some(titulo_grafico);
         entry.kind = parse_kind(tipos[idx_tipo]);
         entry.sources = elegidas.iter().map(|i| fuentes[*i]).collect();
@@ -290,15 +308,38 @@ fn plan_interview(root: &Path) -> Result<()> {
 
     println!();
     println!(
-        "  {} Plan guardado: {} gráficos, con su sección cada uno.",
+        "  {} Plan guardado: {} {}, con su sección cada uno.",
         style("✓").green().bold(),
-        nuevos.len()
+        nuevos.len(),
+        if nuevos.len() == 1 {
+            "gráfico"
+        } else {
+            "gráficos"
+        }
     );
     println!();
     println!("  Próximo paso — mirá qué falta:");
     println!("    {}", style("xtal status").cyan());
     println!();
     Ok(())
+}
+
+/// Devuelve un id que no choque con los que ya se juntaron en esta entrevista.
+///
+/// Le cuelga `-2`, `-3`, … hasta encontrar uno libre. Es feo pero es honesto: mejor
+/// `bode-2` que perder el gráfico que el usuario acaba de describir.
+fn id_unico(base: String, ya_hay: &[PlannedPlot]) -> String {
+    if !ya_hay.iter().any(|p| p.id == base) {
+        return base;
+    }
+    let mut n = 2;
+    loop {
+        let candidato = format!("{base}-{n}");
+        if !ya_hay.iter().any(|p| p.id == candidato) {
+            return candidato;
+        }
+        n += 1;
+    }
 }
 
 fn parse_kind(s: &str) -> PlotKind {
@@ -563,6 +604,30 @@ fn status_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dos_graficos_con_el_mismo_nombre_no_se_pisan() {
+        // La entrevista no puede decir "3 gráficos" y dejar 2. El segundo se lleva un
+        // sufijo en vez de sobrescribir al primero.
+        let ya = vec![PlannedPlot::new("bode".to_string())];
+        assert_eq!(id_unico("bode".to_string(), &ya), "bode-2");
+        assert_eq!(id_unico("otro".to_string(), &ya), "otro");
+
+        let ya = vec![
+            PlannedPlot::new("bode".to_string()),
+            PlannedPlot::new("bode-2".to_string()),
+        ];
+        assert_eq!(id_unico("bode".to_string(), &ya), "bode-3");
+    }
+
+    #[test]
+    fn un_titulo_sin_letras_ni_numeros_no_da_un_id_vacio() {
+        // Es la condición que valida la entrevista: si esto diera vacío, el gráfico se
+        // guardaría en `graficos/.toml`.
+        assert!(crate::commands::slugify("???").is_empty());
+        assert!(crate::commands::slugify("   ").is_empty());
+        assert!(!crate::commands::slugify("Bode de salida").is_empty());
+    }
 
     #[test]
     fn tiene_figura_busca_en_subsecciones() {

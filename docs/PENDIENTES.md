@@ -58,20 +58,32 @@ No es algo que se "arregle" con código: hay que dárselo a alguien —un compa�
 facultad con Linux, o una VM— y mirar dónde se traba. El primer TP real de otra persona
 va a encontrar más cosas que cualquier test.
 
-### 3. La entrevista de `xtal plan` no la vio funcionar nadie
+### 3. La entrevista de `xtal plan` — PROBADA (22 de agosto de 2026)
 
-`plan_interview()` en `crates/xtal-cli/src/plan.rs` usa `dialoguer`, que necesita una
-terminal de verdad. Desde una sesión de Claude no hay TTY, así que **el ida y vuelta de
-las preguntas nunca se ejecutó**. La lógica que escribe el plan sí está probada por el
-camino de `xtal plan add`, que comparte todo menos las preguntas.
+`plan_interview()` usa `dialoguer`, que necesita una terminal de verdad. Desde una
+sesión de Claude no hay TTY, así que el ida y vuelta de las preguntas nunca se había
+ejecutado.
 
-Es cinco minutos: correrlo a mano en una terminal y ver que las preguntas, los defaults
-y el multi-select se comporten. Puede haber algo tonto, como que el prompt de la
-cantidad no acepte Enter, o que el `MultiSelect` no se entienda sin instrucciones.
+**Cómo se probó, y cómo volver a probarla:** con `script -q /dev/null`, que le da una PTY
+de verdad al proceso y deja alimentarle las respuestas por stdin. Es el truco que
+destraba probar cualquier cosa interactiva desde una sesión sin terminal.
 
----
+El flujo anda: título con Enter, cantidad, y por cada gráfico nombre + tipo + fuentes.
+Deja el plan, un gráfico vacío por entrada y una sección por gráfico, y `xtal status`
+después lee todo bien. Salieron tres cosas, las tres arregladas:
 
-## Cosas concretas y acotadas
+- **Enter en blanco en "¿Qué muestra?" repetía la pregunta sin decir por qué.**
+  `dialoguer` se come el vacío antes del validador. Con `.allow_empty(true)` el vacío
+  **llega** al validador, que ahí sí explica qué falta. (No es que acepte vacío: es lo
+  contrario.)
+- **Un título de puros símbolos (`???`) daba un id vacío**, o sea un gráfico guardado en
+  `graficos/.toml`. El validador ahora exige que `slugify` devuelva algo.
+- **Dos gráficos con el mismo nombre daban el mismo slug y el segundo pisaba al
+  primero**, en silencio: la entrevista decía "3 gráficos" y quedaban 2. Ahora el
+  segundo se lleva un sufijo (`bode`, `bode-2`).
+
+Queda un pendiente chico y honesto: **un humano todavía no la usó de verdad**. Una PTY
+simulada prueba la lógica y los mensajes, no si las preguntas se entienden.
 
 ### 4. `xtal doctor` reporta la integración con IA — HECHO (22 de agosto de 2026)
 
