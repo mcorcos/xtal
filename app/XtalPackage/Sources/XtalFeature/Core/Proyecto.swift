@@ -31,6 +31,40 @@ public final class Proyecto {
         public var nombre: String { url.lastPathComponent }
         /// La carpeta de adentro del proyecto donde vive, para agrupar en la lista.
         public var grupo: String
+
+        /// Cómo se le dice a este archivo en castellano.
+        ///
+        /// Un proyecto de Xtal es una pila de `.toml` y para el que abre la app por
+        /// primera vez no significan nada: `teorica_mag.toml` no dice que es una curva.
+        /// La lista muestra esto y deja el nombre real abajo, chiquito — así se aprende
+        /// la correspondencia en vez de esconderla.
+        public var etiqueta: String {
+            let base = url.deletingPathExtension().lastPathComponent
+            if nombre == "xtal.toml" { return "El informe" }
+            switch grupo {
+            case "mediciones": return "Curva · \(base)"
+            case "graficos": return "Gráfico · \(base)"
+            case "esquematicos": return "Circuito · \(base)"
+            default: return nombre
+            }
+        }
+
+        /// Qué controla este archivo, para el cartel de arriba del editor.
+        public var explicacion: String? {
+            if nombre == "xtal.toml" {
+                return "El manifiesto del informe: título, autores, theme, el plan de gráficos y el texto de cada sección. Las secciones se editan mejor desde la lista de arriba."
+            }
+            switch grupo {
+            case "mediciones":
+                return "La metadata de una curva: sus unidades, sus etiquetas y de dónde salió. Los datos están en el .csv de al lado."
+            case "graficos":
+                return "La receta de un gráfico: qué curvas muestra y con qué estilo. No tiene datos adentro; las referencia por id."
+            case "esquematicos":
+                return "Un circuito en formato SPICE. Es lo que corre `xtal sim`."
+            default:
+                return nil
+            }
+        }
     }
 
     public init(carpeta: URL) {

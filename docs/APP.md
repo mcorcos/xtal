@@ -102,6 +102,18 @@ que rompió, y un link a la sección donde está. El volcado completo queda a un
 Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
 resultado. Si no hay resultado, ahí va la explicación.
 
+## Que se entienda el TOML
+
+Un proyecto de Xtal es una pila de `.toml` y para el que abre la app por primera vez no
+significan nada: `teorica_mag.toml` no dice que es una curva.
+
+La lista de archivos muestra **qué es cada uno** —«El informe», «Gráfico · bode»,
+«Curva · teorica_mag», «Circuito · filtro»— y deja el nombre real abajo, chiquito. Así
+se aprende la correspondencia en vez de esconderla.
+
+Y al abrir uno, arriba del editor va una línea diciendo qué controla ese archivo. Abrir
+un `.toml` sin saber qué hace es abrirlo a ciegas.
+
 ## Wrappers sobre todo
 
 La idea de fondo: cada cosa difícil de LaTeX tiene que tener adelante algo fácil.

@@ -452,6 +452,37 @@ pub fn cmd_section(cmd: SectionCmd, project: &Option<PathBuf>, json: bool) -> Re
                 );
             }
         }
+        SectionCmd::Rename { from, to } => {
+            let section = find_section_mut(&mut proj.sections, &from)
+                .ok_or_else(|| anyhow!("no encontré la sección '{from}'"))?;
+            section.title = to.clone();
+            store::save_project(&root, &proj)?;
+            if json {
+                println!("{}", serde_json::json!({ "from": from, "to": to }));
+            } else {
+                println!(
+                    "{} '{from}' ahora se llama '{to}'",
+                    style("✓").green().bold()
+                );
+            }
+        }
+        SectionCmd::Remove { title } => {
+            // Se lleva las subsecciones con ella: son parte de la sección, no algo
+            // que quede colgando en la raíz del informe.
+            let sacadas = remove_section(&mut proj.sections, &title);
+            if !sacadas {
+                bail!("no encontré la sección '{title}'");
+            }
+            store::save_project(&root, &proj)?;
+            if json {
+                println!("{}", serde_json::json!({ "removed": title }));
+            } else {
+                println!(
+                    "{} Sección '{title}' sacada del informe",
+                    style("✓").green().bold()
+                );
+            }
+        }
         SectionCmd::List => {
             // Con --json sale el árbol entero, cuerpos incluidos: es lo que necesita
             // cualquier cosa que quiera mostrar o editar las secciones sin parsear el
@@ -466,6 +497,18 @@ pub fn cmd_section(cmd: SectionCmd, project: &Option<PathBuf>, json: bool) -> Re
         }
     }
     Ok(())
+}
+
+/// Saca una sección por título, buscando también adentro de las subsecciones.
+/// Devuelve `true` si encontró y sacó alguna.
+fn remove_section(sections: &mut Vec<Section>, title: &str) -> bool {
+    if let Some(i) = sections.iter().position(|s| s.title == title) {
+        sections.remove(i);
+        return true;
+    }
+    sections
+        .iter_mut()
+        .any(|s| remove_section(&mut s.subsections, title))
 }
 
 fn find_section_mut<'a>(sections: &'a mut [Section], title: &str) -> Option<&'a mut Section> {

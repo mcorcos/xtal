@@ -21,6 +21,22 @@ public struct Workspace: View {
     @State private var insercion: EditorCodigo.Insercion?
     @Environment(\.colorScheme) private var esquema
 
+    /// El diálogo de crear o renombrar una sección.
+    @State private var pidiendoTitulo: PedidoDeTitulo?
+    @State private var tituloNuevo = ""
+
+    private struct PedidoDeTitulo: Identifiable {
+        enum Clase { case nueva(bajo: String?), renombrar(String) }
+        let id = UUID()
+        let clase: Clase
+        var titulo: String {
+            switch clase {
+            case .nueva(let bajo): return bajo == nil ? "Nueva sección" : "Nueva subsección"
+            case .renombrar: return "Cambiarle el nombre"
+            }
+        }
+    }
+
     @AppStorage("xtal.modo") private var modoCrudo = Modo.editor.rawValue
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
@@ -65,6 +81,17 @@ public struct Workspace: View {
         .navigationTitle(proyecto.nombre)
         .navigationSubtitle(proyecto.carpeta.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
         .onAppear { cargarSeleccionado() }
+        .sheet(item: $pidiendoTitulo) { pedido in
+            DialogoTitulo(titulo: pedido.titulo, texto: $tituloNuevo) { nombre in
+                Task {
+                    switch pedido.clase {
+                    case .nueva(let bajo): await secciones.agregar(nombre, bajo: bajo)
+                    case .renombrar(let viejo): await secciones.renombrar(viejo, a: nombre)
+                    }
+                    cargarSeleccionado()
+                }
+            }
+        }
         .task {
             await ajuste.refrescar()
             await secciones.recargar()
@@ -255,7 +282,17 @@ public struct Workspace: View {
             PanelEstado(carpeta: proyecto.carpeta)
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
-            cabecera("Secciones del informe", icono: "text.alignleft")
+            cabecera("Secciones del informe", icono: "text.alignleft") {
+                Button {
+                    tituloNuevo = ""
+                    pidiendoTitulo = PedidoDeTitulo(clase: .nueva(bajo: nil))
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Tok.textSecondary)
+                .help("Agregar una sección")
+            }
             listaSecciones
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
@@ -278,7 +315,8 @@ public struct Workspace: View {
                                 .padding(.horizontal, Tok.S.md)
                                 .frame(height: 24)
                         case .archivo(let a):
-                            ItemNav(titulo: a.nombre, icono: icono(a),
+                            ItemNav(titulo: a.etiqueta, icono: icono(a),
+                                    detalle: a.nombre,
                                     activo: proyecto.seleccionado?.id == a.id) {
                                 if let sec = secciones.seleccionada {
                                     secciones.guardar(sec.titulo, cuerpo: texto)
@@ -335,6 +373,20 @@ public struct Workspace: View {
                         elegirSeccion(sec)
                     }
                     .padding(.leading, CGFloat(sec.nivel) * 14)
+                    .contextMenu {
+                        Button("Cambiarle el nombre…") {
+                            tituloNuevo = sec.titulo
+                            pidiendoTitulo = PedidoDeTitulo(clase: .renombrar(sec.titulo))
+                        }
+                        Button("Agregar una subsección…") {
+                            tituloNuevo = ""
+                            pidiendoTitulo = PedidoDeTitulo(clase: .nueva(bajo: sec.titulo))
+                        }
+                        Divider()
+                        Button("Sacar del informe", role: .destructive) {
+                            Task { await secciones.borrar(sec.titulo); cargarSeleccionado() }
+                        }
+                    }
                 }
             }
         }
@@ -350,7 +402,22 @@ public struct Workspace: View {
                 BarraBloques { bloque in insercion = bloque.insercion }
                 EditorCodigo(texto: $texto, archivoID: "seccion:" + sec.titulo, insercion: $insercion)
             } else if let a = proyecto.seleccionado {
-                cabecera(a.nombre, icono: icono(a))
+                cabecera(a.etiqueta, icono: icono(a), sufijo: a.url.pathExtension.uppercased())
+                // Abrir un `.toml` sin saber qué controla es abrir un archivo a ciegas.
+                // Una línea arriba y ya sabés dónde estás parado.
+                if let explicacion = a.explicacion {
+                    Text(explicacion)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Tok.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, Tok.S.lg)
+                        .padding(.vertical, Tok.S.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Tok.azul.bg)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(Tok.azul.tint).frame(height: 1)
+                        }
+                }
                 EditorCodigo(texto: $texto, archivoID: a.url.path, insercion: $insercion)
             } else {
                 Vacio(icono: "doc.text", titulo: "No hay nada abierto")
@@ -386,7 +453,12 @@ public struct Workspace: View {
         .background(Tok.bgApp)
     }
 
-    private func cabecera(_ titulo: String, icono: String, sufijo: String? = nil) -> some View {
+    private func cabecera<Accesorio: View>(
+        _ titulo: String,
+        icono: String,
+        sufijo: String? = nil,
+        @ViewBuilder accesorio: () -> Accesorio = { EmptyView() }
+    ) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Tok.S.sm) {
                 Image(systemName: icono)
@@ -397,6 +469,7 @@ public struct Workspace: View {
                     Chip(texto: sufijo, familia: Tok.azul)
                 }
                 Spacer()
+                accesorio()
             }
             .padding(.horizontal, Tok.S.lg)
             .frame(height: Tok.H.fila)

@@ -124,6 +124,9 @@ struct FilaAjuste<Control: View>: View {
 struct ItemNav: View {
     let titulo: String
     let icono: String
+    /// Una segunda línea, chiquita. Se usa para el nombre real de un archivo debajo de
+    /// su nombre legible: así se aprende la correspondencia en vez de esconderla.
+    var detalle: String? = nil
     let activo: Bool
     let accion: () -> Void
 
@@ -136,14 +139,23 @@ struct ItemNav: View {
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Tok.textSecondary)
                     .frame(width: 16)
-                Text(titulo)
-                    .font(Tok.F.valor)
-                    .foregroundStyle(Tok.textPrimary)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(titulo)
+                        .font(Tok.F.valor)
+                        .foregroundStyle(Tok.textPrimary)
+                        .lineLimit(1)
+                    if let detalle {
+                        Text(detalle)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Tok.textTertiary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .padding(.leading, Tok.S.md)
             .padding(.trailing, Tok.S.xs)
-            .frame(height: Tok.H.boton)
+            .frame(height: detalle == nil ? Tok.H.boton : Tok.H.fila + 6)
             .background(
                 RoundedMe(activo: activo, hover: hover)
             )
@@ -306,5 +318,50 @@ extension View {
     /// Fondo de una barra de herramientas o cabecera.
     func fondoBarra() -> some View {
         background(MaterialLateral(material: .headerView))
+    }
+}
+
+
+// MARK: - Diálogo de un título
+
+/// Pedir un nombre y nada más. Un `sheet` chico, no una ventana.
+struct DialogoTitulo: View {
+    let titulo: String
+    @Binding var texto: String
+    let confirmar: (String) -> Void
+
+    @Environment(\.dismiss) private var cerrar
+    @FocusState private var enfocado: Bool
+
+    private var valido: Bool { !texto.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tok.S.lg) {
+            Text(titulo).font(Tok.F.titulo).foregroundStyle(Tok.textPrimary)
+
+            TextField("Cómo se llama", text: $texto)
+                .textFieldStyle(.roundedBorder)
+                .focused($enfocado)
+                .onSubmit { if valido { aceptar() } }
+
+            HStack {
+                Spacer()
+                Button("Cancelar") { cerrar() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Listo") { aceptar() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!valido)
+            }
+        }
+        .padding(Tok.S.xl)
+        .frame(width: 340)
+        // El foco va al campo apenas abre: si no, hay que ir a buscarlo con el mouse
+        // para escribir la única cosa que el diálogo pide.
+        .onAppear { enfocado = true }
+    }
+
+    private func aceptar() {
+        confirmar(texto.trimmingCharacters(in: .whitespaces))
+        cerrar()
     }
 }

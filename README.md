@@ -249,13 +249,15 @@ xtal run --open
 | `preview` | Compila un solo gráfico a PDF, para iterar rápido |
 
 ### Informe — `xtal section`
-`add` (sección o subsección) · `set` · `list`
+`add` (sección o subsección) · `set` · `rename` · `remove` · `list`
 
 `set <título> --body-file <archivo>` reemplaza el cuerpo de una sección que ya existe.
 El cuerpo va por archivo y no por argumento porque el LaTeX tiene comillas, barras y
 saltos de línea: pasarlo por la línea de comandos obliga a escapar todo y se rompe en el
 primer apóstrofe. `list --json` devuelve el árbol entero con los cuerpos, para que algo
-pueda mostrarlas o editarlas sin parsear el `xtal.toml` por su cuenta.
+pueda mostrarlas o editarlas sin parsear el `xtal.toml` por su cuenta. `remove` se
+lleva las subsecciones con ella: son parte de la sección, no algo que quede colgando en
+la raíz del informe.
 
 ### Circuitos — `xtal circuit`
 `import` (copia un `.cir` al proyecto) · `list` · `show`

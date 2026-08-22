@@ -95,6 +95,33 @@ public final class Secciones {
         }
     }
 
+    // MARK: - Crear, renombrar, borrar
+
+    /// Agrega una sección al final, o adentro de otra si le pasás `bajo`.
+    public func agregar(_ titulo: String, bajo: String? = nil) async {
+        var args = ["section", "add", titulo]
+        if let bajo { args += ["--under", bajo] }
+        _ = try? await XtalCLI.correr(args, en: carpeta)
+        await recargar()
+        seleccionada = lista.first { $0.titulo == titulo }
+    }
+
+    public func renombrar(_ titulo: String, a nuevo: String) async {
+        _ = try? await XtalCLI.correr(["section", "rename", titulo, nuevo], en: carpeta)
+        await recargar()
+        seleccionada = lista.first { $0.titulo == nuevo }
+    }
+
+    /// Saca una sección. **Se lleva sus subsecciones con ella.**
+    public func borrar(_ titulo: String) async {
+        // Cancelar el guardado pendiente: si no, el debounce vuelve a escribir el
+        // cuerpo de la sección que acabamos de borrar y `section set` falla sola.
+        guardadoPendiente?.cancel()
+        _ = try? await XtalCLI.correr(["section", "remove", titulo], en: carpeta)
+        if seleccionada?.titulo == titulo { seleccionada = nil }
+        await recargar()
+    }
+
     /// Guarda ya, sin esperar. Se usa antes de compilar: compilar con el guardado a
     /// medio camino te muestra un PDF de hace medio segundo.
     public func guardarYa(_ titulo: String, cuerpo: String) async {

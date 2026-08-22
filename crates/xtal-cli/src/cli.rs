@@ -359,6 +359,18 @@ pub enum SectionCmd {
     Add(SectionAddArgs),
     /// Reemplaza el cuerpo (o las figuras) de una sección que ya existe.
     Set(SectionSetArgs),
+    /// Le cambia el título a una sección. El cuerpo y las figuras quedan igual.
+    Rename {
+        /// Título actual.
+        from: String,
+        /// Título nuevo.
+        to: String,
+    },
+    /// Saca una sección del informe. **Se lleva sus subsecciones con ella.**
+    Remove {
+        /// Título de la sección a sacar.
+        title: String,
+    },
     /// Lista la estructura de secciones.
     List,
 }
