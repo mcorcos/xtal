@@ -122,14 +122,33 @@ saca. Detalles que importan:
   imprime el comando exacto según dónde viva (`brew uninstall` o `rm <ruta>`). Los
   proyectos son carpetas del usuario.
 
-### 6. Un solo theme
+### 6. Segundo theme — HECHO (22 de agosto de 2026)
 
-`themes/` tiene solo `itba`. El motor está hecho para que una institución sea un
-paquete y no código, pero **nunca se probó con un segundo theme**, así que es probable
-que haya cosas de ITBA filtradas en el motor sin que se note.
+`themes/` tenía solo `itba`. El motor está hecho para que una institución sea un paquete
+y no código, pero mientras ITBA fuera el único theme no había forma de saber si el motor
+sabía leer **themes** o si sabía leer **ITBA**.
 
-La prueba real es hacer un theme genérico (sin logo, colores neutros) y ver qué se
-rompe. Sirve además para cualquiera que no sea del ITBA.
+Se agregó `themes/generico`: sin institución, sin color propio, con el preámbulo vacío.
+Todo en su default a propósito, así que cualquier cosa que el motor dé por sentada de un
+theme se rompe ahí.
+
+**Lo que estaba filtrado.** El motor asumía que todo informe sale de una institución:
+`[institucion]` era obligatorio en el `theme.toml`, y la carátula imprimía la línea
+siempre. Con un theme sin institución salía un `{\large }` en blanco que igual se comía
+su espacio vertical.
+
+- `nombre` y `sigla` ahora son opcionales, y `[institucion]` entera también. Un
+  `theme.toml` vacío es un theme válido (hay un test).
+- Vacío significa "sin institución": la carátula **no dibuja la línea** en vez de
+  dibujarla en blanco. Vale para los dos formatos (`facultad` y `paper`).
+- Sin `[colors]`, cae al gris neutro del motor (`333333`).
+
+Verificado compilando el ejemplo con `theme = generico` en los dos formatos: los dos
+dan PDF, sin la línea de institución y sin hueco donde estaba.
+
+Queda afuera de este punto lo de los **logos**: el `theme.toml` de ITBA tiene la sección
+`[logos]` comentada y el motor todavía no la lee. Cuando se implemente, el theme genérico
+es el que prueba el caso "no hay logo".
 
 ### 7. Windows no existe
 

@@ -66,10 +66,14 @@ pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> Strin
         DocFormat::Facultad => {
             let mut c = String::new();
             c.push_str("\\begin{titlepage}\n\\centering\n");
-            c.push_str(&format!(
-                "{{\\large {}}}\\\\[0.3cm]\n",
-                latex_escape(&theme.institution_name)
-            ));
+            // Un theme sin institución (el `generico`) no dibuja la línea. Antes salía
+            // en blanco: un `{\large }` que igual se comía su espacio vertical.
+            if !theme.institution_name.is_empty() {
+                c.push_str(&format!(
+                    "{{\\large {}}}\\\\[0.3cm]\n",
+                    latex_escape(&theme.institution_name)
+                ));
+            }
             if let Some(course) = &doc.course {
                 c.push_str(&format!("{{\\large {}}}\\\\[2cm]\n", latex_escape(course)));
             } else {
@@ -120,10 +124,12 @@ pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> Strin
                     latex_escape(&authors_inline)
                 ));
             }
-            c.push_str(&format!(
-                "{{\\small {}}}\n",
-                latex_escape(&theme.institution_sigla)
-            ));
+            if !theme.institution_sigla.is_empty() {
+                c.push_str(&format!(
+                    "{{\\small {}}}\n",
+                    latex_escape(&theme.institution_sigla)
+                ));
+            }
             c.push_str("\\end{center}\n\\vspace{0.4cm}\n]\n");
             c
         }

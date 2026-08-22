@@ -28,7 +28,10 @@ entregable, sin pelearse con el formato.
   `·10⁻³`), y la leyenda se ubica en la esquina más despejada — o afuera del eje si los
   datos no dejan ninguna libre, para no taparlos nunca.
 - **Themes como paquete, no como código.** La identidad de una institución (logos, colores,
-  carátulas) es un theme; el motor no sabe de ninguna en particular.
+  carátulas) es un theme; el motor no sabe de ninguna en particular. Vienen dos:
+  `itba` y `generico` (sin institución, para el que no es de ninguna facultad o no
+  quiere membrete). Para el de la tuya, copiá `themes/generico/` y cambiale el nombre
+  y el color.
 - **Config en cascada**, modelo git: defaults del binario → global del usuario → proyecto → flag.
 - **Pensado para ser orquestado por una IA.** Cada comando es atómico y determinístico, y
   todos aceptan `--json` para que la salida se parsee sin ambigüedad.

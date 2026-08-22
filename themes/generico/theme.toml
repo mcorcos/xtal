@@ -1,0 +1,26 @@
+# Theme genérico — sin institución, sin color propio.
+#
+# Existe por dos razones.
+#
+# 1. **Sirve.** No todo el que usa Xtal es del ITBA. Este theme da una carátula
+#    limpia: título, autores y fecha, nada de membrete.
+#
+# 2. **Es la prueba del motor.** Mientras ITBA fue el único theme, no había forma de
+#    saber si el motor sabía leer themes o si sabía leer ITBA. Este theme deja todo
+#    en su default a propósito — no declara institución ni colores — así que si
+#    mañana alguien vuelve a asumir que un theme siempre trae institución, se rompe
+#    acá y no en la máquina de un desconocido.
+#
+# Para armar el theme de tu facultad: copiá esta carpeta, ponele el nombre de la
+# institución y su color, y listo. El motor no necesita saber nada más.
+
+[institucion]
+# Las dos claves son opcionales. Vacías (o ausentes) = la carátula no imprime la
+# línea de institución, en vez de imprimirla en blanco.
+# nombre = "Universidad de Buenos Aires"
+# sigla = "UBA"
+
+[colors]
+# Sin `primary`, el motor usa su gris oscuro neutro (333333). Descomentá para
+# poner el color de tu institución, en HEX y sin el `#`.
+# primary = "8B0000"

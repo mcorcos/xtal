@@ -22,15 +22,29 @@ struct EmbeddedThemes;
 /// El `theme.toml` parseado.
 #[derive(Debug, Deserialize)]
 struct ThemeManifest {
+    /// Opcional a propósito: un theme genérico no tiene institución. Ver la nota en
+    /// `Institucion`.
+    #[serde(default)]
     institucion: Institucion,
     #[serde(default)]
     colors: Colors,
 }
 
-#[derive(Debug, Deserialize)]
+/// Los dos campos son opcionales.
+///
+/// Hasta que existió un segundo theme, el motor daba por sentado que todo informe sale
+/// de una institución: el `theme.toml` tenía que declararla sí o sí, y la carátula
+/// imprimía la línea siempre. Eso funcionaba porque el único theme era ITBA.
+///
+/// Un theme genérico —alguien que no es de ninguna facultad, o que no quiere el membrete
+/// arriba del título— no tiene qué poner ahí. Con los campos vacíos, la carátula
+/// directamente no dibuja esa línea.
+#[derive(Debug, Default, Deserialize)]
 struct Institucion {
-    nombre: String,
-    sigla: String,
+    #[serde(default)]
+    nombre: Option<String>,
+    #[serde(default)]
+    sigla: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -43,7 +57,10 @@ struct Colors {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     pub name: String,
+    /// Nombre completo de la institución. **Vacío significa "sin institución"**: la
+    /// carátula no dibuja la línea en vez de dibujarla en blanco.
     pub institution_name: String,
+    /// Sigla. Mismo criterio: vacío = no se imprime.
     pub institution_sigla: String,
     /// Color primario en HEX (sin `#`). Default: un gris oscuro neutro.
     pub primary_hex: String,
@@ -101,8 +118,8 @@ impl Theme {
             })?;
         Ok(Theme {
             name: name.to_string(),
-            institution_name: manifest.institucion.nombre,
-            institution_sigla: manifest.institucion.sigla,
+            institution_name: manifest.institucion.nombre.unwrap_or_default(),
+            institution_sigla: manifest.institucion.sigla.unwrap_or_default(),
             primary_hex: manifest
                 .colors
                 .primary
@@ -178,6 +195,26 @@ mod tests {
         assert_eq!(theme.institution_sigla, "ITBA");
         assert_eq!(theme.primary_hex, "003C71");
         assert!(theme.institution_name.contains("Buenos Aires"));
+    }
+
+    #[test]
+    fn loads_embedded_generico() {
+        // El segundo theme existe justamente para que el motor no pueda dar por
+        // sentado nada de ITBA. Sin institución y sin color propio.
+        let theme = Theme::load("generico", None).unwrap();
+        assert!(theme.institution_name.is_empty());
+        assert!(theme.institution_sigla.is_empty());
+        // Cae al gris neutro del motor porque el theme no declara `[colors]`.
+        assert_eq!(theme.primary_hex, "333333");
+    }
+
+    #[test]
+    fn un_theme_sin_institucion_carga_igual() {
+        // El caso mínimo: un theme.toml vacío tiene que ser un theme válido. Antes
+        // del segundo theme, `[institucion]` era obligatorio y esto era un error.
+        let theme = Theme::build("pelado", "", String::new()).unwrap();
+        assert!(theme.institution_name.is_empty());
+        assert_eq!(theme.primary_hex, "333333");
     }
 
     #[test]
