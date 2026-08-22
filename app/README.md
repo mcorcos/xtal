@@ -127,3 +127,27 @@ To include assets in your feature package:
 
 ### Generated with XcodeBuildMCP
 This project was scaffolded using [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP), which provides tools for AI-assisted macOS development workflows.
+---
+
+## Cómo se compila y se corre (Xtal)
+
+```
+cd app
+xcodebuild -workspace Xtal.xcworkspace -scheme Xtal -configuration Debug -destination 'platform=macOS' build
+open ~/Library/Developer/Xcode/DerivedData/Xtal-*/Build/Products/Debug/Xtal.app
+```
+
+El código de verdad vive en `XtalPackage/`, que compila y se testea sin abrir Xcode:
+
+```
+cd app/XtalPackage && swift test
+```
+
+### Dos cosas que conviene saber
+
+- **El sandbox está apagado a propósito.** La app corre el binario `xtal`, abre tu shell
+  y escribe en la carpeta que elegís. Nada de eso se puede hacer en sandbox. El motivo
+  completo está escrito adentro de `Config/Xtal.entitlements`.
+- **SwiftTerm está clavado en 1.10.0.** De 1.11 en adelante trae un build plugin y un
+  renderer en Metal: el plugin hay que aprobarlo en cada build por línea de comandos y el
+  Metal obliga a bajar varios GB de toolchain. 1.10.0 es la última sin ninguna de las dos.

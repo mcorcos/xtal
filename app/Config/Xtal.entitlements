@@ -2,9 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  El sandbox está APAGADO, y es una decisión, no un olvido.
+
+	  Xtal hace tres cosas que el sandbox no permite:
+	    1. corre el binario `xtal` de tu sistema, que a su vez corre `tectonic` y
+	       `ngspice` y escribe en la carpeta del informe;
+	    2. abre tu shell de verdad en la terminal integrada, para que adentro puedas
+	       correr `claude`;
+	    3. escribe en la carpeta que vos elegiste, no en un contenedor propio.
+
+	  Un proyecto de Xtal es una carpeta tuya del disco, versionada con git. Meterla
+	  en el contenedor de una app sería romper la idea entera del producto.
+
+	  Lo que se pierde: no se puede publicar en la Mac App Store. No importa — Xtal
+	  ya se distribuye por GitHub y Homebrew, y una app de escritorio se firma y se
+	  notariza para que Gatekeeper la deje pasar igual.
+
+	  Las apps del mismo rubro hacen lo mismo: ninguna terminal ni ningún editor que
+	  corra herramientas del sistema está en la App Store.
+	-->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
+	<false/>
 </dict>
 </plist>
