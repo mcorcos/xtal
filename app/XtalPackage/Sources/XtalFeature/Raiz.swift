@@ -7,11 +7,19 @@ public struct Raiz: View {
     @State private var carpeta: URL?
     @AppStorage("xtal.apariencia") private var apariencia = "auto"
 
-    public init() {}
+    public init() {
+        // `XTAL_OPEN` abre una carpeta sin pasar por el inicio. Es para desarrollo:
+        // ver `Desarrollo.swift`.
+        _carpeta = State(initialValue: Desarrollo.carpetaInicial)
+    }
 
     public var body: some View {
         Group {
-            if let carpeta {
+            if Desarrollo.pantallaForzada == "ajustes" {
+                Ajustes()
+            } else if Desarrollo.pantallaForzada == "pdf" {
+                VisorPDF(url: Desarrollo.carpetaInicial?.appendingPathComponent("salida/main.pdf"))
+            } else if let carpeta {
                 Workspace(carpeta: carpeta) { self.carpeta = nil }
                     .id(carpeta)   // otra carpeta = workspace nuevo, sin estado viejo
             } else {

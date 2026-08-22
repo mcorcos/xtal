@@ -46,7 +46,7 @@ struct Inicio: View {
 
             VStack(alignment: .leading, spacing: Tok.S.md) {
                 BotonInicio(icono: "folder", titulo: "Abrir una carpeta",
-                            detalle: "Cualquier carpeta con un xtal.toml adentro",
+                            detalle: "La que tenga el xtal.toml adentro",
                             destacado: true, accion: elegirCarpeta)
 
                 BotonInicio(icono: "sparkles", titulo: "Probar con un ejemplo",
@@ -197,6 +197,7 @@ private struct BotonInicio: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(titulo).font(Tok.F.valor).foregroundStyle(Tok.textPrimary)
                     Text(detalle).font(Tok.F.label).foregroundStyle(Tok.textSecondary)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }

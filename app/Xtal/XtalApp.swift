@@ -8,6 +8,7 @@ struct XtalApp: App {
     var body: some Scene {
         WindowGroup {
             Raiz()
+                .onAppear { Desarrollo.retratarSiCorresponde() }
         }
         // El título va adentro de la barra, que es lo que hace que la ventana se sienta
         // de esta década y no de 2014.

@@ -15,6 +15,43 @@ La app es para que cualquiera haga un informe perfecto sin aprender LaTeX.
 Eso incluye a gente que no es de laboratorio ni de facultad: administración, trabajo,
 cualquiera que tenga que entregar algo escrito y quiera que se vea bien.
 
+## Dos modos, no una pantalla con paneles
+
+La idea es de Cursor, y la razón es que las dos formas de trabajar quieren pantallas
+distintas — no la misma con cosas apagadas.
+
+| Modo | Qué ves | Cuándo |
+|---|---|---|
+| **Editor** | Archivos · texto · PDF | Escribís vos |
+| **Agente** | Terminal grande · PDF | Le hablás a Claude |
+
+En modo agente la terminal **no es un cajón que se abre: es la pantalla**. Abrís `claude`
+adentro y trabajás hablando, mirando el PDF salir al lado. Es lo que hace Conductor.
+
+No hay lista de archivos ni editor en ese modo, y es a propósito: si estás ahí, los
+archivos los toca él.
+
+## Git adentro, en símbolos
+
+De Supacode nos traemos que **el estado del repositorio se lea de un vistazo**: una barra
+abajo con la rama y símbolos de color con su número.
+
+| Símbolo | Qué es |
+|---|---|
+| ↑ verde | commits tuyos sin subir |
+| ↓ azul | commits del remoto que no tenés |
+| ✎ ámbar | archivos modificados |
+| + verde | archivos nuevos |
+| − rojo | archivos borrados |
+| ⚠ rojo | conflictos de merge |
+
+Cada símbolo escribe su número y dice su nombre al pasar el mouse: un color solo no le
+comunica nada a quien no distingue esos dos colores.
+
+Los botones que aparecen son los del día a día — guardar cambios, traer, subir — y solo
+cuando hay algo que hacer. **No es un cliente de git**: no hay historial, ni diffs, ni
+ramas. Para eso está la terminal, que la app ya tiene adentro.
+
 ## Los tres extremos, todos al mismo tiempo
 
 La app no elige un nivel de usuario. Los tres caminos llevan al mismo lugar y se pueden
@@ -68,7 +105,8 @@ De a poco, una pieza por vez. Nada de UI hasta tener claro qué va adentro.
 
 ## Todavía sin definir
 
-- La forma de la ventana.
+- El login: GitHub primero (device flow, sin servidor), después Drive y OneDrive.
+- Clonar un repo desde la app.
 - Qué es exactamente un "bloque" para el que no quiere ver LaTeX.
 - Cómo se pide la cuenta de git y dónde se guarda.
 - Qué pasa con los proyectos que no son de electrónica.
