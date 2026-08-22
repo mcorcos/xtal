@@ -15,7 +15,7 @@ public struct Raiz: View {
 
     public var body: some View {
         Group {
-            if Desarrollo.pantallaForzada == "ajustes" {
+            if Desarrollo.pantallaForzada?.hasPrefix("ajustes") == true {
                 Ajustes()
             } else if Desarrollo.pantallaForzada == "pdf" {
                 VisorPDF(url: Desarrollo.carpetaInicial?.appendingPathComponent("salida/main.pdf"))

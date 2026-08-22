@@ -11,6 +11,7 @@ import SwiftUI
 /// Arranca en la carpeta del proyecto, así que `xtal` ya sabe sobre qué está parado.
 struct TerminalIntegrada: NSViewRepresentable {
     let carpeta: URL
+    @Environment(\.colorScheme) private var esquema
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let v = LocalProcessTerminalView(frame: .zero)
@@ -23,13 +24,9 @@ struct TerminalIntegrada: NSViewRepresentable {
         // código se lee igual de los dos lados), aire alrededor, el cursor de barra que
         // es lo que usa cualquier editor, y los colores del sistema para que el modo
         // oscuro funcione solo.
-        v.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        v.configureNativeColors()
-        v.caretColor = NSColor(hex: "266df0")
-        v.caretTextColor = .white
-        v.getTerminal().hideCursor()
-        v.getTerminal().showCursor()
+        v.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         v.optionAsMetaKey = true   // ⌥←/→ mueven por palabra, como en cualquier shell
+        pintar(v)
 
         // El shell de la persona, no un bash cualquiera: sus alias, su prompt, su PATH.
         // Con `-l` (login) se carga el perfil, que es lo que hace que `xtal` y `claude`
@@ -47,13 +44,42 @@ struct TerminalIntegrada: NSViewRepresentable {
         return v
     }
 
-    func updateNSView(_ v: LocalProcessTerminalView, context: Context) {}
+    func updateNSView(_ v: LocalProcessTerminalView, context: Context) {
+        // Los colores se vuelven a poner en cada update porque SwiftTerm los guarda
+        // resueltos: un `NSColor` dinámico no se entera solo de que cambió el modo.
+        pintar(v)
+    }
+
+    /// Los colores de la terminal, atados a los de la app.
+    ///
+    /// Sin esto la terminal se ve como una ventana ajena pegada adentro: blanco puro al
+    /// lado del editor, y en modo oscuro directamente no cambia. Con esto es una pieza
+    /// más de la app.
+    private func pintar(_ v: LocalProcessTerminalView) {
+        let oscuro = esquema == .dark
+        let fondo = NSColor(hex: oscuro ? "1c1c1e" : "fbfbfb")
+        let texto = NSColor(hex: oscuro ? "f2f2f3" : "101112")
+
+        v.nativeBackgroundColor = fondo
+        v.nativeForegroundColor = texto
+        v.caretColor = NSColor(hex: "266df0")
+        v.caretTextColor = .white
+        v.selectedTextBackgroundColor = NSColor(hex: oscuro ? "284b62" : "d6e5ff")
+    }
 }
 
 /// El cajón de la terminal: la barra con el título y el botón de cerrar, más la terminal.
 struct CajonTerminal: View {
     let carpeta: URL
     @Binding var abierto: Bool
+    @Environment(\.colorScheme) private var esquema
+
+    /// El mismo fondo que pinta la terminal por dentro, para que el margen no se note.
+    /// `SwiftUI.Color` con nombre completo: SwiftTerm también exporta un `Color` y sin
+    /// el prefijo el compilador no sabe cuál de los dos es.
+    var fondoTerminal: SwiftUI.Color {
+        esquema == .dark ? SwiftUI.Color.hex("1c1c1e") : SwiftUI.Color.hex("fbfbfb")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,8 +114,19 @@ struct CajonTerminal: View {
 
             // `id` con la carpeta: si abrís otro proyecto, se levanta una terminal nueva
             // parada en la carpeta nueva en vez de quedar en la vieja.
+            //
+            // El aire alrededor no lo da SwiftTerm —no tiene padding— así que lo pone el
+            // contenedor: el terminal queda más chico y el margen lo pinta el fondo. Una
+            // terminal con el texto pegado al borde de la ventana se ve apretada, y es la
+            // diferencia más grande entre una terminal linda y una de 2005.
             TerminalIntegrada(carpeta: carpeta)
                 .id(carpeta.path)
+                .padding(.horizontal, Tok.S.lg)
+                .padding(.vertical, Tok.S.md)
+                .background(fondoTerminal)
+                .clipShape(RoundedRectangle(cornerRadius: Tok.R.panel, style: .continuous))
+                .borde(Tok.borderSubtle, radio: Tok.R.panel)
+                .padding(Tok.S.md)
         }
     }
 }

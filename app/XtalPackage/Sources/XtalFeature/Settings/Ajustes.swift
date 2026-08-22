@@ -26,7 +26,14 @@ public struct Ajustes: View {
 
     @State private var panel: Panel = .general
 
-    public init() {}
+    public init() {
+        // `XTAL_SHOW=ajustes:herramientas` abre directo esa pestaña. Es para poder
+        // retratar cada una sin manejar la ventana a mano; ver `Desarrollo.swift`.
+        if let forzada = Desarrollo.pantallaForzada?.split(separator: ":").last,
+           let p = Panel.allCases.first(where: { $0.rawValue.lowercased() == forzada.lowercased() }) {
+            _panel = State(initialValue: p)
+        }
+    }
 
     public var body: some View {
         HStack(spacing: 0) {

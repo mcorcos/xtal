@@ -19,6 +19,7 @@ public struct Workspace: View {
     @State private var secciones: Secciones
     @State private var texto: String = ""
     @State private var insercion: EditorCodigo.Insercion?
+    @Environment(\.colorScheme) private var esquema
 
     @AppStorage("xtal.modo") private var modoCrudo = Modo.editor.rawValue
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
@@ -34,6 +35,9 @@ public struct Workspace: View {
         var titulo: String { self == .editor ? "Editor" : "Agente" }
         var icono: String { self == .editor ? "text.cursor" : "sparkles" }
     }
+
+    /// El mismo fondo que la terminal pinta por dentro, para que el aire no se note.
+    private var fondoTerminal: Color { esquema == .dark ? .hex("1c1c1e") : .hex("fbfbfb") }
 
     private var modo: Modo {
         if let forzado = Desarrollo.modoForzado, let m = Modo(rawValue: forzado) { return m }
@@ -117,8 +121,17 @@ public struct Workspace: View {
         HSplitView {
             VStack(spacing: 0) {
                 cabecera("Terminal · \(proyecto.carpeta.lastPathComponent)", icono: "terminal")
+                // La terminal va adentro de una tarjeta, como cualquier otro panel de
+                // la app: redondeada, con su borde y con aire alrededor. Pegada al
+                // borde de la ventana se ve como una consola metida a la fuerza.
                 TerminalIntegrada(carpeta: proyecto.carpeta)
                     .id(proyecto.carpeta.path)
+                    .padding(.horizontal, Tok.S.lg)
+                    .padding(.vertical, Tok.S.md)
+                    .background(fondoTerminal)
+                    .clipShape(RoundedRectangle(cornerRadius: Tok.R.panel, style: .continuous))
+                    .borde(Tok.borderSubtle, radio: Tok.R.panel)
+                    .padding(Tok.S.md)
             }
             .frame(minWidth: 380, idealWidth: 700)
 
