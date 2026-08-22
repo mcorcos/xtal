@@ -83,12 +83,25 @@ Que un TP viva en git tiene que ser natural, no un trámite aparte:
 - Un **mini control de git** adentro: ver qué cambió, commitear, pushear.
 - **Iniciar sesión con la cuenta de git** desde la app.
 
+## «Qué falta», a la vista
+
+El objetivo nunca fue un gráfico suelto: es el informe, y son varios gráficos con curvas
+que se consiguen en días distintos. Sin verlo escrito, qué falta vive en la cabeza del
+que lo está haciendo — y se olvida.
+
+Arriba de la lista de archivos va `xtal status` hecho pantalla: gráfico por gráfico, un
+chip por curva. Verde = ya está. Gris = falta conseguirla.
+
 ## Wrappers sobre todo
 
 La idea de fondo: cada cosa difícil de LaTeX tiene que tener adelante algo fácil.
 
-- Meter un bloque de código: fácil.
-- Cambiar de plantilla o de theme —o sea, **cambiar de facultad**— fácil.
+- **Meter un bloque**: un menú `+` con figura, ecuación, tabla, lista, código, cita.
+  Se inserta donde está el cursor. Lo difícil de LaTeX nunca fue la idea, fue acordarse
+  de la sintaxis; nadie recuerda el orden de `\begin{figure}`, `\centering`,
+  `\includegraphics`, `\caption` y `\label`.
+- **Cambiar de facultad**: un desplegable con la institución y el formato. Cambia el
+  theme y recompila. Es una línea de un TOML, pero puesta donde se busca.
 - Y así con el resto.
 
 El LaTeX sigue estando abajo, entero, para el que lo quiera tocar.

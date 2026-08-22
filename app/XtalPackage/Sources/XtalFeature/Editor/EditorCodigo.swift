@@ -15,6 +15,20 @@ struct EditorCodigo: NSViewRepresentable {
     @Binding var texto: String
     /// Cambia cuando se abre otro archivo: dispara el recoloreado completo.
     let archivoID: String
+    /// Un pedido de insertar texto donde está el cursor. Se limpia solo al aplicarlo.
+    @Binding var insercion: Insercion?
+
+    /// Lo que pide el menú «Insertar». Lleva un id propio porque dos inserciones
+    /// seguidas del mismo bloque son dos pedidos distintos, y sin id el segundo no se
+    /// distingue del primero y se pierde.
+    struct Insercion: Equatable {
+        let id = UUID()
+        let texto: String
+        /// Cuántos caracteres retroceder al final, para dejar el cursor adentro del
+        /// bloque en vez de después. Un `\section{}` con el cursor afuera obliga a
+        /// mover el cursor a mano, que es justo lo que el menú venía a evitar.
+        var retroceso: Int = 0
+    }
 
     func makeCoordinator() -> Coord { Coord(self) }
 
@@ -54,6 +68,12 @@ struct EditorCodigo: NSViewRepresentable {
             tv.string = texto
             tv.setSelectedRange(NSRange(location: 0, length: 0))
             context.coordinator.colorear(tv)
+        } else if let pedido = insercion, context.coordinator.ultimaInsercion != pedido.id {
+            context.coordinator.ultimaInsercion = pedido.id
+            context.coordinator.insertar(pedido, en: tv)
+            // Limpiar el binding en el próximo ciclo: hacerlo acá, en pleno `update`,
+            // es modificar el estado mientras SwiftUI está dibujando.
+            DispatchQueue.main.async { insercion = nil }
         } else if tv.string != texto && !context.coordinator.escribiendo {
             let sel = tv.selectedRange()
             tv.string = texto
@@ -67,6 +87,26 @@ struct EditorCodigo: NSViewRepresentable {
         var archivoID: String = ""
         /// Evita que el binding rebote y nos pise el texto mientras alguien tipea.
         var escribiendo = false
+        /// El último pedido de inserción aplicado, para no aplicarlo dos veces.
+        var ultimaInsercion: UUID?
+
+        /// Mete el texto donde está el cursor, respetando el deshacer.
+        ///
+        /// Se usa `insertText(_:replacementRange:)` y no tocar el `textStorage` a mano
+        /// justamente por eso: escribiendo directo en el storage, ⌘Z no deshace la
+        /// inserción y el usuario pierde el control de su propio documento.
+        func insertar(_ pedido: Insercion, en tv: NSTextView) {
+            tv.insertText(pedido.texto, replacementRange: tv.selectedRange())
+            if pedido.retroceso > 0 {
+                let pos = max(0, tv.selectedRange().location - pedido.retroceso)
+                tv.setSelectedRange(NSRange(location: pos, length: 0))
+            }
+            escribiendo = true
+            padre.texto = tv.string
+            escribiendo = false
+            colorear(tv)
+            tv.window?.makeFirstResponder(tv)
+        }
 
         init(_ p: EditorCodigo) {
             self.padre = p

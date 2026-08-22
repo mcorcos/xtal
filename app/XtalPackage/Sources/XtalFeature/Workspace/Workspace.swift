@@ -15,7 +15,9 @@ import SwiftUI
 public struct Workspace: View {
     @State private var proyecto: Proyecto
     @State private var git: Git
+    @State private var ajuste: Ajuste
     @State private var texto: String = ""
+    @State private var insercion: EditorCodigo.Insercion?
 
     @AppStorage("xtal.modo") private var modoCrudo = Modo.editor.rawValue
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
@@ -40,6 +42,7 @@ public struct Workspace: View {
     public init(carpeta: URL, cerrar: @escaping () -> Void) {
         _proyecto = State(initialValue: Proyecto(carpeta: carpeta))
         _git = State(initialValue: Git(carpeta: carpeta))
+        _ajuste = State(initialValue: Ajuste(carpeta: carpeta))
         self.cerrar = cerrar
     }
 
@@ -56,6 +59,7 @@ public struct Workspace: View {
         .navigationTitle(proyecto.nombre)
         .navigationSubtitle(proyecto.carpeta.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
         .onAppear { cargarSeleccionado() }
+        .task { await ajuste.refrescar() }
         .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
             // Guardado directo, sin ⌘S. El proyecto es una carpeta de archivos planos y
@@ -146,6 +150,12 @@ public struct Workspace: View {
             .keyboardShortcut("r", modifiers: .command)
             .disabled(proyecto.compilando)
 
+            if modo == .editor {
+                MenuBloques { bloque in insercion = bloque.insercion }
+                    .disabled(proyecto.seleccionado == nil)
+                menuFacultad
+            }
+
             Divider()
 
             // En modo agente no hay archivos ni cajón de terminal que prender: los
@@ -160,10 +170,48 @@ public struct Workspace: View {
         }
     }
 
+    /// Cambiar de theme es, en la práctica, **cambiar de facultad**: la carátula, los
+    /// colores y el preámbulo salen de ahí. Que sea un desplegable y no una línea en un
+    /// TOML es la mitad de lo que hace que esto se sienta una app.
+    private var menuFacultad: some View {
+        Menu {
+            Section("Institución") {
+                ForEach(ajuste.themes, id: \.self) { t in
+                    Button {
+                        Task { await ajuste.cambiarTheme(t); await proyecto.compilar() }
+                    } label: {
+                        Label(t.capitalized, systemImage: ajuste.theme == t ? "checkmark" : "building.columns")
+                    }
+                }
+            }
+            Section("Formato") {
+                Button {
+                    Task { await ajuste.cambiarFormato("facultad"); await proyecto.compilar() }
+                } label: {
+                    Label("Facultad — con carátula", systemImage: ajuste.formato == "facultad" ? "checkmark" : "doc.text")
+                }
+                Button {
+                    Task { await ajuste.cambiarFormato("paper"); await proyecto.compilar() }
+                } label: {
+                    Label("Paper — dos columnas", systemImage: ajuste.formato == "paper" ? "checkmark" : "doc.on.doc")
+                }
+            }
+        } label: {
+            Image(systemName: "building.columns")
+        }
+        .menuIndicator(.hidden)
+        .help("Cambiar de institución o de formato")
+        .disabled(ajuste.aplicando)
+    }
+
     // MARK: - Paneles
 
     private var listaArchivos: some View {
         VStack(spacing: 0) {
+            cabecera("Qué falta", icono: "checklist")
+            PanelEstado(carpeta: proyecto.carpeta)
+            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+
             cabecera("Archivos", icono: "folder")
             ScrollView {
                 // Una lista plana, sin `Section` y sin `LazyVStack`.
@@ -219,7 +267,7 @@ public struct Workspace: View {
         VStack(spacing: 0) {
             if let a = proyecto.seleccionado {
                 cabecera(a.nombre, icono: icono(a))
-                EditorCodigo(texto: $texto, archivoID: a.url.path)
+                EditorCodigo(texto: $texto, archivoID: a.url.path, insercion: $insercion)
             } else {
                 Vacio(icono: "doc.text", titulo: "No hay nada abierto")
             }

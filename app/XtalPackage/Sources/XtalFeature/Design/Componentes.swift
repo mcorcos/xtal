@@ -209,3 +209,59 @@ struct Vacio: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+// MARK: - Fila que envuelve
+
+/// Una fila de piezas que baja a la línea siguiente cuando no entran.
+///
+/// Existe por los chips del panel «Qué falta»: tres curvas no entran en 220 puntos y con
+/// un `HStack` común se truncan a «Teór…», que no dice nada. Mejor dos líneas completas
+/// que una línea de palabras cortadas.
+struct FilaQueEnvuelve: Layout {
+    var espacio: CGFloat = Tok.S.xs
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ancho = proposal.width ?? .infinity
+        let filas = acomodar(subviews, ancho: ancho)
+        let alto = filas.reduce(0) { $0 + $1.alto } + espacio * CGFloat(max(0, filas.count - 1))
+        let usado = filas.map(\.ancho).max() ?? 0
+        return CGSize(width: min(ancho, usado), height: alto)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for fila in acomodar(subviews, ancho: bounds.width) {
+            var x = bounds.minX
+            for i in fila.indices {
+                let medida = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(medida))
+                x += medida.width + espacio
+            }
+            y += fila.alto + espacio
+        }
+    }
+
+    private struct Fila {
+        var indices: [Int] = []
+        var ancho: CGFloat = 0
+        var alto: CGFloat = 0
+    }
+
+    private func acomodar(_ subviews: Subviews, ancho: CGFloat) -> [Fila] {
+        var filas: [Fila] = []
+        var actual = Fila()
+        for i in subviews.indices {
+            let m = subviews[i].sizeThatFits(.unspecified)
+            let anchoConEsta = actual.indices.isEmpty ? m.width : actual.ancho + espacio + m.width
+            if !actual.indices.isEmpty && anchoConEsta > ancho {
+                filas.append(actual)
+                actual = Fila()
+            }
+            actual.ancho = actual.indices.isEmpty ? m.width : actual.ancho + espacio + m.width
+            actual.alto = max(actual.alto, m.height)
+            actual.indices.append(i)
+        }
+        if !actual.indices.isEmpty { filas.append(actual) }
+        return filas
+    }
+}
