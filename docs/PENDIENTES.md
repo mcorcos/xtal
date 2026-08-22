@@ -97,15 +97,30 @@ y no dice por qué.
   registra **todos** los que falten, no solo los rotos: si ya estás arreglando, dejarlo
   a medias no tiene sentido.
 
-### 5. No hay desinstalador
+### 5. Desinstalador — HECHO (22 de agosto de 2026)
 
-`brew uninstall` saca el binario pero deja dados vueltas `~/.config/xtal`, el skill en
-`~/.claude/skills/xtal/` y la entrada del MCP en la config de los clientes.
+`brew uninstall` saca el binario y nada más. Quedaban dados vueltas la config global, el
+skill que Claude Code lee en cada arranque y las entradas del MCP en los clientes. Las
+últimas dos son las peores: un skill huérfano le sigue diciendo a Claude que Xtal existe,
+y un MCP apuntando a un binario que ya no está hace que el cliente falle al levantar el
+server, en silencio y para siempre.
 
-Un `xtal uninstall` que liste qué va a borrar, pida confirmación y limpie eso. El
-binario en sí no se toca (lo maneja brew o el script). Ojo con el orden: sacar primero
-el registro del MCP, porque después de borrarse a sí mismo no puede correr `claude mcp
-remove`.
+`xtal uninstall` (módulo `uninstall.rs`) lista lo que va a borrar, pide confirmación y lo
+saca. Detalles que importan:
+
+- **El listado se imprime siempre, incluso con `--yes`.** Es destructivo: que quede
+  escrito en la terminal qué se llevó puestas es lo mínimo.
+- **Primero el MCP, después los archivos propios.** Para Claude Code el registro se saca
+  con `claude mcp remove`, que es otro proceso; conviene sacar lo que depende de terceros
+  antes que lo nuestro.
+- **`ensure_first_run` se saltea en este comando**, igual que en modo MCP. Si corriera,
+  volvería a escribir la config y el skill justo antes de borrarlos. Desinstalar tiene
+  que desinstalar. Verificado: correrlo dos veces seguidas no recrea nada.
+- Deja `.bak` de la config de cada cliente antes de tocarla, y saca **solo su entrada**:
+  el resto del archivo, comentarios incluidos, queda igual (`toml_edit` para Codex).
+- **No borra el binario ni los proyectos.** El binario es de quien lo instaló, y al final
+  imprime el comando exacto según dónde viva (`brew uninstall` o `rm <ruta>`). Los
+  proyectos son carpetas del usuario.
 
 ### 6. Un solo theme
 

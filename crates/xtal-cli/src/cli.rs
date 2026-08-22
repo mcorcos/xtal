@@ -72,6 +72,9 @@ pub enum Command {
     /// Instalador interactivo: configura Xtal en esta máquina (config global,
     /// themes, motor LaTeX y warmup de Tectonic).
     Setup(SetupArgs),
+    /// Saca de la máquina lo que Xtal dejó fuera de su binario: la config global,
+    /// el skill de Claude y el registro del MCP. No toca el binario ni tus proyectos.
+    Uninstall(UninstallArgs),
     /// Servidor MCP sobre stdio, para clientes de IA que no tienen bash
     /// (Claude Desktop, Codex). `xtal mcp` a secas arranca el server.
     Mcp(McpArgs),
@@ -519,6 +522,14 @@ pub struct ExampleArgs {
     /// Abre el PDF al terminar (implica --run).
     #[arg(long)]
     pub open: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct UninstallArgs {
+    /// No pregunta. El listado de lo que se va a borrar se imprime igual: es un
+    /// comando destructivo y tiene que quedar escrito qué se llevó puestas.
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, Args)]

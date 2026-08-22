@@ -92,6 +92,17 @@ xtal setup           # pregunta y registra el MCP en los clientes que encuentre
 xtal setup --no-ai   # solo lo de Xtal, sin tocar la config de otros programas
 ```
 
+### Sacarlo
+
+```bash
+xtal uninstall       # lista lo que va a borrar y pide confirmación
+```
+
+Borra la config global, los themes y el skill, y saca el registro del MCP de los
+clientes. **No toca el binario ni tus proyectos**: el binario lo saca quien lo instaló
+(`brew uninstall xtal`, o borrar el archivo que dejó el script), y tus proyectos son
+carpetas tuyas.
+
 ### Usarlo desde un cliente de IA sin terminal
 
 Claude Code no necesita nada: corre `xtal` por bash. Para Claude Desktop, Codex y
@@ -263,8 +274,12 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
 `xtal example [nombre] [--run] [--open]` · `xtal update [--check]` ·
-`xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
+`xtal uninstall [--yes]` · `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`
+
+`xtal doctor` también reporta la **integración con IA**: si el skill está y está al día,
+y si el MCP quedó registrado apuntando a un binario que existe. Las dos cosas fallan en
+silencio, y es el único lugar donde se ven.
 
 Todos los comandos aceptan `--json` y `--project <dir>`.
 

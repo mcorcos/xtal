@@ -15,6 +15,7 @@ mod gen;
 mod mcp;
 mod plan;
 mod setup;
+mod uninstall;
 mod update;
 mod watch;
 
@@ -44,7 +45,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     //
     // En modo MCP se saltea entero: ahí stdout es el canal del protocolo y una línea
     // impresa de más corta la sesión. Con `--json`, se hace pero en silencio.
-    if !matches!(cli.command, Command::Mcp(_)) {
+    //
+    // Y se saltea en `uninstall` por una razón más tonta pero fatal: si corriera,
+    // volvería a escribir la config y el skill justo antes de que el comando los
+    // borre, o peor, justo después. Desinstalar tiene que desinstalar.
+    if !matches!(cli.command, Command::Mcp(_) | Command::Uninstall(_)) {
         ai::ensure_first_run(json);
     }
 
@@ -67,6 +72,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Example(a) => example::cmd_example(a),
         Command::Update(a) => update::cmd_update(a),
         Command::Setup(a) => setup::cmd_setup(a),
+        Command::Uninstall(a) => uninstall::cmd_uninstall(a),
         Command::Mcp(a) => mcp::cmd_mcp(a),
         Command::Completions(a) => gen::cmd_completions(a),
         Command::Man(a) => gen::cmd_man(a),
