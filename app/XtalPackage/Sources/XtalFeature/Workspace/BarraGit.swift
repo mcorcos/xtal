@@ -35,7 +35,7 @@ struct BarraGit: View {
             }
             .padding(.horizontal, Tok.S.lg)
             .frame(height: Tok.H.fila)
-            .background(Tok.bgSidebar)
+            .fondoBarra()
         }
         .task { await git.refrescar() }
     }

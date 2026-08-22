@@ -82,7 +82,9 @@ struct FilaAjuste<Control: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: Tok.S.lg) {
+            // Centrado y no por línea base: un control alto (las maquetas de
+            // apariencia) alineado por la primera línea deja el título colgando abajo.
+            HStack(alignment: .center, spacing: Tok.S.lg) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(titulo)
                         .font(Tok.F.valor)
@@ -263,5 +265,46 @@ struct FilaQueEnvuelve: Layout {
         }
         if !actual.indices.isEmpty { filas.append(actual) }
         return filas
+    }
+}
+
+// MARK: - Material del sistema
+
+/// El fondo translúcido de las barras laterales de macOS.
+///
+/// Es lo que hace que una ventana se sienta **del sistema** y no una página web con
+/// marco: el sidebar deja pasar lo que hay atrás y reacciona a la luz de la pantalla.
+/// Un gris plano en el mismo lugar se ve inmediatamente como algo pegado encima.
+///
+/// No es un efecto decorativo que inventamos: es el mismo `NSVisualEffectView` que usan
+/// el Finder, Mail y Ajustes del Sistema, con el material que Apple reserva para
+/// sidebars. Por eso también se adapta solo al modo oscuro y a «reducir transparencia».
+struct MaterialLateral: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .sidebar
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = material
+        // `behindWindow` toma lo que hay detrás de la ventana; `withinWindow` tomaría
+        // lo de adentro, que en un sidebar es un gris y no se nota.
+        v.blendingMode = .behindWindow
+        v.state = .followsWindowActiveState
+        return v
+    }
+
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {
+        v.material = material
+    }
+}
+
+extension View {
+    /// Fondo de barra lateral, con el material del sistema.
+    func fondoLateral() -> some View {
+        background(MaterialLateral())
+    }
+
+    /// Fondo de una barra de herramientas o cabecera.
+    func fondoBarra() -> some View {
+        background(MaterialLateral(material: .headerView))
     }
 }

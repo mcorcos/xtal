@@ -14,7 +14,22 @@ struct TerminalIntegrada: NSViewRepresentable {
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
         let v = LocalProcessTerminalView(frame: .zero)
+
+        // --- Cómo se ve ---
+        //
+        // Una terminal por default se ve a terminal de 2005: Menlo chiquito, pegada al
+        // borde, cursor de bloque parpadeando. Cuatro ajustes la vuelven parte de la
+        // app: la fuente monoespaciada del sistema (la misma que usa el editor, así el
+        // código se lee igual de los dos lados), aire alrededor, el cursor de barra que
+        // es lo que usa cualquier editor, y los colores del sistema para que el modo
+        // oscuro funcione solo.
+        v.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
         v.configureNativeColors()
+        v.caretColor = NSColor(hex: "266df0")
+        v.caretTextColor = .white
+        v.getTerminal().hideCursor()
+        v.getTerminal().showCursor()
+        v.optionAsMetaKey = true   // ⌥←/→ mueven por palabra, como en cualquier shell
 
         // El shell de la persona, no un bash cualquiera: sus alias, su prompt, su PATH.
         // Con `-l` (login) se carga el perfil, que es lo que hace que `xtal` y `claude`
@@ -67,7 +82,7 @@ struct CajonTerminal: View {
             }
             .padding(.horizontal, Tok.S.lg)
             .frame(height: Tok.H.fila)
-            .background(Tok.bgSidebar)
+            .fondoBarra()
 
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 

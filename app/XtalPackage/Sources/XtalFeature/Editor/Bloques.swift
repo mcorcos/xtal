@@ -30,6 +30,22 @@ enum Bloque: String, CaseIterable, Identifiable {
         }
     }
 
+    /// El nombre corto, para el botón de la barra. El largo queda en el tooltip.
+    var corto: String {
+        switch self {
+        case .seccion: return "Sección"
+        case .subseccion: return "Subsección"
+        case .figura: return "Figura"
+        case .grafico: return "Gráfico"
+        case .ecuacion: return "Ecuación"
+        case .ecuacionEnLinea: return "Inline"
+        case .tabla: return "Tabla"
+        case .lista: return "Lista"
+        case .codigo: return "Código"
+        case .cita: return "Cita"
+        }
+    }
+
     var icono: String {
         switch self {
         case .seccion: return "text.append"
@@ -123,6 +139,79 @@ enum Bloque: String, CaseIterable, Identifiable {
 
             """, retroceso: 14)
         }
+    }
+}
+
+/// La barra de bloques, arriba del editor.
+///
+/// Antes esto era un `+` escondido en la barra de la ventana, y nadie lo encontraba.
+/// Un menú que hay que descubrir no sirve de atajo: lo que se usa todo el tiempo tiene
+/// que estar **a la vista y con su nombre escrito**.
+///
+/// Los seis de siempre quedan como botones; el resto vive en el `···` del final.
+struct BarraBloques: View {
+    let insertar: (Bloque) -> Void
+
+    /// Los que se usan todo el tiempo escribiendo un informe.
+    private static let frecuentes: [Bloque] = [
+        .seccion, .subseccion, .ecuacion, .figura, .tabla, .lista,
+    ]
+
+    var body: some View {
+        HStack(spacing: Tok.S.xs) {
+            ForEach(Self.frecuentes) { b in
+                BotonBloque(bloque: b, accion: { insertar(b) })
+            }
+
+            Menu {
+                ForEach(Bloque.allCases.filter { !Self.frecuentes.contains($0) }) { b in
+                    Button { insertar(b) } label: { Label(b.titulo, systemImage: b.icono) }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Tok.textSecondary)
+                    .frame(width: 26, height: Tok.H.boton)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Más bloques")
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Tok.S.md)
+        .frame(height: Tok.H.fila + 4)
+        .fondoBarra()
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+        }
+    }
+}
+
+private struct BotonBloque: View {
+    let bloque: Bloque
+    let accion: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: accion) {
+            HStack(spacing: Tok.S.xs) {
+                Image(systemName: bloque.icono).font(.system(size: 10, weight: .medium))
+                Text(bloque.corto).font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(Tok.textSecondary)
+            .padding(.horizontal, Tok.S.sm)
+            .frame(height: Tok.H.boton)
+            .background(hover ? Tok.bgHover : Color.clear,
+                        in: RoundedRectangle(cornerRadius: Tok.R.boton, style: .continuous))
+            .borde(hover ? Tok.borderDefault : Color.clear, radio: Tok.R.boton)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(bloque.titulo)
     }
 }
 

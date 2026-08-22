@@ -416,8 +416,49 @@ pub fn cmd_section(cmd: SectionCmd, project: &Option<PathBuf>, json: bool) -> Re
                 println!("✓ Sección '{}' agregada", a.title);
             }
         }
+        SectionCmd::Set(a) => {
+            // El cuerpo puede venir por argumento o por archivo. El archivo existe
+            // porque un cuerpo en LaTeX tiene comillas, barras y saltos de línea:
+            // pasarlo como argumento obliga a escapar todo y se rompe solo.
+            let body = match (&a.body, &a.body_file) {
+                (Some(b), _) => Some(b.clone()),
+                (_, Some(f)) => Some(
+                    std::fs::read_to_string(f)
+                        .with_context(|| format!("no pude leer {}", f.display()))?,
+                ),
+                _ => None,
+            };
+
+            let section = find_section_mut(&mut proj.sections, &a.title)
+                .ok_or_else(|| anyhow!("no encontré la sección '{}'", a.title))?;
+            if let Some(body) = body {
+                section.body = body;
+            }
+            if let Some(figures) = a.figures {
+                section.figures = figures;
+            }
+
+            store::save_project(&root, &proj)?;
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "section": a.title, "updated": true })
+                );
+            } else {
+                println!(
+                    "{} Sección '{}' actualizada",
+                    style("✓").green().bold(),
+                    a.title
+                );
+            }
+        }
         SectionCmd::List => {
-            if proj.sections.is_empty() {
+            // Con --json sale el árbol entero, cuerpos incluidos: es lo que necesita
+            // cualquier cosa que quiera mostrar o editar las secciones sin parsear el
+            // `xtal.toml` por su cuenta.
+            if json {
+                println!("{}", serde_json::to_string(&proj.sections)?);
+            } else if proj.sections.is_empty() {
                 println!("(sin secciones)");
             } else {
                 print_sections(&proj.sections, 0);

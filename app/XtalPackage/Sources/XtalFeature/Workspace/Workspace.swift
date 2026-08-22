@@ -16,6 +16,7 @@ public struct Workspace: View {
     @State private var proyecto: Proyecto
     @State private var git: Git
     @State private var ajuste: Ajuste
+    @State private var secciones: Secciones
     @State private var texto: String = ""
     @State private var insercion: EditorCodigo.Insercion?
 
@@ -43,6 +44,7 @@ public struct Workspace: View {
         _proyecto = State(initialValue: Proyecto(carpeta: carpeta))
         _git = State(initialValue: Git(carpeta: carpeta))
         _ajuste = State(initialValue: Ajuste(carpeta: carpeta))
+        _secciones = State(initialValue: Secciones(carpeta: carpeta))
         self.cerrar = cerrar
     }
 
@@ -59,13 +61,24 @@ public struct Workspace: View {
         .navigationTitle(proyecto.nombre)
         .navigationSubtitle(proyecto.carpeta.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
         .onAppear { cargarSeleccionado() }
-        .task { await ajuste.refrescar() }
+        .task {
+            await ajuste.refrescar()
+            await secciones.recargar()
+            cargarSeleccionado()
+        }
         .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
             // Guardado directo, sin ⌘S. El proyecto es una carpeta de archivos planos y
             // la fuente de verdad es el disco: un buffer sucio adentro de la app sería
             // una segunda verdad, y ahí empiezan los problemas.
-            if let a = proyecto.seleccionado { proyecto.escribir(nuevo, en: a) }
+            //
+            // Un archivo se escribe en el acto; una sección va por la CLI y con retraso,
+            // porque mandar un proceso por cada tecla es absurdo.
+            if let sec = secciones.seleccionada {
+                secciones.guardar(sec.titulo, cuerpo: nuevo)
+            } else if let a = proyecto.seleccionado {
+                proyecto.escribir(nuevo, en: a)
+            }
         }
     }
 
@@ -138,7 +151,15 @@ public struct Workspace: View {
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task { await proyecto.compilar(); await git.refrescar() }
+                Task {
+                    // Guardar YA antes de compilar: con el guardado a medio camino,
+                    // el PDF sale con el texto de hace medio segundo.
+                    if let sec = secciones.seleccionada {
+                        await secciones.guardarYa(sec.titulo, cuerpo: texto)
+                    }
+                    await proyecto.compilar()
+                    await git.refrescar()
+                }
             } label: {
                 if proyecto.compilando {
                     ProgressView().controlSize(.small)
@@ -151,8 +172,6 @@ public struct Workspace: View {
             .disabled(proyecto.compilando)
 
             if modo == .editor {
-                MenuBloques { bloque in insercion = bloque.insercion }
-                    .disabled(proyecto.seleccionado == nil)
                 menuFacultad
             }
 
@@ -212,7 +231,11 @@ public struct Workspace: View {
             PanelEstado(carpeta: proyecto.carpeta)
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
-            cabecera("Archivos", icono: "folder")
+            cabecera("Secciones del informe", icono: "text.alignleft")
+            listaSecciones
+            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+
+            cabecera("Archivos del proyecto", icono: "folder")
             ScrollView {
                 // Una lista plana, sin `Section` y sin `LazyVStack`.
                 //
@@ -233,6 +256,10 @@ public struct Workspace: View {
                         case .archivo(let a):
                             ItemNav(titulo: a.nombre, icono: icono(a),
                                     activo: proyecto.seleccionado?.id == a.id) {
+                                if let sec = secciones.seleccionada {
+                                    secciones.guardar(sec.titulo, cuerpo: texto)
+                                }
+                                secciones.seleccionada = nil
                                 proyecto.seleccionado = a
                             }
                         }
@@ -259,13 +286,46 @@ public struct Workspace: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(width: 220)
-        .background(Tok.bgSidebar)
+        .frame(width: 232)
+        .fondoLateral()
+    }
+
+    /// Las secciones del informe. Es lo primero de la lista porque es lo que uno viene
+    /// a escribir: los archivos del proyecto son el detalle de abajo.
+    private var listaSecciones: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if secciones.cargando {
+                Text("Leyendo…")
+                    .font(Tok.F.label).foregroundStyle(Tok.textTertiary)
+                    .padding(.horizontal, Tok.S.md).frame(height: Tok.H.fila)
+            } else if secciones.lista.isEmpty {
+                Text("El informe todavía no tiene secciones")
+                    .font(.system(size: 11)).foregroundStyle(Tok.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Tok.S.md).padding(.vertical, Tok.S.sm)
+            } else {
+                ForEach(secciones.lista) { sec in
+                    ItemNav(titulo: sec.titulo,
+                            icono: sec.figuras.isEmpty ? "text.alignleft" : "chart.xyaxis.line",
+                            activo: secciones.seleccionada?.id == sec.id) {
+                        elegirSeccion(sec)
+                    }
+                    .padding(.leading, CGFloat(sec.nivel) * 14)
+                }
+            }
+        }
+        .padding(Tok.S.xs)
     }
 
     private var editor: some View {
         VStack(spacing: 0) {
-            if let a = proyecto.seleccionado {
+            if let sec = secciones.seleccionada {
+                // Una sección del informe: se edita SOLO su cuerpo, que es LaTeX puro.
+                // El TOML que lo envuelve no aparece por ningún lado.
+                cabecera(sec.titulo, icono: "text.alignleft", sufijo: "LaTeX")
+                BarraBloques { bloque in insercion = bloque.insercion }
+                EditorCodigo(texto: $texto, archivoID: "seccion:" + sec.titulo, insercion: $insercion)
+            } else if let a = proyecto.seleccionado {
                 cabecera(a.nombre, icono: icono(a))
                 EditorCodigo(texto: $texto, archivoID: a.url.path, insercion: $insercion)
             } else {
@@ -290,20 +350,23 @@ public struct Workspace: View {
         .background(Tok.bgApp)
     }
 
-    private func cabecera(_ titulo: String, icono: String) -> some View {
+    private func cabecera(_ titulo: String, icono: String, sufijo: String? = nil) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Tok.S.sm) {
                 Image(systemName: icono)
                     .font(.system(size: 11))
                     .foregroundStyle(Tok.textTertiary)
                 Text(titulo).font(Tok.F.label).foregroundStyle(Tok.textSecondary)
+                if let sufijo {
+                    Chip(texto: sufijo, familia: Tok.azul)
+                }
                 Spacer()
             }
             .padding(.horizontal, Tok.S.lg)
             .frame(height: Tok.H.fila)
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
         }
-        .background(Tok.bgSidebar)
+        .fondoBarra()
     }
 
     // MARK: - Auxiliares
@@ -342,7 +405,21 @@ public struct Workspace: View {
         }
     }
 
+    private func elegirSeccion(_ sec: Secciones.Seccion) {
+        // Al cambiar de sección, guardar lo que estaba escrito antes de perderlo.
+        if let anterior = secciones.seleccionada, anterior.id != sec.id {
+            secciones.guardar(anterior.titulo, cuerpo: texto)
+        }
+        proyecto.seleccionado = nil
+        secciones.seleccionada = sec
+        texto = sec.cuerpo
+    }
+
     private func cargarSeleccionado() {
-        texto = proyecto.seleccionado.map { proyecto.leer($0) } ?? ""
+        if let sec = secciones.seleccionada {
+            texto = sec.cuerpo
+        } else {
+            texto = proyecto.seleccionado.map { proyecto.leer($0) } ?? ""
+        }
     }
 }

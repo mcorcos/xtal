@@ -32,33 +32,58 @@ public struct Ajustes: View {
         HStack(spacing: 0) {
             lista
             Rectangle().fill(Tok.borderSubtle).frame(width: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: Tok.S.xxl) {
-                    switch panel {
-                    case .general: PanelGeneral()
-                    case .editor: PanelEditor()
-                    case .herramientas: PanelHerramientas()
-                    case .cuentas: PanelCuentas()
-                    }
-                }
-                .padding(Tok.S.xxl)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(Tok.bgApp)
+            contenido
         }
-        .frame(width: 720, height: 520)
+        .frame(width: 760, height: 560)
+    }
+
+    private var contenido: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Tok.S.xxl + Tok.S.md) {
+                // El título de la página, adentro del scroll y no en la barra: así se
+                // corre al scrollear, como en Ajustes del Sistema, y la ventana no
+                // queda con dos títulos peleando.
+                Text(panel.rawValue)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Tok.textPrimary)
+                    .padding(.horizontal, 2)
+
+                switch panel {
+                case .general: PanelGeneral()
+                case .editor: PanelEditor()
+                case .herramientas: PanelHerramientas()
+                case .cuentas: PanelCuentas()
+                }
+            }
+            .padding(.horizontal, Tok.S.xxl + Tok.S.md)
+            .padding(.vertical, Tok.S.xxl + Tok.S.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Tok.bgApp)
     }
 
     private var lista: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
+            // El aire de arriba deja lugar a los botones de la ventana, que en una
+            // ventana sin barra se dibujan encima del contenido.
+            Color.clear.frame(height: 28)
             ForEach(Panel.allCases) { p in
                 ItemNav(titulo: p.rawValue, icono: p.icono, activo: panel == p) { panel = p }
             }
             Spacer()
+            Text("Xtal \(version)")
+                .font(.system(size: 11))
+                .foregroundStyle(Tok.textTertiary)
+                .padding(.horizontal, Tok.S.md)
+                .padding(.bottom, Tok.S.sm)
         }
         .padding(Tok.S.md)
-        .frame(width: 190)
-        .background(Tok.bgSidebar)
+        .frame(width: 200)
+        .fondoLateral()
+    }
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     }
 }
 
@@ -70,16 +95,18 @@ private struct PanelGeneral: View {
     @AppStorage("xtal.abrirUltimo") private var abrirUltimo = true
 
     var body: some View {
-        GrupoAjustes(titulo: "General") {
+        // Sin título de grupo: la página ya se llama así arriba.
+        GrupoAjustes {
             FilaAjuste(titulo: "Apariencia",
                        detalle: "Seguir el sistema, o forzar claro u oscuro.") {
-                Picker("", selection: $apariencia) {
-                    Text("Auto").tag("auto")
-                    Text("Claro").tag("claro")
-                    Text("Oscuro").tag("oscuro")
+                // Tres maquetas en vez de tres palabras. Es lo que hace Ajustes del
+                // Sistema, y por una razón: «Auto» no dice nada hasta que lo probás,
+                // y un dibujo de media ventana clara y media oscura sí.
+                HStack(spacing: Tok.S.lg) {
+                    MaquetaApariencia(clase: .auto, elegido: $apariencia)
+                    MaquetaApariencia(clase: .claro, elegido: $apariencia)
+                    MaquetaApariencia(clase: .oscuro, elegido: $apariencia)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
             }
 
             FilaAjuste(titulo: "Abrir el último informe al arrancar",
@@ -104,7 +131,7 @@ private struct PanelEditor: View {
     @AppStorage("xtal.editor.colores") private var colores = true
 
     var body: some View {
-        GrupoAjustes(titulo: "Editor") {
+        GrupoAjustes {
             FilaAjuste(titulo: "Tamaño del texto",
                        detalle: "El del editor de código. El resto de la app usa el del sistema.") {
                 HStack(spacing: Tok.S.md) {
@@ -138,7 +165,7 @@ private struct PanelHerramientas: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tok.S.xxl) {
-            GrupoAjustes(titulo: "Xtal") {
+            GrupoAjustes(titulo: "El motor") {
                 FilaAjuste(titulo: "El comando xtal",
                            detalle: XtalCLI.rutaBinario() ?? "No está instalado. brew install mcorcos/xtal/xtal",
                            conSeparador: false) {
@@ -187,7 +214,7 @@ private struct PanelHerramientas: View {
 private struct PanelCuentas: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tok.S.xxl) {
-            GrupoAjustes(titulo: "Cuentas") {
+            GrupoAjustes(titulo: "Servicios") {
                 FilaAjuste(titulo: "GitHub",
                            detalle: "Para clonar un informe y subirlo sin salir de la app.") {
                     Button("Conectar") {}.disabled(true)
@@ -213,6 +240,83 @@ private struct PanelCuentas: View {
                     .font(Tok.F.label)
                     .foregroundStyle(Tok.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+
+// MARK: - Maqueta de apariencia
+
+/// Una ventanita de mentira que muestra cómo va a quedar.
+private struct MaquetaApariencia: View {
+    enum Clase: String {
+        case auto, claro, oscuro
+        var titulo: String {
+            switch self {
+            case .auto: return "Auto"
+            case .claro: return "Claro"
+            case .oscuro: return "Oscuro"
+            }
+        }
+    }
+
+    let clase: Clase
+    @Binding var elegido: String
+
+    private var activo: Bool { elegido == clase.rawValue }
+
+    var body: some View {
+        VStack(spacing: Tok.S.sm) {
+            Button {
+                elegido = clase.rawValue
+            } label: {
+                dibujo
+                    .frame(width: 72, height: 46)
+                    .clipShape(RoundedRectangle(cornerRadius: Tok.R.boton, style: .continuous))
+                    .borde(activo ? Tok.accent : Tok.borderDefault,
+                           radio: Tok.R.boton, ancho: activo ? 2 : 1)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Text(clase.titulo)
+                .font(.system(size: 11, weight: activo ? .semibold : .regular))
+                .foregroundStyle(activo ? Tok.textPrimary : Tok.textSecondary)
+        }
+    }
+
+    /// Media ventana con su sidebar y su contenido. En «auto», la mitad de cada una.
+    @ViewBuilder
+    private var dibujo: some View {
+        switch clase {
+        case .claro: ventana(fondo: .hex("f6f7f7"), panel: .hex("ffffff"), raya: .hex("d9dade"))
+        case .oscuro: ventana(fondo: .hex("1c1c1e"), panel: .hex("222b31"), raya: .hex("4e4f53"))
+        case .auto:
+            HStack(spacing: 0) {
+                ventana(fondo: .hex("f6f7f7"), panel: .hex("ffffff"), raya: .hex("d9dade"))
+                ventana(fondo: .hex("1c1c1e"), panel: .hex("222b31"), raya: .hex("4e4f53"))
+            }
+        }
+    }
+
+    private func ventana(fondo: Color, panel: Color, raya: Color) -> some View {
+        ZStack(alignment: .leading) {
+            fondo
+            HStack(spacing: 3) {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Capsule().fill(raya).frame(width: 12, height: 2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(4)
+                .frame(width: 22)
+
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(panel)
+                    .padding(.vertical, 4)
+                    .padding(.trailing, 4)
             }
         }
     }

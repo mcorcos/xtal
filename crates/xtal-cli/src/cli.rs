@@ -357,8 +357,27 @@ pub struct PlotPreviewArgs {
 pub enum SectionCmd {
     /// Agrega una sección (o subsección) al informe.
     Add(SectionAddArgs),
+    /// Reemplaza el cuerpo (o las figuras) de una sección que ya existe.
+    Set(SectionSetArgs),
     /// Lista la estructura de secciones.
     List,
+}
+
+#[derive(Debug, Args)]
+pub struct SectionSetArgs {
+    /// Título de la sección a modificar. Busca también adentro de las subsecciones.
+    pub title: String,
+    /// Cuerpo nuevo, en LaTeX.
+    #[arg(long, conflicts_with = "body_file")]
+    pub body: Option<String>,
+    /// Lo mismo, pero leyendo el cuerpo de un archivo. Es lo que conviene cuando el
+    /// texto es largo o tiene comillas y saltos de línea: pasarlo como argumento
+    /// obliga a escapar todo y se rompe en el primer apóstrofe.
+    #[arg(long = "body-file", conflicts_with = "body")]
+    pub body_file: Option<PathBuf>,
+    /// Ids de gráficos a mostrar como figuras. Reemplaza la lista entera.
+    #[arg(long = "figure")]
+    pub figures: Option<Vec<String>>,
 }
 
 #[derive(Debug, Args)]

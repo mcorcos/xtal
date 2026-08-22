@@ -119,7 +119,7 @@ struct Inicio: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Tok.bgSidebar)
+        .fondoLateral()
     }
 
     // MARK: - Acciones
