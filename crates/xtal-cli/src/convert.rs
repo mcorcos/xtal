@@ -1,12 +1,12 @@
 //! Conversión de los enums de la CLI (clap) a los enums del dominio (xtal-model).
 //! Se mantienen separados para que el modelo no dependa de clap.
+//!
+//! Las conversiones que tocan el simulador (`SweepArg` -> `Sweep`) NO van acá:
+//! viven en `electronics.rs`, que es el único módulo que puede ver `xtal_sim`.
 
-use crate::cli::{
-    FormatArg, KindArg, LineArg, PanelArg, PlotKindArg, RoleArg, ScaleArg, ShapeArg, SweepArg,
-};
+use crate::cli::{FormatArg, KindArg, LineArg, PanelArg, PlotKindArg, RoleArg, ScaleArg, ShapeArg};
 use xtal_data::{RandomShape, SweepScale};
 use xtal_model::{DocFormat, LineDash, MeasurementKind, Panel, PlotKind, Role, Scale};
-use xtal_sim::Sweep;
 
 impl From<FormatArg> for DocFormat {
     fn from(f: FormatArg) -> Self {
@@ -94,16 +94,6 @@ impl From<ShapeArg> for RandomShape {
             ShapeArg::Noise => RandomShape::Noise,
             ShapeArg::Ramp => RandomShape::Ramp,
             ShapeArg::Sine => RandomShape::Sine,
-        }
-    }
-}
-
-impl From<SweepArg> for Sweep {
-    fn from(s: SweepArg) -> Self {
-        match s {
-            SweepArg::Dec => Sweep::Dec,
-            SweepArg::Oct => Sweep::Oct,
-            SweepArg::Lin => Sweep::Lin,
         }
     }
 }

@@ -21,11 +21,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use xtal_model::{Measurement, Plot, Project, Source};
-use xtal_sim::{RawSpec, SimSpec};
 
 use crate::error::{DataError, Result};
-use crate::formula::FormulaSpec;
-use crate::random::RandomSpec;
+use crate::provenance::Provenance;
 
 const MEAS_DIR: &str = "mediciones";
 const PLOT_DIR: &str = "graficos";
@@ -48,18 +46,15 @@ struct MeasurementRecord {
     x_label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     y_label: Option<String>,
-    /// Si la medición viene de una fórmula, se guarda para regenerar.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    formula: Option<FormulaSpec>,
-    /// Si viene de datos sintéticos, se guarda su receta.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    random: Option<RandomSpec>,
-    /// Si viene de una simulación de circuito (ngspice), se guarda su receta.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    sim: Option<SimSpec>,
-    /// Si viene de importar un rawfile externo (LTspice/ngspice), su provenance.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    raw: Option<RawSpec>,
+    /// De dónde salió la medición: `[formula]`, `[random]`, `[sim]`, `[raw]`, lo que
+    /// haya puesto quien la produjo.
+    ///
+    /// `flatten` hace que estos bloques queden como tablas de primer nivel del
+    /// archivo, exactamente donde estaban cuando cada uno tenía su propio campo
+    /// tipado acá. El formato en disco no cambió; lo que cambió es que **este crate
+    /// ya no sabe qué hay adentro** (ver `provenance.rs`).
+    #[serde(flatten)]
+    provenance: toml::Table,
 }
 
 /// Busca la raíz del proyecto subiendo desde `start` hasta encontrar `xtal.toml`.
@@ -94,16 +89,11 @@ pub fn save_project(root: &Path, project: &Project) -> Result<()> {
 
 // ---------- Mediciones ----------
 
-/// Escribe una medición: su `.toml` de metadata + su `.csv` de datos. `formula`/
-/// `random` se guardan en el `.toml` si la medición proviene de ellos.
-pub fn save_measurement(
-    root: &Path,
-    meas: &Measurement,
-    formula: Option<&FormulaSpec>,
-    random: Option<&RandomSpec>,
-    sim: Option<&SimSpec>,
-    raw: Option<&RawSpec>,
-) -> Result<()> {
+/// Escribe una medición: su `.toml` de metadata + su `.csv` de datos.
+///
+/// `prov` son los bloques de trazabilidad, que se escriben tal cual vengan. Para una
+/// medición sin receta —un CSV importado— va `Provenance::new()`.
+pub fn save_measurement(root: &Path, meas: &Measurement, prov: &Provenance) -> Result<()> {
     let dir = root.join(MEAS_DIR);
     ensure_dir(&dir)?;
 
@@ -116,10 +106,7 @@ pub fn save_measurement(
         y_unit: meas.y_unit.clone(),
         x_label: meas.x_label.clone(),
         y_label: meas.y_label.clone(),
-        formula: formula.cloned(),
-        random: random.cloned(),
-        sim: sim.cloned(),
-        raw: raw.cloned(),
+        provenance: prov.table().clone(),
     };
     let toml_path = dir.join(format!("{}.toml", meas.id));
     let text = toml::to_string_pretty(&record).expect("record serializa a TOML");
@@ -368,7 +355,7 @@ mod tests {
         m.x_unit = Some("Hz".to_string());
         m.y_unit = Some("dB".to_string());
         m.data = vec![(10.0, -3.0), (100.0, -20.0)];
-        save_measurement(&root, &m, None, None, None, None).unwrap();
+        save_measurement(&root, &m, &Provenance::new()).unwrap();
 
         let loaded = load_measurement(&root, "v_out").unwrap();
         assert_eq!(loaded.id, "v_out");

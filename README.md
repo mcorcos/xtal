@@ -290,6 +290,13 @@ Todos los comandos aceptan `--json` y `--project <dir>`.
 
 ## Arquitectura
 
+Xtal está partido en dos: un **núcleo** que arma el informe (lo necesita cualquiera) y
+un **addon de electrónica** que consigue los datos del circuito (lo necesita quien hace
+electrónica). El addon está detrás de la feature `electronics`, prendida por default;
+`cargo build --bin xtal --no-default-features` da un binario sin `sim`/`circuit`/`raw`
+que compila el mismo PDF. Un job de CI lo verifica en cada cambio.
+Todo el detalle en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+
 Workspace de Rust con siete crates:
 
 | Crate | Responsabilidad |

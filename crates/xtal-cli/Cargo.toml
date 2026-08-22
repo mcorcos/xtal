@@ -14,11 +14,20 @@ rust-version.workspace = true
 name = "xtal"
 path = "src/main.rs"
 
+# El addon de electrónica: circuitos, ngspice y rawfiles. Prendido por default —
+# es lo que Xtal es hoy — pero se puede apagar, y entonces el binario no lleva nada
+# del simulador. Que exista un build sin esto es lo que mantiene honesta la
+# separación entre "armar un informe" (todo el mundo) y "medir un circuito"
+# (algunos). Ver el doc de `src/electronics.rs`.
+[features]
+default = ["electronics"]
+electronics = ["dep:xtal-sim"]
+
 [dependencies]
 xtal-model = { workspace = true }
 xtal-config = { workspace = true }
 xtal-data = { workspace = true }
-xtal-sim = { workspace = true }
+xtal-sim = { workspace = true, optional = true }
 xtal-render = { workspace = true }
 xtal-compile = { workspace = true }
 clap = { workspace = true }

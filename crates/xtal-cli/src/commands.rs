@@ -9,10 +9,8 @@ use console::style;
 use xtal_compile::Engine;
 use xtal_config::{PartialConfig, ResolvedConfig};
 use xtal_data::csv_scope::{ColumnRef, CsvImportOptions};
-use xtal_data::{store, FormulaSpec, RandomSpec};
-use xtal_model::{DocFormat, Measurement, Panel, Plot, PlotKind, Project, Section, Series, Source};
-use xtal_sim::analysis::{Ac, Dc, Disto, Four, Noise, Pz, Sp, Tf, Tran};
-use xtal_sim::{Analysis, CurveMeta, Quantity, RawFile};
+use xtal_data::{store, FormulaSpec, Provenance, RandomSpec};
+use xtal_model::{DocFormat, Measurement, Plot, PlotKind, Project, Section, Series, Source};
 
 use crate::cli::*;
 use crate::ctx;
@@ -153,7 +151,7 @@ fn meas_import(a: MeasImportArgs, project: &Option<PathBuf>, json: bool) -> Resu
     m.label = a.label;
     m.data = data;
     let n = m.data.len();
-    store::save_measurement(&root, &m, None, None, None, None)?;
+    store::save_measurement(&root, &m, &Provenance::new())?;
     report_measurement_saved(&a.id, n, json);
     Ok(())
 }
@@ -188,7 +186,7 @@ fn meas_formula(a: MeasFormulaArgs, project: &Option<PathBuf>, json: bool) -> Re
     m.label = a.label;
     m.data = data;
     let n = m.data.len();
-    store::save_measurement(&root, &m, Some(&spec), None, None, None)?;
+    store::save_measurement(&root, &m, &Provenance::new().with("formula", &spec)?)?;
     report_measurement_saved(&a.id, n, json);
     Ok(())
 }
@@ -213,7 +211,7 @@ fn meas_random(a: MeasRandomArgs, project: &Option<PathBuf>, json: bool) -> Resu
     m.label = a.label;
     m.data = data;
     let n = m.data.len();
-    store::save_measurement(&root, &m, None, Some(&spec), None, None)?;
+    store::save_measurement(&root, &m, &Provenance::new().with("random", &spec)?)?;
     report_measurement_saved(&a.id, n, json);
     Ok(())
 }
@@ -451,374 +449,6 @@ fn print_sections(sections: &[Section], depth: usize) {
         };
         println!("{indent}- {}{figs}", s.title);
         print_sections(&s.subsections, depth + 1);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// circuit
-// ---------------------------------------------------------------------------
-
-pub fn cmd_circuit(cmd: CircuitCmd, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    let root = ctx::project_root(project)?;
-    match cmd {
-        CircuitCmd::Import(a) => {
-            import_circuit(&root, &a.file, &a.id)?;
-            if json {
-                println!("{}", serde_json::json!({ "circuit": a.id }));
-            } else {
-                println!("✓ Circuito '{}' importado", a.id);
-            }
-        }
-        CircuitCmd::Watch(a) => circuit_watch(&root, &a.file, &a.id, a.interval_ms)?,
-        CircuitCmd::List => {
-            let ids = store::list_circuits(&root)?;
-            if json {
-                println!("{}", serde_json::json!({ "circuits": ids }));
-            } else if ids.is_empty() {
-                println!("(sin circuitos)");
-            } else {
-                for id in ids {
-                    println!("{id}");
-                }
-            }
-        }
-        CircuitCmd::Show { id } => {
-            let content = store::load_circuit(&root, &id)?;
-            print!("{content}");
-        }
-    }
-    Ok(())
-}
-
-/// Importa un circuito al proyecto. Si el archivo es un `.asc` de LTspice, lo netlista
-/// primero (shell-out a LTspice); si es un netlist (`.cir/.net/.sp`), lo copia tal cual.
-fn import_circuit(root: &Path, file: &Path, id: &str) -> Result<()> {
-    let is_asc = file
-        .extension()
-        .map(|e| e.eq_ignore_ascii_case("asc"))
-        .unwrap_or(false);
-    let content = if is_asc {
-        xtal_sim::netlist_asc(file)
-            .with_context(|| format!("netlistando {} con LTspice", file.display()))?
-    } else {
-        std::fs::read_to_string(file).with_context(|| format!("leyendo {}", file.display()))?
-    };
-    store::save_circuit(root, id, &content)?;
-    Ok(())
-}
-
-/// Observa un archivo (`.asc` o netlist) y lo re-importa al proyecto cada vez que cambia.
-///
-/// Sondea el `mtime` del archivo cada `interval_ms`: simple, sin dependencias y multiplataforma.
-/// Pensado para tener LTspice abierto editando el esquemático: cada vez que guardás, el
-/// circuito del proyecto queda al día (re-netlistado). Corre hasta que lo cortás (Ctrl-C).
-fn circuit_watch(root: &Path, file: &Path, id: &str, interval_ms: u64) -> Result<()> {
-    use std::time::{Duration, SystemTime};
-
-    if !file.exists() {
-        bail!("no existe el archivo a observar: {}", file.display());
-    }
-    println!(
-        "👁  Observando {} → circuito '{}' (Ctrl-C para parar)",
-        file.display(),
-        id
-    );
-    let mut last: Option<SystemTime> = None;
-    loop {
-        // Si cambió el mtime (o es la primera vuelta), re-importamos.
-        let mtime = std::fs::metadata(file).ok().and_then(|m| m.modified().ok());
-        if mtime != last {
-            last = mtime;
-            match import_circuit(root, file, id) {
-                Ok(()) => println!("✓ [{}] circuito '{}' actualizado", now_hhmmss(), id),
-                Err(e) => eprintln!("✗ [{}] {e}", now_hhmmss()),
-            }
-        }
-        std::thread::sleep(Duration::from_millis(interval_ms.max(50)));
-    }
-}
-
-/// Hora local HH:MM:SS para los mensajes del watch (sin dependencias externas).
-fn now_hhmmss() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let s = secs % 60;
-    let m = (secs / 60) % 60;
-    let h = (secs / 3600) % 24; // UTC; alcanza para distinguir cada save
-    format!("{h:02}:{m:02}:{s:02} UTC")
-}
-
-// ---------------------------------------------------------------------------
-// sim
-// ---------------------------------------------------------------------------
-
-pub fn cmd_sim(cmd: SimCmd, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    let root = ctx::project_root(project)?;
-    match cmd {
-        SimCmd::Ac(a) => {
-            let an = Analysis::Ac(Ac {
-                sweep: a.sweep.into(),
-                points: a.points,
-                fstart: a.from,
-                fstop: a.to,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Tran(a) => {
-            let an = Analysis::Tran(Tran {
-                step: a.step,
-                stop: a.stop,
-                start: a.start,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Dc(a) => {
-            let an = Analysis::Dc(Dc {
-                source: a.source,
-                start: a.from,
-                stop: a.to,
-                step: a.step,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Noise(a) => {
-            let an = Analysis::Noise(Noise {
-                output: a.output,
-                input: a.input,
-                sweep: a.sweep.into(),
-                points: a.points,
-                fstart: a.from,
-                fstop: a.to,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Disto(a) => {
-            let an = Analysis::Disto(Disto {
-                sweep: a.sweep.into(),
-                points: a.points,
-                fstart: a.from,
-                fstop: a.to,
-                f2overf1: a.f2overf1,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Sp(a) => {
-            let an = Analysis::Sp(Sp {
-                sweep: a.sweep.into(),
-                points: a.points,
-                fstart: a.from,
-                fstop: a.to,
-            });
-            run_curve_cmd(&root, &a.common, an, json)
-        }
-        SimCmd::Op(a) => run_report_cmd(&root, &a.circuit, Analysis::Op, json),
-        SimCmd::Tf(a) => {
-            let an = Analysis::Tf(Tf {
-                output: a.output,
-                input: a.input,
-            });
-            run_report_cmd(&root, &a.circuit, an, json)
-        }
-        SimCmd::Sens(a) => {
-            run_report_cmd(&root, &a.circuit, Analysis::Sens { output: a.output }, json)
-        }
-        SimCmd::Pz(a) => {
-            let an = Analysis::Pz(Pz {
-                in_pos: a.in_pos,
-                in_neg: a.in_neg,
-                out_pos: a.out_pos,
-                out_neg: a.out_neg,
-                transfer: a.transfer,
-                kind: a.kind,
-            });
-            run_report_cmd(&root, &a.circuit, an, json)
-        }
-        SimCmd::Four(a) => {
-            let an = Analysis::Four(Four {
-                freq: a.freq,
-                tran: Tran {
-                    step: a.step,
-                    stop: a.stop,
-                    start: None,
-                },
-                vector: a.node,
-            });
-            run_report_cmd(&root, &a.circuit, an, json)
-        }
-    }
-}
-
-/// Directorio de trabajo para los intermedios de simulación (netlist aumentado + datos
-/// de wrdata). Vive en `salida/sim/` para que sea inspeccionable (texto plano).
-fn sim_workdir(root: &Path) -> Result<PathBuf> {
-    let dir = root.join("salida").join("sim");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
-/// Corre un análisis de curva y guarda la(s) medición(es) resultante(s).
-fn run_curve_cmd(root: &Path, common: &CurveCommon, analysis: Analysis, json: bool) -> Result<()> {
-    let circuit_text = store::load_circuit(root, &common.circuit)?;
-    let workdir = sim_workdir(root)?;
-    let meta = CurveMeta {
-        x_unit: common.x_unit.clone(),
-        y_unit: common.y_unit.clone(),
-        label: common.label.clone(),
-        ..Default::default()
-    };
-    let results = xtal_sim::simulate_curve(
-        &common.circuit,
-        &circuit_text,
-        &analysis,
-        &common.nodes,
-        &common.id,
-        &meta,
-        &workdir,
-    )
-    .with_context(|| format!("simulando {} sobre '{}'", analysis.name(), common.circuit))?;
-
-    let mut ids = Vec::new();
-    for r in &results {
-        store::save_measurement(root, &r.measurement, None, None, Some(&r.spec), None)?;
-        ids.push(r.measurement.id.clone());
-    }
-    if json {
-        println!("{}", serde_json::json!({ "measurements": ids }));
-    } else {
-        for r in &results {
-            println!(
-                "✓ Medición '{}' guardada ({} puntos)",
-                r.measurement.id,
-                r.measurement.data.len()
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Corre un análisis de reporte (op/tf/sens/pz/four) e imprime su resultado.
-fn run_report_cmd(root: &Path, circuit: &str, analysis: Analysis, json: bool) -> Result<()> {
-    let circuit_text = store::load_circuit(root, circuit)?;
-    let workdir = sim_workdir(root)?;
-    let report = xtal_sim::simulate_report(&circuit_text, &analysis, &workdir)
-        .with_context(|| format!("corriendo {} sobre '{}'", analysis.name(), circuit))?;
-    if json {
-        println!(
-            "{}",
-            serde_json::json!({ "analysis": analysis.name(), "report": report })
-        );
-    } else {
-        println!("{report}");
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// raw — importar rawfiles de corridas externas (LTspice/ngspice)
-// ---------------------------------------------------------------------------
-
-pub fn cmd_raw(cmd: RawCmd, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    match cmd {
-        RawCmd::Import(a) => raw_import(a, project, json),
-    }
-}
-
-fn raw_import(a: RawImportArgs, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    let bytes = std::fs::read(&a.file).with_context(|| format!("leyendo {}", a.file.display()))?;
-    let raw = RawFile::parse(&bytes, a.double)
-        .with_context(|| format!("parseando {}", a.file.display()))?;
-
-    // Modo inspección: no importa, solo muestra qué hay adentro del rawfile.
-    if a.inspect {
-        println!("plot:     {}", raw.plotname);
-        println!(
-            "tipo:     {}",
-            if raw.complex { "complejo (AC)" } else { "real" }
-        );
-        println!("puntos:   {}", raw.n_points);
-        println!("variables:");
-        for (i, v) in raw.vars.iter().enumerate() {
-            let tag = if i == raw.independent_index() {
-                "  (eje X)"
-            } else {
-                ""
-            };
-            println!("  {:<2} {:<16} [{}]{}", i, v.name, v.kind, tag);
-        }
-        return Ok(());
-    }
-
-    let root = ctx::project_root(project)?;
-    let meta = CurveMeta {
-        x_unit: a.x_unit.clone(),
-        y_unit: a.y_unit.clone(),
-        label: a.label.clone(),
-        ..Default::default()
-    };
-    // Ruta de referencia para la provenance (la mostramos tal cual la pasó el usuario).
-    let file_ref = a.file.display().to_string();
-    let results = xtal_sim::raw_to_measurements(&raw, &file_ref, &a.nodes, &a.id, &meta)
-        .with_context(|| format!("importando series de {}", a.file.display()))?;
-
-    let mut ids = Vec::new();
-    for r in &results {
-        store::save_measurement(&root, &r.measurement, None, None, None, Some(&r.spec))?;
-        ids.push(r.measurement.id.clone());
-    }
-
-    // Si pidió un gráfico, lo armamos con las series importadas (panel según magnitud/fase).
-    if let Some(plot_id) = &a.plot {
-        let kind = a
-            .plot_kind
-            .map(Into::into)
-            .unwrap_or_else(|| infer_plot_kind(&raw));
-        let mut plot =
-            store::load_plot(&root, plot_id).unwrap_or_else(|_| Plot::new(plot_id, kind));
-        for r in &results {
-            let mut series = Series::new(&r.measurement.id);
-            // Las series de fase van al panel de fase del Bode; el resto al de magnitud.
-            series.panel = if r.spec.quantity == Quantity::Phase {
-                Panel::Phase
-            } else {
-                Panel::Magnitude
-            };
-            plot.series.push(series);
-        }
-        store::save_plot(&root, &plot)?;
-    }
-
-    if json {
-        println!(
-            "{}",
-            serde_json::json!({ "measurements": ids, "plot": a.plot })
-        );
-    } else {
-        for r in &results {
-            println!(
-                "✓ Medición '{}' importada de {} ({} puntos)",
-                r.measurement.id,
-                raw.plotname,
-                r.measurement.data.len()
-            );
-        }
-        if let Some(plot_id) = &a.plot {
-            println!("✓ Gráfico '{plot_id}' armado con {} series", results.len());
-        }
-    }
-    Ok(())
-}
-
-/// Infiere el tipo de gráfico a partir del análisis del rawfile.
-fn infer_plot_kind(raw: &RawFile) -> PlotKind {
-    if raw.complex {
-        PlotKind::Bode
-    } else if raw.plotname.to_lowercase().contains("transient") {
-        PlotKind::Time
-    } else {
-        PlotKind::Generic
     }
 }
 
@@ -1070,7 +700,10 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
             style(dep.purpose).dim()
         );
     }
-    // LTspice no es un binario del PATH (en macOS es una .app), así que se detecta aparte.
+    // LTspice no es un binario del PATH (en macOS es una .app), así que se detecta
+    // aparte. Y solo tiene sentido nombrarlo si este binario trae el addon de
+    // electrónica: sin él no hay nada que netlistar.
+    #[cfg(feature = "electronics")]
     println!(
         "    {} {:<10} {}",
         if xtal_sim::ltspice::is_available() {
@@ -1313,7 +946,9 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
             "required": matches!(d.kind, crate::deps::DepKind::Core),
             "purpose": d.purpose,
         })).collect::<Vec<_>>(),
-        "ltspice": xtal_sim::ltspice::is_available(),
+        // `false` sin el addon: no es que no esté LTspice, es que este binario no
+        // sabría qué hacer con él.
+        "ltspice": cfg!(feature = "electronics") && ltspice_disponible(),
         "config": {
             "dir": config_dir.as_ref().map(|d| d.display().to_string()),
             "file_exists": config_dir.as_ref().is_some_and(|d| d.join("config.toml").is_file()),
@@ -1345,6 +980,18 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
     });
     println!("{value}");
     Ok(())
+}
+
+/// ¿Hay LTspice? Siempre `false` en un binario sin el addon de electrónica.
+fn ltspice_disponible() -> bool {
+    #[cfg(feature = "electronics")]
+    {
+        xtal_sim::ltspice::is_available()
+    }
+    #[cfg(not(feature = "electronics"))]
+    {
+        false
+    }
 }
 
 fn report_path(label: &str, path: &Path, exists: bool) {

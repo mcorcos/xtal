@@ -109,6 +109,50 @@ jobs:
             | "$BIN" mcp | grep -q '"serverInfo"'
           "$BIN" mcp install --client codex --print > /dev/null
 
+  # La separación núcleo / addon de electrónica, verificada por un build.
+  #
+  # Xtal hace dos cosas: armar un informe en LaTeX (todo el mundo) y conseguir datos
+  # de un circuito (algunos). La segunda vive detrás de la feature `electronics`.
+  # Sin un build que la deje afuera, la frontera se pudre sola: alguien usa `xtal_sim`
+  # desde el núcleo, compila, y nadie se entera. Es lo mismo que pasó con el theme de
+  # ITBA hasta que hubo un segundo theme.
+  #
+  # Este job es barato y es el que mantiene honesta la arquitectura.
+  nucleo:
+    name: el núcleo compila sin el addon de electrónica
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cachear dependencias
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compilar y lintear sin `electronics`
+        run: |
+          set -euxo pipefail
+          cargo build --bin xtal --no-default-features
+          cargo clippy -p xtal-cli --no-default-features --all-targets -- -D warnings
+          cargo test -p xtal-cli --no-default-features
+
+      - name: Y que el binario resultante siga sirviendo para algo
+        run: |
+          set -euxo pipefail
+          BIN=target/debug/xtal
+          "$BIN" --version
+          # Los comandos de electrónica NO tienen que estar...
+          ! "$BIN" --help | grep -qE '^  (sim|circuit|raw) '
+          # ...y los del informe sí.
+          "$BIN" --help | grep -q '^  plot '
+          "$BIN" --help | grep -q '^  run '
+          "$BIN" example nucleo-demo > /dev/null
+          "$BIN" --project nucleo-demo export > /dev/null
+          rm -rf nucleo-demo
+
   # El único job que compila un PDF de verdad. Sin esto, romper una plantilla de
   # `xtal-render` —un \usepackage mal, una llave de más en el .j2— pasa todos los
   # tests y se descubre recién cuando no compila el TP.

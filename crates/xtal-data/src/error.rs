@@ -32,6 +32,9 @@ pub enum DataError {
     #[error("fórmula inválida: {0}")]
     Formula(String),
 
+    #[error("no pude guardar la trazabilidad de la medición: {0}")]
+    Provenance(String),
+
     #[error(
         "dominio inválido: para escala log, 'from' y 'to' deben ser > 0 (from={from}, to={to})"
     )]

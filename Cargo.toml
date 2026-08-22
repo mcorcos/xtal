@@ -34,7 +34,12 @@ serde = { version = "1", features = ["derive"] }
 # en `xtal mcp install`, que reescribe la config de otro programa: sin esto le
 # reordenaríamos alfabéticamente todas las claves al usuario.
 serde_json = { version = "1", features = ["preserve_order"] }
-toml = "0.8"            # lectura de TOML -> structs
+# preserve_order: `toml::Table` conserva el orden en que se insertaron las claves en
+# vez de ordenarlas alfabéticamente. Importa desde que la trazabilidad de una medición
+# es un bloque opaco (`Provenance`): al pasar por `toml::Value`, sin esto un `[sim]`
+# quedaba con sus claves alfabetizadas — el archivo seguía siendo válido, pero se leía
+# peor y le cambiaba el diff a cualquiera que tuviera un proyecto de antes.
+toml = { version = "0.8", features = ["preserve_order"] }
 toml_edit = "0.22"     # escritura de TOML preservando comentarios/formato
 csv = "1.3"            # parseo robusto de CSV
 encoding_rs = "0.8"    # detección/conversión de encodings (osciloscopios Windows)

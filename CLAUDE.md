@@ -202,6 +202,20 @@ El núcleo es análisis de circuitos + consolidación de datos.
   producto, las decisiones ya tomadas para no re-discutirlas, y las trampas conocidas.
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
+### Núcleo vs addon de electrónica — HECHO (2026-08-22) → `docs/ARQUITECTURA.md`
+Xtal hace dos cosas distintas: **armar un informe** (todo el mundo) y **conseguir datos
+de un circuito** (algunos). La segunda es un addon detrás de la feature `electronics`,
+prendida por default.
+- **La regla: `xtal_sim` se usa desde `xtal-cli/src/electronics.rs` y desde ningún otro
+  lado.** Hay un job de CI (`nucleo`) que compila sin el addon y falla si se rompe. Sin
+  ese build, la frontera se pudre sola — es la lección del theme de ITBA.
+- `xtal-data` ya NO depende de `xtal-sim`. La trazabilidad de una medición pasó a ser
+  `Provenance`: bloques con nombre que el núcleo escribe y devuelve **sin mirar
+  adentro**. El formato en disco quedó byte a byte igual (verificado con un diff).
+- Para eso hizo falta `toml` con `preserve_order`: al pasar por `toml::Value`, las
+  claves de un `[sim]` se alfabetizaban y le cambiaban el diff a cualquiera con un
+  proyecto de antes.
+
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
 - `xtal-config` — config en cascada 4 capas (defaults→global→proyecto→flags).

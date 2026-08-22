@@ -46,12 +46,15 @@ pub enum Command {
     #[command(subcommand)]
     Section(SectionCmd),
     /// Esquemáticos de circuito (.cir): importar, listar, mostrar.
+    #[cfg(feature = "electronics")]
     #[command(subcommand)]
     Circuit(CircuitCmd),
     /// Simulación de circuitos con ngspice (ac, tran, dc, op, tf, noise, ...).
+    #[cfg(feature = "electronics")]
     #[command(subcommand)]
     Sim(SimCmd),
     /// Importa el resultado de una corrida externa (rawfile `.raw` de LTspice/ngspice).
+    #[cfg(feature = "electronics")]
     #[command(subcommand)]
     Raw(RawCmd),
     /// Genera el .tex del proyecto sin compilar.

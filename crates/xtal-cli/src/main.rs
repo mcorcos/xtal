@@ -10,6 +10,10 @@ mod commands;
 mod convert;
 mod ctx;
 mod deps;
+// Los comandos de electrónica (circuit/sim/raw) viven aparte y son opcionales:
+// ver el doc de `electronics.rs`.
+#[cfg(feature = "electronics")]
+mod electronics;
 mod example;
 mod gen;
 mod mcp;
@@ -61,9 +65,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Plan(a) => plan::cmd_plan(a, &project, json),
         Command::Status(a) => plan::cmd_status(a, &project, json),
         Command::Section(cmd) => commands::cmd_section(cmd, &project, json),
-        Command::Circuit(cmd) => commands::cmd_circuit(cmd, &project, json),
-        Command::Sim(cmd) => commands::cmd_sim(cmd, &project, json),
-        Command::Raw(cmd) => commands::cmd_raw(cmd, &project, json),
+        #[cfg(feature = "electronics")]
+        Command::Circuit(cmd) => electronics::cmd_circuit(cmd, &project, json),
+        #[cfg(feature = "electronics")]
+        Command::Sim(cmd) => electronics::cmd_sim(cmd, &project, json),
+        #[cfg(feature = "electronics")]
+        Command::Raw(cmd) => electronics::cmd_raw(cmd, &project, json),
         Command::Export(a) => commands::cmd_export(a, &project),
         Command::Run(a) => commands::cmd_run(a, &project),
         Command::Watch(a) => watch::cmd_watch(a, &project),
