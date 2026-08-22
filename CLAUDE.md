@@ -195,11 +195,12 @@ El núcleo es análisis de circuitos + consolidación de datos.
     para cualquier cosa interactiva. Salieron tres bugs (Enter en blanco repetía la
     pregunta muda, un título de símbolos daba id vacío, dos títulos iguales se pisaban),
     los tres arreglados.
-- **Qué falta → `docs/PENDIENTES.md`.** Ahí está todo: lo que preocupa (el CI nunca
-  compila un PDF, nadie más que Manu lo usó, la entrevista de `plan` sin probar), lo
-  acotado (doctor que reporte la integración con IA, desinstalador, segundo theme), el
-  backlog de producto, las decisiones ya tomadas para no re-discutirlas, y las trampas
-  conocidas. Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
+- **Qué falta → `docs/PENDIENTES.md`.** Después de la Tanda 6 quedan abiertos dos:
+  **nadie más que Manu lo usó** (los binarios de Linux y de Mac Intel se publican pero
+  ningún humano los corrió) y **Windows no existe** (sin binario y sin probar; pesa más
+  ahora que se piensa una app de escritorio). El archivo tiene además el backlog de
+  producto, las decisiones ya tomadas para no re-discutirlas, y las trampas conocidas.
+  Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
