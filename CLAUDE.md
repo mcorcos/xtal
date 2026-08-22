@@ -169,6 +169,32 @@ El núcleo es análisis de circuitos + consolidación de datos.
     los clientes detectados (pregunta en interactivo; en `--yes` lo hace). `--no-ai` saltea.
   - `install.sh` corre `xtal setup --yes` al final: después de instalar no queda ningún
     paso manual.
+- **Cerrar los pendientes que preocupaban — HECHO (2026-08-22, "Tanda 6").**
+  - **El CI ya compila un PDF.** Job `pdf` en `ci.yml`, Linux y macOS: baja Tectonic
+    0.17.0 del release (no está en apt), cachea su bundle de LaTeX, corre
+    `xtal example` + `xtal run` y verifica que el PDF arranque con `%PDF-` y pese más
+    de 10 KB. Si falla, sube `salida/` como artifact. Era el único agujero que podía
+    romper el producto sin que nadie se entere.
+  - **`xtal doctor` reporta la integración con IA.** `ai.rs` suma `skill_status()` y
+    `mcp_status()`, que **solo leen**. Se lee el archivo de config de cada cliente y no
+    su CLI: `claude mcp get` devuelve exit 0 exista o no el server. Claude Code guarda
+    los servers de scope user en `~/.claude.json`. Un MCP sin registrar NO cuenta como
+    roto (en Claude Code es opcional); sí cuentan el skill ausente/viejo y un registro
+    que apunta a un binario muerto. `--fix` arregla las dos cosas.
+  - **`xtal uninstall`** (`uninstall.rs`): saca config, themes, skill y el registro del
+    MCP. **No toca el binario ni los proyectos.** Imprime siempre qué va a borrar, aun
+    con `--yes`. Saca el MCP primero (depende de otros programas). **`ensure_first_run`
+    se saltea en este comando**, como en modo MCP: si no, reescribe lo que el comando
+    está por borrar.
+  - **Segundo theme: `themes/generico`.** Era la prueba del motor: mientras ITBA fuera
+    el único theme, no se sabía si el motor leía themes o leía ITBA. Encontró lo suyo —
+    `[institucion]` era obligatoria y la carátula imprimía la línea siempre. Ahora
+    `nombre`/`sigla` son opcionales y vacío = no se dibuja la línea (los dos formatos).
+  - **La entrevista de `xtal plan` se probó** con `script -q /dev/null`, que le da una
+    PTY de verdad al proceso desde una sesión sin terminal. **Guardá este truco**: sirve
+    para cualquier cosa interactiva. Salieron tres bugs (Enter en blanco repetía la
+    pregunta muda, un título de símbolos daba id vacío, dos títulos iguales se pisaban),
+    los tres arreglados.
 - **Qué falta → `docs/PENDIENTES.md`.** Ahí está todo: lo que preocupa (el CI nunca
   compila un PDF, nadie más que Manu lo usó, la entrevista de `plan` sin probar), lo
   acotado (doctor que reporte la integración con IA, desinstalador, segundo theme), el
@@ -189,7 +215,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
-`example` · `update` · `setup` · `mcp [serve|install]` · `completions` · `man`.
+`example` · `update` · `setup` · `uninstall` · `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
 `xtal raw import <archivo.raw>` lee el resultado de una corrida hecha en **LTspice/ngspice**
