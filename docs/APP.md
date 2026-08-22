@@ -92,6 +92,16 @@ que lo está haciendo — y se olvida.
 Arriba de la lista de archivos va `xtal status` hecho pantalla: gráfico por gráfico, un
 chip por curva. Verde = ya está. Gris = falta conseguirla.
 
+## Cuando no compila
+
+Un error de LaTeX es célebremente ilegible, y el que abre esta app por definición no
+quiere pelear con TeX. Cuando el informe no compila, **el lado del PDF muestra por qué**:
+la explicación en castellano primero y grande, el mensaje del compilador abajo, la línea
+que rompió, y un link a la sección donde está. El volcado completo queda a un click.
+
+Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
+resultado. Si no hay resultado, ahí va la explicación.
+
 ## Wrappers sobre todo
 
 La idea de fondo: cada cosa difícil de LaTeX tiene que tener adelante algo fácil.

@@ -132,3 +132,64 @@ import Testing
     #expect(e.adelante == 0 && e.atras == 0)
     #expect(!e.tieneRemoto)
 }
+
+// MARK: - Errores de compilación
+//
+// Es lo que decide si el usuario entiende por qué no compila o se queda apretando ⌘R.
+
+@Test func saca_mensaje_linea_y_fragmento_del_volcado() {
+    // La salida real de Tectonic con un comando inventado.
+    let salida = """
+    Error: compilando el informe
+      causa: falló la compilación de LaTeX:
+    error: main.tex:58: Undefined control sequence
+    error: something bad happened inside XeTeX; its output follows:
+
+    ! Undefined control sequence.
+    l.58 Esto tiene un error: \\comandoQueNoExiste
+                                                 {hola}
+    """
+    let e = ErrorCompilacion.parsear(salida)
+    #expect(e.mensaje == "Undefined control sequence")
+    #expect(e.linea == 58)
+    #expect(e.fragmento?.contains("comandoQueNoExiste") == true)
+    // Y lo que de verdad importa: que diga algo entendible.
+    #expect(e.explicacion.contains("comando que LaTeX no conoce"))
+}
+
+@Test func un_volcado_que_no_entendemos_igual_devuelve_algo() {
+    // Nunca dejar al usuario con la pantalla en blanco: mostrar algo feo es mejor
+    // que no mostrar nada.
+    let e = ErrorCompilacion.parsear("pasó algo raro y no dijo nada útil")
+    #expect(!e.mensaje.isEmpty)
+    #expect(!e.explicacion.isEmpty)
+    #expect(e.crudo.contains("algo raro"))
+}
+
+@Test func traduce_los_errores_que_pasan_todo_el_tiempo() {
+    #expect(ErrorCompilacion.explicar("Missing $ inserted").contains("matemática"))
+    #expect(ErrorCompilacion.explicar("Runaway argument?").contains("llave"))
+    #expect(ErrorCompilacion.explicar("Extra }, or forgotten $").contains("Sobra"))
+    #expect(ErrorCompilacion.explicar("LaTeX Error: File `foto.png' not found").contains("Falta un archivo"))
+}
+
+@MainActor
+@Test func ubica_el_error_en_la_seccion_que_lo_tiene() {
+    // El número de línea es del .tex generado y no le sirve a nadie: lo que ubica es
+    // buscar el texto que rompió adentro de los cuerpos.
+    let secciones = [
+        Secciones.Seccion(titulo: "Objetivo", cuerpo: "Todo bien acá.", figuras: [], nivel: 0),
+        Secciones.Seccion(titulo: "Resultados",
+                          cuerpo: "Esto tiene un error: \\comandoQueNoExiste{hola}",
+                          figuras: [], nivel: 0),
+    ]
+    let e = ErrorCompilacion(
+        mensaje: "Undefined control sequence",
+        explicacion: "…",
+        linea: 58,
+        fragmento: "Esto tiene un error: \\comandoQueNoExiste",
+        seccion: nil,
+        crudo: ""
+    ).ubicar(en: secciones)
+    #expect(e.seccion == "Resultados")
+}

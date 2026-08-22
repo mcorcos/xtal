@@ -22,6 +22,8 @@ public final class Proyecto {
 
     public private(set) var compilando = false
     public private(set) var ultimoLog: String = ""
+    /// Por qué no compiló. `nil` cuando la última compilación salió bien.
+    public var error: ErrorCompilacion?
 
     public struct Archivo: Identifiable, Hashable, Sendable {
         public let url: URL
@@ -114,8 +116,13 @@ public final class Proyecto {
         do {
             let r = try await XtalCLI.correr(["run"], en: carpeta)
             ultimoLog = r.texto
+            // El error se guarda entero. Que no compile es la falla más común de una
+            // app de documentos, y dejar al usuario apretando ⌘R sin que pase nada es
+            // lo peor que puede hacer.
+            self.error = r.ok ? nil : ErrorCompilacion.parsear(r.texto)
         } catch {
             ultimoLog = error.localizedDescription
+            self.error = ErrorCompilacion.parsear(error.localizedDescription)
         }
         recargar()
         // Un PDF nuevo con el mismo nombre no le llega solo al visor: hay que decirle

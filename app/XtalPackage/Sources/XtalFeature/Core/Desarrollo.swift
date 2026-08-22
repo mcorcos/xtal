@@ -40,6 +40,11 @@ public enum Desarrollo {
         return v.isEmpty ? nil : v
     }
 
+    /// `XTAL_COMPILAR=1` — compila apenas abre, sin esperar un ⌘R.
+    public static var compilarAlAbrir: Bool {
+        ProcessInfo.processInfo.environment["XTAL_COMPILAR"] == "1"
+    }
+
     /// `XTAL_SNAPSHOT=/ruta/salida.png` — se retrata y se cierra.
     static var rutaSnapshot: URL? {
         guard let p = ProcessInfo.processInfo.environment["XTAL_SNAPSHOT"], !p.isEmpty else {

@@ -69,6 +69,12 @@ public struct Workspace: View {
             await ajuste.refrescar()
             await secciones.recargar()
             cargarSeleccionado()
+            if Desarrollo.compilarAlAbrir {
+                await proyecto.compilar()
+                if let e = proyecto.error {
+                    proyecto.error = e.ubicar(en: secciones.lista)
+                }
+            }
         }
         .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
@@ -171,6 +177,11 @@ public struct Workspace: View {
                         await secciones.guardarYa(sec.titulo, cuerpo: texto)
                     }
                     await proyecto.compilar()
+                    // Ubicar el error en la sección donde está el texto que rompió:
+                    // el número de línea es del .tex generado y no le sirve a nadie.
+                    if let e = proyecto.error {
+                        proyecto.error = e.ubicar(en: secciones.lista)
+                    }
                     await git.refrescar()
                 }
             } label: {
@@ -349,12 +360,24 @@ public struct Workspace: View {
         .background(Tok.bgBase)
     }
 
+    /// El lado derecho: el PDF, o —si no compila— por qué no.
+    ///
+    /// El error va acá y no en un panel aparte porque este es el lugar donde uno mira
+    /// para ver el resultado. Si no hay resultado, acá va la explicación.
     private var pdf: some View {
         VStack(spacing: 0) {
-            cabecera(proyecto.pdf == nil ? "Sin compilar" : "main.pdf", icono: "doc.richtext")
-            if proyecto.pdf != nil {
+            if let e = proyecto.error {
+                cabecera("No compila", icono: "exclamationmark.triangle.fill")
+                PanelError(error: e) { titulo in
+                    if let sec = secciones.lista.first(where: { $0.titulo == titulo }) {
+                        elegirSeccion(sec)
+                    }
+                }
+            } else if proyecto.pdf != nil {
+                cabecera("main.pdf", icono: "doc.richtext")
                 VisorPDF(url: proyecto.pdf)
             } else {
+                cabecera("Sin compilar", icono: "doc.richtext")
                 Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
                       detalle: "Apretá ⌘R y el PDF aparece acá")
             }
