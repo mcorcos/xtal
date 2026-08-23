@@ -441,6 +441,21 @@ pub fn cmd_section(cmd: SectionCmd, project: &Option<PathBuf>, json: bool) -> Re
             let section = find_section_mut(&mut proj.sections, &a.title)
                 .ok_or_else(|| anyhow!("no encontré la sección '{}'", a.title))?;
             if let Some(body) = body {
+                // Red de seguridad: un cuerpo que trae `[[sections]]` al principio de
+                // una línea es, casi seguro, un `xtal.toml` entero metido adentro de
+                // una sección por error. Y no falla ruidosamente: el TOML se vuelve a
+                // parsear y el informe queda con las secciones **triplicadas**.
+                //
+                // Ya pasó una vez, por un bug de la app. Cuesta dos líneas evitar que
+                // vuelva a pasar por cualquier otro camino.
+                if body
+                    .lines()
+                    .any(|l| l.trim_start().starts_with("[[sections]]"))
+                {
+                    bail!(
+                        "el cuerpo trae un `[[sections]]` adentro: eso es un xtal.toml, \n                                no el texto de una sección. No lo guardo para no duplicarte el informe."
+                    );
+                }
                 section.body = body;
             }
             if let Some(figures) = a.figures {

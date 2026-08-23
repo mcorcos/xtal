@@ -19,13 +19,24 @@ public struct Workspace: View {
     @State private var secciones: Secciones
     @State private var arbol: Arbol
     @State private var texto: String = ""
-    /// De qué archivo es lo que hay en `texto` ahora mismo.
+    /// **Qué es lo que hay en `texto` ahora mismo.**
     ///
-    /// Sin esto se puede escribir el contenido de un archivo **arriba de otro**: el
-    /// `onChange` del texto dispara con lo que haya cargado y guarda en el archivo que
-    /// esté seleccionado en ese instante, que no siempre es el mismo. Ya vació un
-    /// `graficos/*.toml`. Nada se guarda si estos dos no coinciden.
-    @State private var textoDe: URL?
+    /// Una sola fuente de verdad, y no tres selecciones sueltas que hay que mantener
+    /// coordinadas. Tenerlas sueltas ya causó dos pérdidas de datos:
+    ///
+    ///   1. escribir el contenido de un archivo arriba de otro, y
+    ///   2. peor: guardar el `xtal.toml` entero **adentro del cuerpo de una sección**,
+    ///      porque al abrir el proyecto quedaban una sección seleccionada y un archivo
+    ///      cargado en el editor al mismo tiempo, y el guardado le creía a la sección.
+    ///
+    /// Con esto no hay ambigüedad posible: lo que se guarda es lo que dice `abierto`.
+    @State private var abierto: Abierto = .nada
+
+    enum Abierto: Equatable {
+        case nada
+        case archivo(URL)
+        case seccion(String)
+    }
     @State private var insercion: EditorCodigo.Insercion?
     @Environment(\.colorScheme) private var esquema
 
@@ -170,14 +181,15 @@ public struct Workspace: View {
             //
             // Un archivo se escribe en el acto; una sección va por la CLI y con retraso,
             // porque mandar un proceso por cada tecla es absurdo.
-            if let sec = secciones.seleccionada {
-                secciones.guardar(sec.titulo, cuerpo: nuevo)
-            } else if let url = arbol.seleccionado, url == textoDe,
-                      Arbol.clase(de: url) == .texto, !generado(url) {
-                // `url == textoDe` es el candado: solo se guarda si lo que hay en el
-                // editor es de ESTE archivo. Y lo de `salida/` no se guarda nunca: se
-                // pisa en la próxima compilación.
+            switch abierto {
+            case .seccion(let titulo):
+                secciones.guardar(titulo, cuerpo: nuevo)
+            case .archivo(let url) where Arbol.clase(de: url) == .texto && !generado(url):
+                // Lo de `salida/` no se guarda nunca: se pisa en la próxima
+                // compilación, y dejar que alguien lo edite es dejarlo perder el trabajo.
                 try? nuevo.write(to: url, atomically: true, encoding: .utf8)
+            case .archivo, .nada:
+                break
             }
             if compilarAlGuardar { programarCompilado() }
         }
@@ -646,9 +658,11 @@ public struct Workspace: View {
     /// compilación te lo pisaría.
     private func guardarYCompilar() async {
         compiladoPendiente?.cancel()
-        guardarLoAbierto()
-        if let sec = secciones.seleccionada {
-            await secciones.guardarYa(sec.titulo, cuerpo: texto)
+        // Con el guardado a medio camino, el PDF sale con el texto de hace medio
+        // segundo. Se guarda YA, y solo lo que de verdad está abierto.
+        switch abierto {
+        case .seccion(let titulo): await secciones.guardarYa(titulo, cuerpo: texto)
+        case .archivo, .nada: guardarLoAbierto()
         }
 
         // Qué se compila, en orden:
@@ -703,19 +717,21 @@ public struct Workspace: View {
             arbol.abiertas.insert(padre)
             padre = padre.deletingLastPathComponent()
         }
-        // Primero el candado y después el texto: al revés, el `onChange` del texto
-        // dispararía con el candado todavía apuntando al archivo anterior.
-        textoDe = url
+        // Primero se declara qué está abierto y después se carga el texto: al revés,
+        // el `onChange` del texto dispararía apuntando a lo anterior.
+        abierto = .archivo(url)
         texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
     /// Escribe al disco lo que hay en el editor, si corresponde.
     private func guardarLoAbierto() {
-        if let sec = secciones.seleccionada {
-            secciones.guardar(sec.titulo, cuerpo: texto)
-        } else if let url = arbol.seleccionado, url == textoDe, !generado(url),
-                  Arbol.clase(de: url) == .texto {
+        switch abierto {
+        case .seccion(let titulo):
+            secciones.guardar(titulo, cuerpo: texto)
+        case .archivo(let url) where Arbol.clase(de: url) == .texto && !generado(url):
             try? texto.write(to: url, atomically: true, encoding: .utf8)
+        case .archivo, .nada:
+            break
         }
     }
 
@@ -807,25 +823,26 @@ public struct Workspace: View {
     }
 
     private func elegirSeccion(_ sec: Secciones.Seccion) {
-        // Al cambiar de sección, guardar lo que estaba escrito antes de perderlo.
-        if let anterior = secciones.seleccionada, anterior.id != sec.id {
-            secciones.guardar(anterior.titulo, cuerpo: texto)
-        }
+        // Guardar lo que estaba abierto antes de perderlo. `guardarLoAbierto` mira
+        // `abierto`, así que no hace falta acordarse de qué era.
+        guardarLoAbierto()
         proyecto.seleccionado = nil
+        arbol.seleccionado = nil
         secciones.seleccionada = sec
+        abierto = .seccion(sec.titulo)
         texto = sec.cuerpo
     }
 
     private func cargarSeleccionado() {
         if let url = arbol.seleccionado {
-            textoDe = url
+            abierto = .archivo(url)
             texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
         } else if let sec = secciones.seleccionada {
-            textoDe = nil
+            abierto = .seccion(sec.titulo)
             texto = sec.cuerpo
         } else {
-            textoDe = nil
-            texto = proyecto.seleccionado.map { proyecto.leer($0) } ?? ""
+            abierto = .nada
+            texto = ""
         }
     }
 }
