@@ -61,6 +61,12 @@ pub enum Command {
     Export(ExportArgs),
     /// Genera el .tex y compila a PDF.
     Run(RunArgs),
+    /// Compila un `.tex` **tal cual está**, sin regenerarlo.
+    ///
+    /// Es la diferencia con `run`: `run` rehace el `.tex` desde el `xtal.toml` y pisa
+    /// lo que hubiera. `compile` no toca el archivo — es lo que hace falta cuando el
+    /// LaTeX lo escribís vos.
+    Compile(CompileArgs),
     /// Recompila el PDF cada vez que cambia un archivo del proyecto.
     Watch(WatchArgs),
     /// Configuración (cascada: global vs proyecto).
@@ -556,6 +562,18 @@ pub struct ExampleArgs {
     /// Abre el PDF al terminar (implica --run).
     #[arg(long)]
     pub open: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CompileArgs {
+    /// El `.tex` a compilar. Por default, `salida/main.tex`.
+    pub file: Option<PathBuf>,
+    /// Abre el PDF al terminar.
+    #[arg(long)]
+    pub open: bool,
+    /// Compila con pdflatex en vez de Tectonic.
+    #[arg(long)]
+    pub pdflatex: bool,
 }
 
 #[derive(Debug, Args)]

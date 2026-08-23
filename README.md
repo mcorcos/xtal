@@ -286,7 +286,8 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 | Comando | Descripción |
 |---|---|
 | `xtal export` | Genera el `.tex` sin compilar |
-| `xtal run` | Genera el `.tex` y compila el PDF. Flags: `--open`, `--monochrome`, `--pdflatex` |
+| `xtal run` | **Genera** el `.tex` desde el `xtal.toml` y compila. Pisa lo que hubiera |
+| `xtal compile [archivo]` | Compila un `.tex` **tal cual está**. Es lo que corresponde cuando el LaTeX lo escribiste vos |
 | `xtal watch` | Recompila solo cuando cambia algo. Mismos flags que `run`, más `--interval` |
 
 ### Sistema

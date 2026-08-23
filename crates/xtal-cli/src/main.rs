@@ -73,6 +73,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Raw(cmd) => electronics::cmd_raw(cmd, &project, json),
         Command::Export(a) => commands::cmd_export(a, &project),
         Command::Run(a) => commands::cmd_run(a, &project),
+        Command::Compile(a) => commands::cmd_compile(a, &project),
         Command::Watch(a) => watch::cmd_watch(a, &project),
         Command::Config(cmd) => commands::cmd_config(cmd, &project),
         Command::Doctor(a) => commands::cmd_doctor(a, json),

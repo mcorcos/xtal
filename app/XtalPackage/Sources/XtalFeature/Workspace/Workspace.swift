@@ -52,6 +52,9 @@ public struct Workspace: View {
     /// Si la lista de archivos del proyecto está desplegada. Arranca cerrada: son la
     /// tripa, no el informe.
     @AppStorage("xtal.panel.archivosCrudos") private var verArchivos2 = false
+    @AppStorage("xtal.compilarAlGuardar") private var compilarAlGuardar = false
+    /// El compilado automático, con retraso. Compilar en cada tecla es absurdo.
+    @State private var compiladoPendiente: Task<Void, Never>?
 
     let cerrar: () -> Void
 
@@ -93,6 +96,9 @@ public struct Workspace: View {
         .navigationTitle(proyecto.nombre)
         .navigationSubtitle(proyecto.carpeta.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
         .onAppear { cargarSeleccionado() }
+        .onReceive(NotificationCenter.default.publisher(for: .xtalGuardarYCompilar)) { _ in
+            Task { await guardarYCompilar() }
+        }
         .sheet(item: $pidiendoTitulo) { pedido in
             DialogoTitulo(titulo: pedido.titulo, texto: $tituloNuevo) { nombre in
                 Task {
@@ -132,6 +138,7 @@ public struct Workspace: View {
                 // pisa en la próxima compilación.
                 try? nuevo.write(to: url, atomically: true, encoding: .utf8)
             }
+            if compilarAlGuardar { programarCompilado() }
         }
     }
 
@@ -544,6 +551,45 @@ public struct Workspace: View {
             .buttonStyle(.plain)
             .foregroundStyle(Tok.accent)
             .help("El LaTeX que generó este PDF. Es de mirar: se rehace en cada compilación.")
+        }
+    }
+
+    // MARK: - Guardar y compilar
+
+    /// ⌘S: guarda lo que hay en el editor y compila.
+    ///
+    /// **Qué compila depende de qué estés editando**, y es la distinción que importa:
+    ///   - un `.tex` → `xtal compile`, que lo toma tal cual está;
+    ///   - cualquier otra cosa → `xtal run`, que rehace el `.tex` desde el `xtal.toml`.
+    ///
+    /// Si fuera siempre `run`, escribir LaTeX a mano no serviría de nada: la primera
+    /// compilación te lo pisaría.
+    private func guardarYCompilar() async {
+        compiladoPendiente?.cancel()
+        guardarLoAbierto()
+        if let sec = secciones.seleccionada {
+            await secciones.guardarYa(sec.titulo, cuerpo: texto)
+        }
+
+        if let url = arbol.seleccionado, url.pathExtension.lowercased() == "tex" {
+            await proyecto.compilarTex(url)
+        } else {
+            await proyecto.compilar()
+        }
+        if let e = proyecto.error {
+            proyecto.error = e.ubicar(en: secciones.lista)
+        }
+        arbol.recargar()
+        await git.refrescar()
+    }
+
+    /// Compila sin que se lo pidan, un rato después de la última tecla.
+    private func programarCompilado() {
+        compiladoPendiente?.cancel()
+        compiladoPendiente = Task {
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            await guardarYCompilar()
         }
     }
 

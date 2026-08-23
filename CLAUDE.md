@@ -252,7 +252,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 `xtal new|init` · `plan [add|list|remove]` · `status` · `meas import|formula|random|list|show` ·
 `plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
-· `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `run [--open] [--monochrome]
+· `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update` · `setup` · `uninstall` · `mcp [serve|install]` · `completions` · `man`.
 

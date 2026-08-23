@@ -141,6 +141,27 @@ public final class Proyecto {
 
     // MARK: - Compilar
 
+    /// Compila **un `.tex` tal cual está**, sin regenerarlo.
+    ///
+    /// Es lo que corresponde cuando el LaTeX lo escribiste vos: `xtal run` lo rehace
+    /// desde el `xtal.toml` y te pisaría lo escrito.
+    public func compilarTex(_ tex: URL) async {
+        guard !compilando else { return }
+        compilando = true
+        defer { compilando = false }
+
+        do {
+            let r = try await XtalCLI.correr(["compile", tex.path], en: carpeta)
+            ultimoLog = r.texto
+            error = r.ok ? nil : ErrorCompilacion.parsear(r.texto)
+        } catch {
+            ultimoLog = error.localizedDescription
+            self.error = ErrorCompilacion.parsear(error.localizedDescription)
+        }
+        recargar()
+        NotificationCenter.default.post(name: .xtalPdfCambio, object: nil)
+    }
+
     /// `xtal run`: genera el `.tex` y compila el PDF.
     public func compilar() async {
         guard !compilando else { return }
@@ -167,4 +188,7 @@ public final class Proyecto {
 
 extension Notification.Name {
     static let xtalPdfCambio = Notification.Name("xtal.pdf.cambio")
+    /// ⌘S. Lo manda el menú y lo escucha el workspace: un atajo tiene que estar en el
+    /// menú para que alguien lo descubra, y desde ahí no se llega al estado de la vista.
+    public static let xtalGuardarYCompilar = Notification.Name("xtal.guardarYCompilar")
 }

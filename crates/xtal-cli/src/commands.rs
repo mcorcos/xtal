@@ -568,6 +568,52 @@ pub fn cmd_export(a: ExportArgs, project: &Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// `xtal compile` — compila un `.tex` **sin regenerarlo**.
+///
+/// La diferencia con `run` es todo el punto: `run` rehace el `.tex` desde el
+/// `xtal.toml` y pisa lo que hubiera adentro. Eso está bien mientras el LaTeX salga de
+/// los datos, pero deja de servir apenas alguien escribe LaTeX a mano — que es
+/// exactamente lo que uno hace en un editor de LaTeX.
+///
+/// `compile` toma el archivo tal cual está y lo manda al motor. Nada más.
+pub fn cmd_compile(a: CompileArgs, project: &Option<PathBuf>) -> Result<()> {
+    let root = ctx::project_root(project)?;
+    let tex_path = match a.file {
+        Some(f) if f.is_absolute() => f,
+        Some(f) => root.join(f),
+        None => root.join("salida").join("main.tex"),
+    };
+    if !tex_path.is_file() {
+        bail!(
+            "no encontré {}. Si el informe lo genera Xtal, corré `xtal run` primero.",
+            tex_path.display()
+        );
+    }
+
+    // El PDF va al lado del `.tex`, no siempre a `salida/`: si estás compilando un
+    // `.tex` que escribiste vos en otra carpeta, el resultado tiene que quedar ahí.
+    let outdir = tex_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| root.join("salida"));
+
+    let engine = if a.pdflatex {
+        Engine::Pdflatex
+    } else {
+        Engine::Tectonic
+    };
+    let pdf = xtal_compile::compile(&tex_path, &outdir, engine).context("compilando el .tex")?;
+    println!(
+        "{} PDF generado: {}",
+        style("✓").green().bold(),
+        pdf.display()
+    );
+    if a.open {
+        open_file(&pdf);
+    }
+    Ok(())
+}
+
 pub fn cmd_run(a: RunArgs, project: &Option<PathBuf>) -> Result<()> {
     let root = ctx::project_root(project)?;
     let overrides = PartialConfig {

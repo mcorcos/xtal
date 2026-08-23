@@ -16,6 +16,16 @@ struct XtalApp: App {
         .commands {
             // Los atajos de los paneles viven acá y no en la vista para que aparezcan en
             // el menú: un atajo que no está en el menú es un atajo que nadie descubre.
+            // ⌘S es «guardar y compilar». Guardar solo no existe: el editor escribe
+            // al disco mientras tipeás, así que lo único que ⌘S puede agregar es ver
+            // el resultado.
+            CommandGroup(replacing: .saveItem) {
+                Button("Guardar y compilar") {
+                    NotificationCenter.default.post(name: .xtalGuardarYCompilar, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+            }
+
             CommandGroup(after: .sidebar) {
                 Button("Archivos") { alternar("xtal.panel.archivos") }
                     .keyboardShortcut("1", modifiers: .command)

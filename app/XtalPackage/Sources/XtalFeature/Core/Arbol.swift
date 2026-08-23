@@ -37,9 +37,11 @@ public final class Arbol {
     public init(carpeta: URL) {
         self.carpeta = carpeta
         recargar()
-        // Las carpetas de primer nivel arrancan abiertas: un árbol todo cerrado obliga
-        // a hacer cinco clicks antes de ver un solo archivo.
-        abiertas = Set(raiz.filter(\.esCarpeta).map(\.url))
+        // Las carpetas de la tripa arrancan **cerradas**: `mediciones/`, `graficos/`,
+        // `esquematicos/` son cómo Xtal guarda los datos, no algo que uno vaya a abrir.
+        // La que sí arranca abierta es `salida/`, porque ahí está el `.tex`.
+        let tripa: Set<String> = ["mediciones", "graficos", "esquematicos", "fuentes"]
+        abiertas = Set(raiz.filter { $0.esCarpeta && !tripa.contains($0.nombre) }.map(\.url))
         // Y se abre el `xtal.toml`: abrir un proyecto y encontrarse con el panel en
         // blanco no le dice a nadie qué hacer. El manifiesto es el punto de partida.
         seleccionado = raiz.first { $0.nombre == "xtal.toml" }?.url
