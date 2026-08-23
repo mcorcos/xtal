@@ -102,6 +102,17 @@ que rompió, y un link a la sección donde está. El volcado completo queda a un
 Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
 resultado. Si no hay resultado, ahí va la explicación.
 
+## El panel lateral es el informe, no la carpeta
+
+Al principio era un explorador de archivos: una lista de `.toml` de mediciones, de
+gráficos y de circuitos. Eso es la tripa de Xtal, no el informe. **Nadie abre
+`node_modules` para escribir su aplicación.**
+
+Ahora muestra lo que hay adentro del informe: qué falta, y sus secciones con las figuras
+que muestra cada una. Los archivos siguen ahí —son de texto y son tuyos— pero van
+plegados al final, cerrados por default. Se pueden mirar si uno quiere; no son la
+pantalla.
+
 ## Que se entienda el TOML
 
 Un proyecto de Xtal es una pila de `.toml` y para el que abre la app por primera vez no

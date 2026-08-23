@@ -41,6 +41,9 @@ public struct Workspace: View {
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
     @AppStorage("xtal.panel.terminal") private var verTerminal = false
+    /// Si la lista de archivos del proyecto está desplegada. Arranca cerrada: son la
+    /// tripa, no el informe.
+    @AppStorage("xtal.panel.archivosCrudos") private var verArchivos2 = false
 
     let cerrar: () -> Void
 
@@ -276,13 +279,22 @@ public struct Workspace: View {
 
     // MARK: - Paneles
 
+    /// El panel lateral es **el informe**, no la carpeta.
+    ///
+    /// Antes era un explorador de archivos: una lista de `.toml` de mediciones, de
+    /// gráficos y de circuitos. Eso es la tripa de Xtal, no el informe — y nadie abre
+    /// `node_modules` para escribir su aplicación. Los archivos siguen ahí, en la
+    /// carpeta, y se pueden mirar si uno quiere; pero no son la pantalla.
+    ///
+    /// Lo que se ve acá es lo que hay en el informe: qué falta, y sus secciones con las
+    /// figuras que muestra cada una.
     private var listaArchivos: some View {
         VStack(spacing: 0) {
             cabecera("Qué falta", icono: "checklist")
             PanelEstado(carpeta: proyecto.carpeta)
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
-            cabecera("Secciones del informe", icono: "text.alignleft") {
+            cabecera("El informe", icono: "text.alignleft") {
                 Button {
                     tituloNuevo = ""
                     pidiendoTitulo = PedidoDeTitulo(clase: .nueva(bajo: nil))
@@ -296,7 +308,29 @@ public struct Workspace: View {
             listaSecciones
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
-            cabecera("Archivos del proyecto", icono: "folder")
+            // Los archivos van plegados y al final. Están para el que los quiera —
+            // son archivos de texto y son suyos— pero abrir uno no es parte de escribir
+            // un informe.
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { verArchivos2.toggle() }
+            } label: {
+                HStack(spacing: Tok.S.sm) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Tok.textTertiary)
+                        .rotationEffect(.degrees(verArchivos2 ? 90 : 0))
+                    Text("Archivos del proyecto")
+                        .font(Tok.F.label)
+                        .foregroundStyle(Tok.textTertiary)
+                    Spacer()
+                }
+                .padding(.horizontal, Tok.S.lg)
+                .frame(height: Tok.H.fila)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if verArchivos2 {
             ScrollView {
                 // Una lista plana, sin `Section` y sin `LazyVStack`.
                 //
@@ -330,7 +364,9 @@ public struct Workspace: View {
                 .padding(Tok.S.xs)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            }
 
+            Spacer(minLength: 0)
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
 
             Button {
@@ -386,6 +422,25 @@ public struct Workspace: View {
                         Button("Sacar del informe", role: .destructive) {
                             Task { await secciones.borrar(sec.titulo); cargarSeleccionado() }
                         }
+                    }
+
+                    // Las figuras que muestra esa sección, debajo. Son parte del
+                    // informe: se ven en el índice como cualquier otra cosa que salga
+                    // impresa. No se abren — un gráfico se mira en el PDF, no en su
+                    // archivo de configuración.
+                    ForEach(sec.figuras, id: \.self) { fig in
+                        HStack(spacing: Tok.S.sm) {
+                            Image(systemName: "chart.xyaxis.line")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Tok.textTertiary)
+                                .frame(width: 16)
+                            Text(fig)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Tok.textSecondary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, Tok.S.md + CGFloat(sec.nivel) * 14 + 14)
+                        .frame(height: 22)
                     }
                 }
             }
