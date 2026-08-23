@@ -118,6 +118,62 @@ pub fn render_standalone_plot(
 
 #[cfg(test)]
 mod tests {
+
+    // --- El preámbulo ---
+    //
+    // Es la pieza que decide si un informe compila o no: un paquete que falta se ve
+    // como un error de LaTeX que no explica nada.
+
+    fn doc_vacio() -> xtal_model::DocumentMeta {
+        xtal_model::DocumentMeta::default()
+    }
+
+    #[test]
+    fn el_preambulo_trae_float_y_graphicspath() {
+        // `float` habilita `\begin{figure}[H]` — «acá y no donde vos quieras», que es
+        // lo que uno quiere en un informe. Sin él: «Unknown float option `H'».
+        let theme = Theme::load("generico", None).unwrap();
+        let p = document::build_preamble(&theme, &doc_vacio());
+        assert!(p.contains("\\usepackage{float}"), "falta float:\n{p}");
+        // Sin graphicspath, una imagen en la carpeta del proyecto no se encuentra: el
+        // .tex se genera adentro de `salida/` y ahí no hay ninguna foto.
+        assert!(p.contains("\\graphicspath"), "falta graphicspath:\n{p}");
+        assert!(
+            p.contains("{../}"),
+            "graphicspath no mira la raíz del proyecto"
+        );
+    }
+
+    #[test]
+    fn el_informe_puede_pedir_paquetes_con_y_sin_opciones() {
+        let theme = Theme::load("generico", None).unwrap();
+        let mut doc = doc_vacio();
+        doc.packages = vec!["booktabs".into(), "[version=4]{mhchem}".into()];
+        let p = document::build_preamble(&theme, &doc);
+        assert!(p.contains("\\usepackage{booktabs}"));
+        // Si ya trae llaves se escribe tal cual: obligar a una sola forma es hacer que
+        // alguien tenga que adivinar cuál.
+        assert!(p.contains("\\usepackage[version=4]{mhchem}"));
+        assert!(!p.contains("{[version=4]{mhchem}}"));
+    }
+
+    #[test]
+    fn el_preambulo_del_informe_va_ultimo() {
+        // Lo más general primero y lo más específico último, para que cada capa pueda
+        // pisar a la anterior. El informe tiene la última palabra.
+        let theme = Theme::load("itba", None).unwrap();
+        let mut doc = doc_vacio();
+        doc.packages = vec!["booktabs".into()];
+        doc.preamble = Some("\\newcommand{\\vin}{V}".into());
+        let p = document::build_preamble(&theme, &doc);
+        let base = p.find("Preámbulo base").unwrap();
+        let paquetes = p.find("Paquetes que pide el informe").unwrap();
+        let propio = p.find("Preámbulo del informe").unwrap();
+        assert!(
+            base < paquetes && paquetes < propio,
+            "el orden del preámbulo cambió"
+        );
+    }
     use super::*;
     use xtal_model::{MeasurementKind, PlotKind, Role, Section, Series, Source};
 

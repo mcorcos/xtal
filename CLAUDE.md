@@ -216,6 +216,19 @@ prendida por default.
   claves de un `[sim]` se alfabetizaban y le cambiaban el diff a cualquiera con un
   proyecto de antes.
 
+### El proceso completo → `docs/PIPELINE.md`
+Dato → medición (`mediciones/<id>.csv` + `.toml`) → gráfico como receta
+(`graficos/<id>.toml`, sin datos adentro) → `xtal.toml` → `salida/main.tex` → Tectonic.
+Los gráficos se dibujan **adentro del LaTeX** con PGFPlots: no hay PNG intermedios.
+- **Imágenes**: el `.tex` se genera en `salida/`, así que el preámbulo trae
+  `\graphicspath{{./}{../}{../imagenes/}{../figuras/}}`. Poné la foto en la raíz del
+  proyecto y escribí su nombre a secas.
+- **Paquetes**: `[document] packages` y `[document] preamble` en el `xtal.toml`. El orden
+  del preámbulo es base → theme → paquetes del informe → preámbulo del informe, de lo
+  general a lo específico, para que cada capa pise a la anterior.
+- `float` está en la base porque `\begin{figure}[H]` es lo que uno quiere en un informe
+  y sin el paquete LaTeX dice «Unknown float option `H'», que no explica nada.
+
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
 - `xtal-config` — config en cascada 4 capas (defaults→global→proyecto→flags).

@@ -214,34 +214,3 @@ private struct BotonBloque: View {
         .help(bloque.titulo)
     }
 }
-
-/// El menú «Insertar» de la barra.
-struct MenuBloques: View {
-    let insertar: (Bloque) -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(grupos, id: \.self) { grupo in
-                Section(grupo) {
-                    ForEach(Bloque.allCases.filter { $0.grupo == grupo }) { b in
-                        Button {
-                            insertar(b)
-                        } label: {
-                            Label(b.titulo, systemImage: b.icono)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "plus")
-        }
-        .menuIndicator(.hidden)
-        .help("Meter un bloque donde está el cursor")
-    }
-
-    private var grupos: [String] {
-        var vistos: [String] = []
-        for b in Bloque.allCases where !vistos.contains(b.grupo) { vistos.append(b.grupo) }
-        return vistos
-    }
-}

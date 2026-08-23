@@ -14,14 +14,29 @@ use crate::pgfplots;
 use crate::theme::Theme;
 
 /// Construye el preámbulo: paquetes base, colores de Xtal, color institucional del
-/// theme, y el preámbulo extra del theme.
-pub fn build_preamble(theme: &Theme) -> String {
+/// theme, el preámbulo del theme, y lo que pida el informe.
+///
+/// El orden importa y es este a propósito: **lo más general primero, lo más específico
+/// último**, para que cada capa pueda pisar a la anterior. Xtal pone la base, el theme
+/// pone lo de la institución, y el informe tiene la última palabra.
+pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta) -> String {
     let mut p = String::new();
     p.push_str("% --- Preámbulo base de Xtal ---\n");
     p.push_str("\\usepackage[margin=2.5cm]{geometry}\n");
     p.push_str("\\usepackage[spanish,es-noquoting]{babel}\n");
     p.push_str("\\usepackage{amsmath}\n");
     p.push_str("\\usepackage{graphicx}\n");
+    // `float` es lo que habilita `[H]` en una figura — «acá y no donde vos quieras».
+    // En un informe es lo que uno quiere el 90% de las veces, y sin el paquete el
+    // documento no compila con un mensaje que no explica nada.
+    p.push_str("\\usepackage{float}\n");
+    // Dónde buscar las imágenes.
+    //
+    // El `.tex` se genera adentro de `salida/`, así que una ruta relativa se resuelve
+    // desde ahí — y nadie guarda sus fotos en la carpeta de salida. Con esto, poner la
+    // imagen en la raíz del proyecto (o en `imagenes/`) y escribir su nombre alcanza,
+    // que es lo único que alguien va a intentar.
+    p.push_str("\\graphicspath{{./}{../}{../imagenes/}{../figuras/}}\n");
     p.push_str("\\usepackage{xcolor}\n");
     p.push_str("\\usepackage{siunitx}\n");
     p.push_str("\\usepackage{pgfplots}\n");
@@ -45,6 +60,30 @@ pub fn build_preamble(theme: &Theme) -> String {
         p.push_str(&format!("% --- Preámbulo del theme {} ---\n", theme.name));
         p.push_str(&theme.preamble);
         p.push('\n');
+    }
+
+    // Lo que pide el informe, al final: tiene la última palabra sobre todo lo anterior.
+    if !doc.packages.is_empty() {
+        p.push('\n');
+        p.push_str("% --- Paquetes que pide el informe ---\n");
+        for paquete in &doc.packages {
+            // Se acepta tanto `booktabs` como `[version=4]{mhchem}`: si ya trae llaves,
+            // se escribe tal cual; si no, se le ponen. Obligar a una sola forma es
+            // hacer que alguien tenga que adivinar cuál.
+            if paquete.contains('{') {
+                p.push_str(&format!("\\usepackage{paquete}\n"));
+            } else {
+                p.push_str(&format!("\\usepackage{{{paquete}}}\n"));
+            }
+        }
+    }
+    if let Some(extra) = &doc.preamble {
+        if !extra.trim().is_empty() {
+            p.push('\n');
+            p.push_str("% --- Preámbulo del informe ---\n");
+            p.push_str(extra);
+            p.push('\n');
+        }
     }
     p
 }
@@ -313,7 +352,7 @@ pub fn assemble_parts(
     let format = resolved.format;
     let rendered = render_used_plots(project, plots, measurements, resolved.monochrome, format)?;
     Ok(DocumentParts {
-        preamble: build_preamble(theme),
+        preamble: build_preamble(theme, &project.document),
         cover: build_cover(project, theme, format),
         body: build_body(&project.sections, &rendered),
         show_toc: show_toc(format, &project.sections),

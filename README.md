@@ -248,6 +248,13 @@ xtal run --open
 | `list` · `show` | Listar y mostrar |
 | `preview` | Compila un solo gráfico a PDF, para iterar rápido |
 
+### Paquetes de LaTeX y preámbulo propio
+
+En el `xtal.toml`, bajo `[document]`: `packages = ["booktabs", "[version=4]{mhchem}"]` y
+`preamble = "\\newcommand{...}"`. Tectonic baja lo que falte solo. Todo el detalle —y
+dónde poner una imagen para que la encuentre— está en
+[`docs/PIPELINE.md`](docs/PIPELINE.md).
+
 ### Informe — `xtal section`
 `add` (sección o subsección) · `set` · `rename` · `remove` · `list`
 

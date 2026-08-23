@@ -84,6 +84,23 @@ pub struct DocumentMeta {
     pub course: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+
+    /// Paquetes de LaTeX que este informe necesita, además de los que Xtal ya trae.
+    ///
+    /// Se escriben como los escribirías en el `.tex`, con sus opciones si hacen falta:
+    /// `"booktabs"`, `"[version=4]{mhchem}"`. Sin esto, cualquier informe que necesite
+    /// algo que no está en la lista base no tiene forma de pedirlo, y la única salida
+    /// era editar el motor.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub packages: Vec<String>,
+
+    /// Preámbulo LaTeX propio del informe, literal.
+    ///
+    /// Va después de los paquetes y después del preámbulo del theme, así que puede
+    /// pisar cualquier cosa. Es la vía de escape: lo que no entre en `packages`
+    /// —un `\newcommand`, un `\setlength`— entra acá.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preamble: Option<String>,
 }
 
 /// Un gráfico **planificado**: qué se quiere mostrar, antes de tener los datos.
