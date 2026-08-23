@@ -6,8 +6,7 @@ A modern macOS application using a **workspace + SPM package** architecture for 
 
 ```
 Xtal/
-├── Xtal.xcworkspace/              # Open this file in Xcode
-├── Xtal.xcodeproj/                # App shell project
+├── Xtal.xcodeproj/                # Open this file in Xcode
 ├── Xtal/                          # App target (minimal)
 │   ├── Assets.xcassets/                # App-level assets (icons, colors)
 │   ├── XtalApp.swift              # App entry point
@@ -133,9 +132,12 @@ This project was scaffolded using [XcodeBuildMCP](https://github.com/cameroncook
 
 ```
 cd app
-xcodebuild -workspace Xtal.xcworkspace -scheme Xtal -configuration Debug -destination 'platform=macOS' build
+xcodebuild -project Xtal.xcodeproj -scheme Xtal -configuration Debug -destination 'platform=macOS' build
 open ~/Library/Developer/Xcode/DerivedData/Xtal-*/Build/Products/Debug/Xtal.app
 ```
+
+En Xcode: abrí `app/Xtal.xcodeproj` y dale a Play. **No hay workspace**, a propósito —
+ver abajo.
 
 El código de verdad vive en `XtalPackage/`, que compila y se testea sin abrir Xcode:
 
@@ -143,7 +145,16 @@ El código de verdad vive en `XtalPackage/`, que compila y se testea sin abrir X
 cd app/XtalPackage && swift test
 ```
 
-### Dos cosas que conviene saber
+### Tres cosas que conviene saber
+
+- **No hay `.xcworkspace`, y es a propósito.** El scaffold original dejaba tres piezas:
+  el proyecto, el paquete, y un workspace que los presentaba. El problema es que el
+  proyecto pedía `XtalFeature` sin decir dónde estaba —esa dirección vivía solo en el
+  workspace— así que abrir el proyecto directo fallaba con "Missing package product".
+  Es una trampa: abrís el archivo que parece el correcto y no compila.
+
+  Ahora la dirección está adentro del proyecto (`XCLocalSwiftPackageReference`), que es
+  igual de estándar y no tiene ese filo. Hay un solo archivo para abrir.
 
 - **El sandbox está apagado a propósito.** La app corre el binario `xtal`, abre tu shell
   y escribe en la carpeta que elegís. Nada de eso se puede hacer en sandbox. El motivo
