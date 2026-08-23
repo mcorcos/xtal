@@ -261,3 +261,33 @@ import Testing
                          ofItemAtPath: fuente.path)
     #expect(Vigia.huellaDe(base) != antes)
 }
+
+// MARK: - Crear y borrar archivos
+//
+// Un editor de LaTeX en el que no podés crear un archivo no es un editor.
+
+@MainActor
+@Test func crear_renombrar_y_no_pisar_lo_que_ya_esta() throws {
+    let base = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-crear-\(UUID().uuidString)")
+    let fm = FileManager.default
+    try fm.createDirectory(at: base, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+    try "".write(to: base.appendingPathComponent("xtal.toml"), atomically: true, encoding: .utf8)
+
+    let arbol = Arbol(carpeta: base)
+    let creado = try arbol.crearArchivo("capitulo.tex", en: base)
+    #expect(fm.fileExists(atPath: creado.path))
+    // Queda seleccionado: creás algo para escribirlo, no para buscarlo después.
+    #expect(arbol.seleccionado == creado)
+
+    // Pisar un archivo que ya está sería perder trabajo sin avisar.
+    #expect(throws: Arbol.Falla.self) {
+        try arbol.crearArchivo("capitulo.tex", en: base)
+    }
+
+    try arbol.renombrar(creado, a: "intro.tex")
+    #expect(!fm.fileExists(atPath: creado.path))
+    #expect(fm.fileExists(atPath: base.appendingPathComponent("intro.tex").path))
+    #expect(arbol.seleccionado?.lastPathComponent == "intro.tex")
+}

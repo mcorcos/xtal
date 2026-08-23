@@ -15,6 +15,24 @@ La app es para que cualquiera haga un informe perfecto sin aprender LaTeX.
 Eso incluye a gente que no es de laboratorio ni de facultad: administración, trabajo,
 cualquiera que tenga que entregar algo escrito y quiera que se vea bien.
 
+## Primero un editor de LaTeX
+
+El resultado es el **`.tex`**. El PDF es lo entregable, pero lo que uno hace acá es
+escribir LaTeX — y lo valioso de Xtal no es que genere el `.tex`, es que le da a Claude
+herramientas para escribir uno muy bueno.
+
+Por eso la app tiene que tener antes que nada lo que tiene Overleaf:
+
+- Un explorador con la carpeta tal cual es, y **crear, renombrar y borrar** archivos.
+- Un editor que escribe `.tex` de verdad.
+- **⌘S guarda y compila**, y lo hace solo mientras trabajás.
+
+Qué se compila, en orden: el `.tex` que estás editando; si no, un `main.tex` tuyo en la
+raíz —la señal de «acá el LaTeX lo escribo yo», que Xtal no genera ni pisa—; y si no hay
+ninguno, se arma desde el `xtal.toml`.
+
+El generador queda: sirve, y con él salen las plantillas.
+
 ## Dos modos, no una pantalla con paneles
 
 La idea es de Cursor, y la razón es que las dos formas de trabajar quieren pantallas

@@ -98,6 +98,87 @@ public final class Arbol {
         return nodos
     }
 
+    // MARK: - Crear, renombrar, borrar
+    //
+    // Un editor de LaTeX en el que no podés crear un archivo no es un editor. Esto es
+    // lo mínimo: nuevo, renombrar y borrar. Nada de mover ni copiar — para eso está el
+    // Finder, que ya lo hace mejor.
+
+    /// La carpeta donde cae algo nuevo, según lo que esté seleccionado.
+    ///
+    /// Si tenés un archivo seleccionado, el hermano nuevo va al lado suyo. Es lo que
+    /// uno espera: creás donde estás mirando.
+    public var carpetaDestino: URL {
+        guard let sel = seleccionado else { return carpeta }
+        var v = sel
+        if (try? v.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true {
+            v = v.deletingLastPathComponent()
+        }
+        return v
+    }
+
+    public enum Falla: LocalizedError {
+        case yaExiste(String)
+        case noPude(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .yaExiste(let n): return "Ya hay algo que se llama «\(n)» en esa carpeta."
+            case .noPude(let m): return m
+            }
+        }
+    }
+
+    /// Crea un archivo vacío y lo deja seleccionado.
+    @discardableResult
+    public func crearArchivo(_ nombre: String, en dir: URL? = nil) throws -> URL {
+        let destino = (dir ?? carpetaDestino).appendingPathComponent(nombre)
+        guard !FileManager.default.fileExists(atPath: destino.path) else {
+            throw Falla.yaExiste(nombre)
+        }
+        guard FileManager.default.createFile(atPath: destino.path, contents: Data()) else {
+            throw Falla.noPude("No pude crear \(nombre).")
+        }
+        recargar()
+        abiertas.insert(destino.deletingLastPathComponent())
+        seleccionado = destino
+        return destino
+    }
+
+    public func crearCarpeta(_ nombre: String, en dir: URL? = nil) throws {
+        let destino = (dir ?? carpetaDestino).appendingPathComponent(nombre)
+        guard !FileManager.default.fileExists(atPath: destino.path) else {
+            throw Falla.yaExiste(nombre)
+        }
+        try FileManager.default.createDirectory(at: destino, withIntermediateDirectories: false)
+        recargar()
+        abiertas.insert(destino)
+    }
+
+    public func renombrar(_ url: URL, a nombre: String) throws {
+        let destino = url.deletingLastPathComponent().appendingPathComponent(nombre)
+        guard destino != url else { return }
+        guard !FileManager.default.fileExists(atPath: destino.path) else {
+            throw Falla.yaExiste(nombre)
+        }
+        // Anotar ANTES de mover si estaba seleccionado: `recargar()` limpia la
+        // selección cuando el archivo ya no existe, así que después es tarde. Lo
+        // encontró un test — renombrar te dejaba el editor vacío.
+        let estabaAbierto = seleccionado == url
+
+        try FileManager.default.moveItem(at: url, to: destino)
+        recargar()
+        if estabaAbierto { seleccionado = destino }
+    }
+
+    /// Manda algo a la papelera. **No borra de verdad**: si alguien se equivoca con el
+    /// único `.tex` de su informe, tiene que poder recuperarlo.
+    public func borrar(_ url: URL) throws {
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        if seleccionado == url { seleccionado = nil }
+        recargar()
+    }
+
     // MARK: - Qué es cada archivo
 
     /// Cómo se abre un archivo en el visor.

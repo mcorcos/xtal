@@ -8,12 +8,22 @@ import SwiftUI
 struct ArbolArchivos: View {
     @Bindable var arbol: Arbol
     let abrir: (URL) -> Void
+    /// Qué hacer con el menú contextual de una fila.
+    let pedir: (Accion) -> Void
+
+    /// Lo que se le puede pedir al árbol desde una fila.
+    enum Accion {
+        case nuevoArchivo(en: URL)
+        case nuevaCarpeta(en: URL)
+        case renombrar(URL)
+        case borrar(URL)
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(arbol.raiz) { nodo in
-                    Rama(nodo: nodo, nivel: 0, arbol: arbol, abrir: abrir)
+                    Rama(nodo: nodo, nivel: 0, arbol: arbol, abrir: abrir, pedir: pedir)
                 }
             }
             .padding(.vertical, Tok.S.xs)
@@ -32,6 +42,7 @@ private struct Rama: View {
     let nivel: Int
     @Bindable var arbol: Arbol
     let abrir: (URL) -> Void
+    let pedir: (ArbolArchivos.Accion) -> Void
 
     @State private var hover = false
 
@@ -90,6 +101,13 @@ private struct Rama: View {
             .buttonStyle(.plain)
             .onHover { hover = $0 }
             .contextMenu {
+                let carpetaDeAcá = nodo.esCarpeta ? nodo.url : nodo.url.deletingLastPathComponent()
+                Button("Archivo nuevo…") { pedir(.nuevoArchivo(en: carpetaDeAcá)) }
+                Button("Carpeta nueva…") { pedir(.nuevaCarpeta(en: carpetaDeAcá)) }
+                Divider()
+                Button("Cambiarle el nombre…") { pedir(.renombrar(nodo.url)) }
+                Button("Mover a la papelera", role: .destructive) { pedir(.borrar(nodo.url)) }
+                Divider()
                 Button("Ver en el Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([nodo.url])
                 }
@@ -97,7 +115,7 @@ private struct Rama: View {
 
             if nodo.esCarpeta && abierta {
                 ForEach(nodo.hijos) { hijo in
-                    Rama(nodo: hijo, nivel: nivel + 1, arbol: arbol, abrir: abrir)
+                    Rama(nodo: hijo, nivel: nivel + 1, arbol: arbol, abrir: abrir, pedir: pedir)
                 }
             }
         }

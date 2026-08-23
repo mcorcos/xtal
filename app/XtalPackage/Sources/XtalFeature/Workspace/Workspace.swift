@@ -58,6 +58,22 @@ public struct Workspace: View {
     /// El compilado automático, con retraso. Compilar en cada tecla es absurdo.
     @State private var compiladoPendiente: Task<Void, Never>?
     @State private var vigia: Vigia?
+    @State private var pedidoArchivo: PedidoArchivo?
+    @State private var nombreArchivo = ""
+    @State private var errorArchivo: String?
+
+    private struct PedidoArchivo: Identifiable {
+        enum Clase { case archivo(en: URL), carpeta(en: URL), renombrar(URL) }
+        let id = UUID()
+        let clase: Clase
+        var titulo: String {
+            switch clase {
+            case .archivo: return "Archivo nuevo"
+            case .carpeta: return "Carpeta nueva"
+            case .renombrar: return "Cambiarle el nombre"
+            }
+        }
+    }
 
     let cerrar: () -> Void
 
@@ -103,6 +119,19 @@ public struct Workspace: View {
             Task { await guardarYCompilar() }
         }
         .onDisappear { vigia?.parar() }
+        .sheet(item: $pedidoArchivo) { pedido in
+            DialogoTitulo(titulo: pedido.titulo, texto: $nombreArchivo) { nombre in
+                hacer(pedido, nombre)
+            }
+        }
+        .alert("No se pudo", isPresented: Binding(
+            get: { errorArchivo != nil },
+            set: { if !$0 { errorArchivo = nil } }
+        )) {
+            Button("Entendido", role: .cancel) { errorArchivo = nil }
+        } message: {
+            Text(errorArchivo ?? "")
+        }
         .sheet(item: $pidiendoTitulo) { pedido in
             DialogoTitulo(titulo: pedido.titulo, texto: $tituloNuevo) { nombre in
                 Task {
@@ -479,6 +508,18 @@ public struct Workspace: View {
     private var panelArchivos: some View {
         VStack(spacing: 0) {
             cabecera(proyecto.nombre, icono: "folder") {
+                Menu {
+                    Button("Archivo nuevo…") { atender(.nuevoArchivo(en: arbol.carpetaDestino)) }
+                    Button("Carpeta nueva…") { atender(.nuevaCarpeta(en: arbol.carpetaDestino)) }
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(Tok.textSecondary)
+                .help("Crear algo nuevo")
+
                 Button {
                     arbol.recargar()
                 } label: {
@@ -491,6 +532,8 @@ public struct Workspace: View {
 
             ArbolArchivos(arbol: arbol) { url in
                 abrirArchivo(url)
+            } pedir: { accion in
+                atender(accion)
             }
 
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
@@ -555,6 +598,42 @@ public struct Workspace: View {
         }
     }
 
+    // MARK: - Archivos
+
+    private func atender(_ accion: ArbolArchivos.Accion) {
+        switch accion {
+        case .nuevoArchivo(let dir):
+            // El `.tex` de arranque: es lo que uno va a crear el 90% de las veces.
+            nombreArchivo = "nuevo.tex"
+            pedidoArchivo = PedidoArchivo(clase: .archivo(en: dir))
+        case .nuevaCarpeta(let dir):
+            nombreArchivo = ""
+            pedidoArchivo = PedidoArchivo(clase: .carpeta(en: dir))
+        case .renombrar(let url):
+            nombreArchivo = url.lastPathComponent
+            pedidoArchivo = PedidoArchivo(clase: .renombrar(url))
+        case .borrar(let url):
+            do { try arbol.borrar(url) } catch { errorArchivo = error.localizedDescription }
+        }
+    }
+
+    private func hacer(_ pedido: PedidoArchivo, _ nombre: String) {
+        do {
+            switch pedido.clase {
+            case .archivo(let dir):
+                let url = try arbol.crearArchivo(nombre, en: dir)
+                abrirArchivo(url)
+            case .carpeta(let dir):
+                try arbol.crearCarpeta(nombre, en: dir)
+            case .renombrar(let url):
+                try arbol.renombrar(url, a: nombre)
+                if let nuevo = arbol.seleccionado { abrirArchivo(nuevo) }
+            }
+        } catch {
+            errorArchivo = error.localizedDescription
+        }
+    }
+
     // MARK: - Guardar y compilar
 
     /// ⌘S: guarda lo que hay en el editor y compila.
@@ -572,8 +651,17 @@ public struct Workspace: View {
             await secciones.guardarYa(sec.titulo, cuerpo: texto)
         }
 
+        // Qué se compila, en orden:
+        //
+        //   1. el `.tex` que estás editando — si estás escribiendo LaTeX, es ese;
+        //   2. un `main.tex` tuyo en la raíz del proyecto, si existe. Es la señal de
+        //      «acá el LaTeX lo escribo yo»: Xtal no lo genera y no lo pisa;
+        //   3. si no hay ninguno, `xtal run`, que arma el `.tex` desde el `xtal.toml`.
+        let propio = proyecto.carpeta.appendingPathComponent("main.tex")
         if let url = arbol.seleccionado, url.pathExtension.lowercased() == "tex" {
             await proyecto.compilarTex(url)
+        } else if FileManager.default.fileExists(atPath: propio.path) {
+            await proyecto.compilarTex(propio)
         } else {
             await proyecto.compilar()
         }
