@@ -17,6 +17,7 @@ use std::io::Read;
 use std::path::Path;
 
 use encoding_rs_io::DecodeReaderBytes;
+use serde::Serialize;
 
 use crate::error::{DataError, Result};
 
@@ -33,6 +34,50 @@ impl ColumnRef {
         match s.parse::<usize>() {
             Ok(i) => ColumnRef::Index(i),
             Err(_) => ColumnRef::Name(s.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for ColumnRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColumnRef::Index(i) => write!(f, "{i}"),
+            ColumnRef::Name(n) => write!(f, "{n}"),
+        }
+    }
+}
+
+/// De qué archivo salió una medición importada: el bloque `[csv]` de su `.toml`.
+///
+/// Antes no se guardaba nada («el archivo original es la fuente, y no hay receta que
+/// guardar»). El problema apareció con el orden de la carpeta: sin este bloque, un CSV
+/// tirado en `fuentes/` es indistinguible de uno que ya se importó, y ni el usuario ni
+/// la IA pueden saber qué les queda por hacer. Además hace repetible el import: quedan
+/// escritas las columnas y las filas de metadata que hubo que saltear.
+#[derive(Debug, Clone, Serialize)]
+pub struct CsvSpec {
+    /// Ruta del archivo tal como se importó. Relativa al proyecto cuando está adentro.
+    pub file: String,
+    /// Filas de metadata que se saltearon antes del header.
+    pub skip_rows: usize,
+    /// Columna que dio el eje X (índice o nombre de header).
+    pub x_col: String,
+    /// Columna que dio el eje Y.
+    pub y_col: String,
+    /// Delimitador, solo si se forzó a mano. Vacío = se autodetectó.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<String>,
+}
+
+impl CsvSpec {
+    /// Arma el bloque a partir del archivo y las opciones con las que se leyó.
+    pub fn new(file: &str, opts: &CsvImportOptions) -> Self {
+        CsvSpec {
+            file: file.to_string(),
+            skip_rows: opts.skip_rows,
+            x_col: opts.x_col.to_string(),
+            y_col: opts.y_col.to_string(),
+            delimiter: opts.delimiter.map(|d| (d as char).to_string()),
         }
     }
 }

@@ -16,6 +16,7 @@ xtal status
 
 Te dice qué gráficos tiene planeados el informe, qué curvas ya están cargadas y cuáles
 faltan. **Corrélo antes de tocar nada** y volvé a correrlo cuando termines cada paso.
+También avisa si hay archivos en la carpeta que nadie usó todavía.
 
 ---
 
@@ -33,6 +34,32 @@ mediciones separadas** que entran al **mismo gráfico** como tres series. Ese es
 de toda la herramienta.
 
 No edites a mano los archivos de `mediciones/` ni de `graficos/`. Usá los comandos.
+
+---
+
+## El orden de la carpeta
+
+Un proyecto es una carpeta, y ahí adentro hay cosas que Xtal no generó: el CSV que bajó
+el osciloscopio, el `.raw` de LTspice, la foto del banco de medición, el netlist.
+
+| Carpeta | Qué va |
+|---|---|
+| `fuentes/` | Lo que trae el usuario: CSV del instrumento, `.raw`, `.asc`, netlists, scripts. |
+| `imagenes/` | Fotos y figuras que Xtal no dibuja. Se citan por su nombre a secas. |
+| `esquematicos/` | Los circuitos ya importados. **Los escribe Xtal.** |
+| `mediciones/` | Una curva por archivo: `.csv` con los datos, `.toml` con de dónde salió. **Los escribe Xtal.** |
+| `graficos/` | La receta de cada gráfico. **Los escribe Xtal.** |
+| `salida/` | El `.tex` generado y el PDF. **Se pisa entera en cada compilación.** |
+
+```bash
+xtal scan
+```
+
+Dice qué es cada archivo de la carpeta, cuál ya se usó y **con qué comando se usa el que
+falta**. Corrélo cuando el usuario te deja datos nuevos: un archivo que nadie importó no
+aparece en el informe, y eso no se nota hasta el final.
+
+Si algo está fuera de su carpeta, movelo con `mv` y volvé a correr `xtal scan`.
 
 ---
 

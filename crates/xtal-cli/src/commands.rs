@@ -8,12 +8,13 @@ use console::style;
 
 use xtal_compile::Engine;
 use xtal_config::{PartialConfig, ResolvedConfig};
-use xtal_data::csv_scope::{ColumnRef, CsvImportOptions};
+use xtal_data::csv_scope::{ColumnRef, CsvImportOptions, CsvSpec};
 use xtal_data::{store, FormulaSpec, Provenance, RandomSpec};
 use xtal_model::{DocFormat, Measurement, Plot, PlotKind, Project, Section, Series, Source};
 
 use crate::cli::*;
 use crate::ctx;
+use crate::inventory;
 
 // ---------------------------------------------------------------------------
 // new / init
@@ -53,16 +54,12 @@ fn scaffold_project(
     format: Option<DocFormat>,
     theme: Option<String>,
 ) -> Result<()> {
-    // `imagenes` existe porque el preámbulo ya la busca (ver el `\graphicspath` en
-    // `xtal-render`): sin la carpeta creada, el lugar obvio para una foto no existe y
-    // cada uno la deja donde le parece.
-    for sub in [
-        "mediciones",
-        "graficos",
-        "esquematicos",
-        "imagenes",
-        "salida",
-    ] {
+    // Las carpetas salen de `inventory::ORDEN`, que es la única definición del orden
+    // de un proyecto. `imagenes` existe porque el preámbulo ya la busca (ver el
+    // `\graphicspath` en `xtal-render`): sin la carpeta creada, el lugar obvio para
+    // una foto no existe y cada uno la deja donde le parece. `fuentes` existe por lo
+    // mismo, para lo que traés de afuera: el CSV del instrumento, el `.raw`, el netlist.
+    for sub in inventory::carpetas_del_proyecto() {
         std::fs::create_dir_all(root.join(sub))?;
     }
     let mut project = Project::new(name);
@@ -160,7 +157,10 @@ fn meas_import(a: MeasImportArgs, project: &Option<PathBuf>, json: bool) -> Resu
     m.label = a.label;
     m.data = data;
     let n = m.data.len();
-    store::save_measurement(&root, &m, &Provenance::new())?;
+    // De qué archivo salió. Es lo que después le permite a `xtal scan` decir qué CSV de
+    // la carpeta ya se usó y cuál sigue pendiente: sin esto, los dos se ven igual.
+    let spec = CsvSpec::new(&inventory::ruta_relativa(&root, &a.file), &opts);
+    store::save_measurement(&root, &m, &Provenance::new().with("csv", &spec)?)?;
     report_measurement_saved(&a.id, n, json);
     Ok(())
 }
@@ -887,68 +887,35 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
 
     // --- Integración con IA ---
     //
-    // Es tan importante como las dependencias: si el skill no está, Claude no se
+    // Es tan importante como las dependencias: si el skill no está, el agente no se
     // entera de que Xtal existe, y no hay forma de darse cuenta mirando. Esto es el
-    // único lugar donde alguien lo va a ver.
+    // único lugar donde alguien lo va a ver. El detalle, agente por agente, está en
+    // `xtal agents`.
     println!();
     println!("  {}", style("Integración con IA").bold());
-    let (skill, skill_path) = crate::ai::skill_status();
-    match skill {
-        crate::ai::SkillState::SinCliente => println!(
-            "    {} {:<14} {}",
-            style("·").dim(),
-            "skill",
-            style("no hay Claude Code en esta máquina").dim()
-        ),
-        crate::ai::SkillState::AlDia => report_path(
-            "skill",
-            skill_path.as_deref().unwrap_or(Path::new("")),
-            true,
-        ),
-        crate::ai::SkillState::Falta => println!(
-            "    {} {:<14} {}",
-            style("✗").red().bold(),
-            "skill",
-            style("falta — Claude no sabe que Xtal existe").yellow()
-        ),
-        crate::ai::SkillState::Viejo => println!(
-            "    {} {:<14} {}",
-            style("!").yellow().bold(),
-            "skill",
-            style("es de otra version de Xtal").yellow()
-        ),
-    }
-
-    let clientes = crate::ai::detect_clients();
-    if clientes.is_empty() {
+    let agentes: Vec<crate::agents::Estado> =
+        crate::agents::AGENTES.iter().map(|a| a.estado()).collect();
+    if agentes.iter().all(|e| !e.presente) {
         println!(
             "    {} {:<14} {}",
             style("·").dim(),
-            "MCP",
-            style("no encontré ningún cliente de IA instalado").dim()
+            "agentes",
+            style("no encontré ningún agente de IA instalado").dim()
         );
     }
-    for cliente in &clientes {
-        match crate::ai::mcp_status(cliente.arg) {
-            crate::ai::McpState::Ok(path) => println!(
+    for e in agentes.iter().filter(|e| e.presente) {
+        match e.falta() {
+            None => println!(
                 "    {} {:<14} {}",
                 style("✓").green().bold(),
-                cliente.label,
-                style(path.display()).dim()
+                e.agente.label,
+                style("enchufado").dim()
             ),
-            crate::ai::McpState::NoRegistrado => println!(
-                "    {} {:<14} {}",
-                style("·").dim(),
-                cliente.label,
-                style("el MCP no está registrado").yellow()
-            ),
-            // Este es el que vale la pena cazar: el registro está, pero apunta a un
-            // binario que ya no existe. El cliente falla en silencio.
-            crate::ai::McpState::Roto(path) => println!(
+            Some(falta) => println!(
                 "    {} {:<14} {}",
                 style("✗").red().bold(),
-                cliente.label,
-                style(format!("apunta a {} y ahí no hay nada", path.display())).red()
+                e.agente.label,
+                style(falta).yellow()
             ),
         }
     }
@@ -980,12 +947,10 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
 
     // La integración con IA cuenta para el resumen: "todo listo" con el skill sin
     // instalar es mentira, porque la mitad del producto es que Claude lo maneje.
-    let ia_rota = matches!(
-        crate::ai::skill_status().0,
-        crate::ai::SkillState::Falta | crate::ai::SkillState::Viejo
-    ) || crate::ai::detect_clients()
+    let ia_rota = crate::agents::AGENTES
         .iter()
-        .any(|c| matches!(crate::ai::mcp_status(c.arg), crate::ai::McpState::Roto(_)));
+        .map(|a| a.estado())
+        .any(|e| !e.listo());
 
     println!();
     if faltantes.is_empty() && !ia_rota {
@@ -1045,45 +1010,31 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Reinstala el skill y vuelve a registrar el MCP donde haga falta.
+/// Reinstala el skill y vuelve a registrar el MCP en los agentes que lo necesiten.
 ///
 /// Escribe sin preguntar, a diferencia de las dependencias: acá no se instala nada en
 /// el sistema, solo archivos propios de Xtal en el home del usuario. Y quien corrió
 /// `--fix` ya dijo que sí.
-///
-/// Registra el MCP en **todos** los clientes que no lo tengan, aunque el resumen solo
-/// marque como roto el que apunta a un binario muerto: no registrarlo no rompe nada,
-/// pero si ya estás arreglando, dejarlo a medias no tiene sentido.
 fn arreglar_ia() -> Result<()> {
     println!();
     println!("  {}", style("Arreglando la integración con IA").bold());
 
-    if matches!(
-        crate::ai::skill_status().0,
-        crate::ai::SkillState::Falta | crate::ai::SkillState::Viejo
-    ) {
-        match crate::ai::install_skill()? {
-            Some(path) => println!("    {} skill → {}", style("✓").green(), path.display()),
-            None => println!("    {} no hay dónde instalar el skill", style("·").dim()),
-        }
-    }
-
-    for cliente in crate::ai::detect_clients() {
-        if matches!(
-            crate::ai::mcp_status(cliente.arg),
-            crate::ai::McpState::Ok(_)
-        ) {
+    for agente in crate::agents::presentes() {
+        let estado = agente.estado();
+        if estado.listo() {
             continue;
         }
-        // Un cliente que falla no puede cortar a los otros: si Claude Code no está en
-        // el PATH, Codex igual tiene que quedar registrado.
-        if let Err(e) = crate::ai::register(cliente.arg) {
-            println!(
-                "    {} {}: {}",
-                style("✗").red(),
-                cliente.label,
-                style(e).dim()
-            );
+        println!("    {} {}", style("·").dim(), style(agente.label).bold());
+        println!("        {}", style(agente.toca).dim());
+        match agente.instalar_skill() {
+            Ok(Some(path)) => println!("        {} skill → {}", style("✓").green(), path.display()),
+            Ok(None) => {}
+            Err(e) => println!("        {} skill: {}", style("✗").red(), style(e).dim()),
+        }
+        // Un agente que falla no puede cortar a los otros: si Claude Code no está en el
+        // PATH, Codex igual tiene que quedar enchufado.
+        if let Err(e) = agente.instalar_mcp() {
+            println!("        {} MCP: {}", style("✗").red(), style(e).dim());
         }
     }
     Ok(())
@@ -1109,25 +1060,23 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
         },
         // El estado de la integración con IA, para que un agente pueda darse cuenta
         // solo de que está mal enchufado y ofrecer `xtal doctor --fix`.
+        // El estado de la integración con IA, para que un agente pueda darse cuenta
+        // solo de que está mal enchufado y ofrecer `xtal doctor --fix`. El detalle
+        // completo, agente por agente, sale de `xtal agents --json`.
         "ai": {
-            "skill": match crate::ai::skill_status().0 {
-                crate::ai::SkillState::SinCliente => "sin_cliente",
-                crate::ai::SkillState::Falta => "falta",
-                crate::ai::SkillState::Viejo => "viejo",
-                crate::ai::SkillState::AlDia => "al_dia",
-            },
-            "clients": crate::ai::detect_clients().iter().map(|c| {
-                let (estado, path) = match crate::ai::mcp_status(c.arg) {
-                    crate::ai::McpState::Ok(p) => ("ok", Some(p)),
-                    crate::ai::McpState::Roto(p) => ("roto", Some(p)),
-                    crate::ai::McpState::NoRegistrado => ("no_registrado", None),
-                };
+            "agents": crate::agents::AGENTES.iter().map(|a| {
+                let e = a.estado();
                 serde_json::json!({
-                    "name": c.label,
-                    "mcp": estado,
-                    "command": path.map(|p| p.display().to_string()),
+                    "id": a.id,
+                    "name": a.label,
+                    "installed": e.presente,
+                    "skill": e.skill.clave(),
+                    "mcp": e.mcp.clave(),
+                    "ready": e.listo(),
+                    "missing": e.falta(),
                 })
             }).collect::<Vec<_>>(),
+            "ok": crate::agents::AGENTES.iter().all(|a| a.estado().listo()),
         },
         // El dato que de verdad importa: ¿puede compilar un informe?
         "can_build": crate::deps::is_available("tectonic") || crate::deps::is_available("pdflatex"),

@@ -274,6 +274,29 @@ pub fn all() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "xtal_scan",
+            title: "Qué hay en la carpeta",
+            description: "Lista los archivos que hay en la carpeta del informe y que Xtal \
+                          no generó —CSV del instrumento, rawfiles, netlists, fotos—, dice \
+                          cuál ya se usó y con qué comando se usa el que falta. Llamala \
+                          cuando el usuario dice que dejó datos nuevos: un archivo que nadie \
+                          importó no aparece en el informe y no se nota hasta el final.",
+            schema: || {
+                json!({
+                    "type": "object",
+                    "properties": { "project": project_prop() },
+                    "additionalProperties": false
+                })
+            },
+            handler: |s, args| {
+                s.exec(
+                    s.project_for(args).as_deref(),
+                    None,
+                    &["scan".into(), "--json".into()],
+                )
+            },
+        },
+        Tool {
             name: "xtal_plan_add",
             title: "Planificar un gráfico",
             description: "Anota que el informe va a tener este gráfico y qué curvas se \

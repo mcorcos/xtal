@@ -4,6 +4,7 @@
 //! se imprimen de forma legible (con su cadena de contexto) y salen con código 1, en
 //! vez de hacer panic: importante porque el cliente principal es Claude orquestando.
 
+mod agents;
 mod ai;
 mod cli;
 mod commands;
@@ -16,6 +17,7 @@ mod deps;
 mod electronics;
 mod example;
 mod gen;
+mod inventory;
 mod mcp;
 mod plan;
 mod setup;
@@ -64,6 +66,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Plot(cmd) => commands::cmd_plot(cmd, &project, json),
         Command::Plan(a) => plan::cmd_plan(a, &project, json),
         Command::Status(a) => plan::cmd_status(a, &project, json),
+        Command::Scan(a) => inventory::cmd_scan(a, &project, json),
         Command::Section(cmd) => commands::cmd_section(cmd, &project, json),
         #[cfg(feature = "electronics")]
         Command::Circuit(cmd) => electronics::cmd_circuit(cmd, &project, json),
@@ -81,6 +84,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Update(a) => update::cmd_update(a),
         Command::Setup(a) => setup::cmd_setup(a),
         Command::Uninstall(a) => uninstall::cmd_uninstall(a),
+        Command::Agents(a) => agents::cmd_agents(a, json),
         Command::Mcp(a) => mcp::cmd_mcp(a),
         Command::Completions(a) => gen::cmd_completions(a),
         Command::Man(a) => gen::cmd_man(a),

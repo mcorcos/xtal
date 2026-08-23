@@ -405,7 +405,7 @@ pub fn cmd_status(_args: StatusArgs, project: &Option<PathBuf>, json: bool) -> R
     }
 
     if json {
-        return status_json(&proj, &informe, mediciones.len(), plots.len());
+        return status_json(&proj, &informe, mediciones.len(), plots.len(), &root);
     }
 
     println!();
@@ -487,6 +487,34 @@ pub fn cmd_status(_args: StatusArgs, project: &Option<PathBuf>, json: bool) -> R
         }
     }
 
+    // Lo que hay tirado en la carpeta y todavía no entró al informe. Va acá, y no solo
+    // en `xtal scan`, porque `status` es el primer comando que corre cualquiera —el
+    // AGENTS.md del proyecto lo dice— y un CSV que nadie importó es exactamente el tipo
+    // de cosa que se olvida.
+    let inventario = crate::inventory::escanear(&root).unwrap_or_default();
+    let pendientes: Vec<_> = inventario.sin_usar().collect();
+    if !pendientes.is_empty() {
+        println!();
+        println!(
+            "  {} {} archivos en la carpeta sin usar",
+            style("·").yellow(),
+            pendientes.len()
+        );
+        for a in pendientes.iter().take(4) {
+            println!(
+                "      {} {:<28} {}",
+                style("○").yellow(),
+                a.path,
+                style(a.clase.nombre()).dim()
+            );
+        }
+        println!(
+            "      {} {}",
+            style("→").dim(),
+            style("xtal scan  (qué es cada uno y el comando que lo usa)").cyan()
+        );
+    }
+
     println!();
     if faltan == 0 {
         println!(
@@ -554,6 +582,7 @@ fn status_json(
     informe: &[(&PlannedPlot, bool, Vec<SourceState>, bool)],
     total_mediciones: usize,
     total_plots: usize,
+    root: &Path,
 ) -> Result<()> {
     let plots: Vec<serde_json::Value> = informe
         .iter()
@@ -586,6 +615,20 @@ fn status_json(
         .iter()
         .all(|p| p["complete"].as_bool().unwrap_or(false));
 
+    // Los archivos sueltos que todavía no entraron al informe, con el comando que los
+    // usa. La lista completa está en `xtal scan --json`.
+    let inventario = crate::inventory::escanear(root).unwrap_or_default();
+    let pendientes: Vec<serde_json::Value> = inventario
+        .sin_usar()
+        .map(|a| {
+            serde_json::json!({
+                "path": a.path,
+                "kind": a.clase.clave(),
+                "command": a.comando,
+            })
+        })
+        .collect();
+
     println!(
         "{}",
         serde_json::json!({
@@ -595,6 +638,7 @@ fn status_json(
             "measurements": total_mediciones,
             "plots": total_plots,
             "sections": proj.sections.len(),
+            "unused_files": pendientes,
             "complete": complete && !informe.is_empty(),
         })
     );

@@ -82,18 +82,29 @@ cargo build --release
 
 Xtal **se configura solo**. El script corre el instalador al terminar; con Homebrew, se
 configura en la primera corrida de cualquier comando. Eso deja la config global, los
-themes, y —si tenés Claude Code— un skill en `~/.claude/skills/xtal/`.
+themes, y un **skill** en la carpeta de skills de cada agente de IA que tengas instalado
+(Claude Code, Codex, Copilot CLI, opencode).
 
-Ese skill es la parte que importa: **Claude se entera solo de que Xtal existe**. No hay
-que explicarle nada ni acordarse de ningún comando. Le decís "tengo que armar el TP de
-electrónica, tengo el CSV del osciloscopio" y ya sabe por dónde empezar.
+Ese skill es la parte que importa: **el agente se entera solo de que Xtal existe**. No
+hay que explicarle nada ni acordarse de ningún comando. Le decís "tengo que armar el TP
+de electrónica, tengo el CSV del osciloscopio" y ya sabe por dónde empezar.
 
-Si querés elegir theme y formato a mano, o enchufarlo a Claude Desktop y Codex:
+Para ver cómo quedó enchufado cada agente, o para enchufar uno a mano:
 
 ```bash
-xtal setup           # pregunta y registra el MCP en los clientes que encuentre
+xtal agents                       # la lista, con el estado de cada uno
+xtal agents install --all         # los que falten
+```
+
+Y si querés elegir theme y formato a mano, o registrar el MCP en Claude Desktop:
+
+```bash
+xtal setup           # pregunta y registra el MCP en los agentes que encuentre
 xtal setup --no-ai   # solo lo de Xtal, sin tocar la config de otros programas
 ```
+
+Cada agente dice **qué archivos suyos toca Xtal** antes de que se toque nada. Detalle
+completo en [`docs/AGENTES.md`](docs/AGENTES.md).
 
 ### Sacarlo
 
@@ -293,12 +304,13 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
 `xtal example [nombre] [--run] [--open]` · `xtal update [--check]` ·
-`xtal uninstall [--yes]` · `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
+`xtal agents [install|uninstall]` · `xtal uninstall [--yes]` ·
+`xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`
 
-`xtal doctor` también reporta la **integración con IA**: si el skill está y está al día,
-y si el MCP quedó registrado apuntando a un binario que existe. Las dos cosas fallan en
-silencio, y es el único lugar donde se ven.
+`xtal doctor` también reporta la **integración con IA**, agente por agente: si el skill
+está y está al día, y si el MCP quedó registrado apuntando a un binario que existe. Las
+dos cosas fallan en silencio. El detalle está en `xtal agents`.
 
 Todos los comandos aceptan `--json` y `--project <dir>`.
 

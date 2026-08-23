@@ -21,7 +21,16 @@ public enum XtalCLI {
 
     /// La ruta del binario, o `nil` si no está instalado.
     public static func rutaBinario() -> String? {
-        // El repo de desarrollo primero: si estás laburando en Xtal, querés probar la
+        // `XTAL_BIN=/ruta/al/xtal` manda sobre todo. Es para probar la app contra un
+        // binario recién compilado que no está en el repo de siempre: por ejemplo el de
+        // un worktree, donde la ruta de abajo no existe y la app terminaría hablándole
+        // al `xtal` instalado por brew, que es más viejo y no tiene lo que estás
+        // probando. Ese síntoma —"la función nueva no aparece en la app"— es confuso.
+        if let bin = ProcessInfo.processInfo.environment["XTAL_BIN"],
+           FileManager.default.isExecutableFile(atPath: bin) {
+            return bin
+        }
+        // El repo de desarrollo después: si estás laburando en Xtal, querés probar la
         // app contra el binario que acabás de compilar, no contra el instalado.
         let dev = NSHomeDirectory() + "/dev/personal/xtal/target/debug/xtal"
         if FileManager.default.isExecutableFile(atPath: dev) { return dev }
