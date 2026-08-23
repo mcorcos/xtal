@@ -229,6 +229,17 @@ Los gráficos se dibujan **adentro del LaTeX** con PGFPlots: no hay PNG intermed
 - `float` está en la base porque `\begin{figure}[H]` es lo que uno quiere en un informe
   y sin el paquete LaTeX dice «Unknown float option `H'», que no explica nada.
 
+### Los dos motores de LaTeX → `docs/PIPELINE.md`
+**Tectonic** no trae los paquetes: trae la dirección de un *bundle* —una foto congelada
+de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cacheándolo en
+`~/Library/Caches/TectonicProject.Tectonic` (48 MB acá, contra 9,7 GB de TeX Live).
+- El bundle está congelado a propósito: el mismo informe compila igual dentro de dos
+  años. **La trampa**: si un paquete no está en esa foto no lo tenés, y no alcanza con
+  instalarlo en la Mac porque Tectonic no mira tu TeX Live. La salida es `--pdflatex`.
+- Tectonic es XeTeX (Unicode y fuentes del sistema de fábrica); pdflatex es de 8 bits.
+- **Los dos compilan el ejemplo**, verificado. Que siga siendo cierto es la prueba de
+  que el preámbulo no depende de un motor en particular.
+
 ### Arquitectura (workspace, 6 crates)
 - `xtal-model` — tipos puros (Measurement, Plot, Project) + `style.rs` (defaults de buen gusto).
 - `xtal-config` — config en cascada 4 capas (defaults→global→proyecto→flags).

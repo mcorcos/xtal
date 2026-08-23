@@ -525,6 +525,28 @@ public struct Workspace: View {
         .background(Tok.bgBase)
     }
 
+    /// «¿Dónde está el LaTeX?»
+    ///
+    /// La pregunta sale sola: uno ve el PDF pero el `.tex` no aparece por ningún lado,
+    /// porque **no lo escribís vos** — lo arma Xtal en cada compilación a partir del
+    /// `xtal.toml`, los gráficos y el theme, y lo deja en `salida/main.tex`.
+    ///
+    /// El botón va acá, al lado del PDF, porque es justo donde uno se hace la pregunta.
+    @ViewBuilder
+    private var botonVerLatex: some View {
+        let tex = proyecto.carpeta.appendingPathComponent("salida/main.tex")
+        if FileManager.default.fileExists(atPath: tex.path) {
+            Button {
+                abrirArchivo(tex)
+            } label: {
+                Text("ver el .tex").font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Tok.accent)
+            .help("El LaTeX que generó este PDF. Es de mirar: se rehace en cada compilación.")
+        }
+    }
+
     /// Si el archivo lo genera Xtal y no tiene sentido editarlo.
     private func generado(_ url: URL) -> Bool {
         url.pathComponents.contains("salida")
@@ -537,6 +559,13 @@ public struct Workspace: View {
         secciones.seleccionada = nil
         proyecto.seleccionado = nil
         arbol.seleccionado = url
+        // Abrir en el árbol las carpetas que llevan a este archivo, para que se vea
+        // dónde está. Abrir algo y no saber de dónde salió es la mitad del problema.
+        var padre = url.deletingLastPathComponent()
+        while padre.path.hasPrefix(proyecto.carpeta.path), padre != proyecto.carpeta {
+            arbol.abiertas.insert(padre)
+            padre = padre.deletingLastPathComponent()
+        }
         // Primero el candado y después el texto: al revés, el `onChange` del texto
         // dispararía con el candado todavía apuntando al archivo anterior.
         textoDe = url
@@ -567,7 +596,7 @@ public struct Workspace: View {
                     }
                 }
             } else if proyecto.pdf != nil {
-                cabecera("main.pdf", icono: "doc.richtext")
+                cabecera("main.pdf", icono: "doc.richtext") { botonVerLatex }
                 VisorPDF(url: proyecto.pdf)
             } else {
                 cabecera("Sin compilar", icono: "doc.richtext")

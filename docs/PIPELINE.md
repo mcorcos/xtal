@@ -74,6 +74,52 @@ nada.
 
 ---
 
+## Los dos motores: Tectonic y pdflatex
+
+«Compilar LaTeX» no es una cosa sola. Hace falta un **motor** que lea el `.tex`, vaya a
+buscar cada paquete que el documento pide, y escriba el PDF. Xtal sabe usar dos, y la
+diferencia entre ellos **es de dónde salen los paquetes**. Cuando el informe empiece a
+pedir paquetes raros, esto es lo que hay que tener claro.
+
+| | **Tectonic** (el que usa Xtal) | **pdflatex** (TeX Live) |
+|---|---|---|
+| Qué hay que instalar | Un binario | Una distribución entera |
+| Cuánto ocupa | 48 MB de cache, acá y hoy | 9,7 GB, acá y hoy |
+| De dónde saca un paquete | Lo **baja** la primera vez que un documento lo usa | Del disco, de lo que instalaste |
+| Necesita internet | Sí, la primera vez que aparece un paquete nuevo | No |
+| Agregar un paquete | Lo escribís en el `.tex` y listo | Lo escribís **y** lo instalás con `tlmgr` |
+| Motor por abajo | XeTeX: Unicode y fuentes del sistema de fábrica | 8 bits: los acentos y las fuentes necesitan ayuda |
+
+### Cómo funciona el de Tectonic
+
+Tectonic no trae los paquetes adentro. Trae la dirección de un **bundle**: una foto
+congelada de TeX Live, en un servidor. Cuando el documento pide `mhchem`, va, lo baja de
+ahí, y lo guarda en su cache. La segunda vez ya no sale a la red.
+
+- El cache vive en `~/Library/Caches/TectonicProject.Tectonic`. Se puede borrar entero:
+  se vuelve a bajar solo.
+- **El bundle está congelado a propósito.** Es lo que hace que el mismo informe compile
+  igual hoy y dentro de dos años. La contra: si un paquete no está en esa foto, no lo
+  tenés — y no alcanza con instalarlo en tu Mac, porque Tectonic no mira tu TeX Live.
+
+Esa última línea es **la trampa** que va a aparecer el día que alguien pida algo muy
+nuevo o muy de nicho. La salida es compilar ese informe con el otro motor.
+
+### Cuándo usar pdflatex
+
+`xtal run --pdflatex`. Vale la pena en tres casos:
+
+1. Un paquete que no está en el bundle de Tectonic.
+2. Sin internet y con un paquete que todavía no está en el cache.
+3. Ya tenés TeX Live instalado y no querés bajar nada.
+
+Lo que se pierde: las fuentes del sistema, y el Unicode deja de ser gratis.
+
+**Los dos compilan el ejemplo.** Está verificado, y conviene que siga siendo cierto: es
+la prueba de que el preámbulo que arma Xtal no depende de un motor en particular.
+
+---
+
 ## Las dos cosas que hay que saber para que ande
 
 ### Dónde poner una imagen
