@@ -69,7 +69,15 @@ public enum XtalCLI {
                 // `tectonic` y `ngspice`. Sin esto, compilar falla adentro de la app y
                 // anda en la terminal, que es el bug más confuso posible.
                 var env = ProcessInfo.processInfo.environment
-                let extra = ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.local/bin"]
+                // `/Library/TeX/texbin` es donde MacTeX deja pdflatex y compañía, y no
+                // está en el PATH de una app de GUI. Sin esta línea, `xtal doctor`
+                // decía que no tenés TeX Live aunque lo tuvieras instalado.
+                let extra = [
+                    "/opt/homebrew/bin",
+                    "/usr/local/bin",
+                    "/Library/TeX/texbin",
+                    NSHomeDirectory() + "/.local/bin",
+                ]
                 env["PATH"] = (extra + [env["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
                 p.environment = env
 
