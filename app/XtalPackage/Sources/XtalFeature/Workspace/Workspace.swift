@@ -127,12 +127,13 @@ public struct Workspace: View {
     private var modoEditor: some View {
         VSplitView {
             HStack(spacing: 0) {
-                if verArchivos {
-                    listaArchivos
-                    Rectangle().fill(Tok.borderSubtle).frame(width: 1)
-                }
-                // El corte del medio. `HSplitView` trae el divisor arrastrable de Mac,
-                // con su cursor y su comportamiento: no hay nada que inventar.
+                // El corte del medio, y nada más. `HSplitView` trae el divisor
+                // arrastrable de Mac, con su cursor y su comportamiento.
+                //
+                // El panel lateral se sacó: Manu lo miró y prefiere decidirlo desde
+                // cero antes que corregirlo por partes. Las piezas —`listaArchivos`,
+                // `PanelEstado`, `BarraBloques`— siguen en el repo y andan; no se
+                // dibujan, nada más. Volver a poner cualquiera es una línea.
                 HSplitView {
                     editor
                     if verPdf { pdf }
@@ -233,9 +234,6 @@ public struct Workspace: View {
 
             // En modo agente no hay archivos ni cajón de terminal que prender: los
             // botones que no hacen nada confunden más que los que faltan.
-            if modo == .editor {
-                BotonPanel(icono: "sidebar.left", ayuda: "Archivos (⌘1)", prendido: $verArchivos)
-            }
             BotonPanel(icono: "doc.richtext", ayuda: "PDF (⌘2)", prendido: $verPdf)
             if modo == .editor {
                 BotonPanel(icono: "terminal", ayuda: "Terminal (⌘J)", prendido: $verTerminal)
@@ -448,37 +446,20 @@ public struct Workspace: View {
         .padding(Tok.S.xs)
     }
 
+    /// El lado del documento. **En blanco a propósito**, hasta que Manu diga qué va.
+    ///
+    /// Se conserva la forma exacta que ya funcionaba —un `VStack` con este `frame` y
+    /// este fondo— porque adentro de un `HSplitView` un panel sin forma propia se come
+    /// todo el ancho y deja al PDF en cero. Ya pasó.
     private var editor: some View {
         VStack(spacing: 0) {
-            if let sec = secciones.seleccionada {
-                // Una sección del informe: se edita SOLO su cuerpo, que es LaTeX puro.
-                // El TOML que lo envuelve no aparece por ningún lado.
-                cabecera(sec.titulo, icono: "text.alignleft", sufijo: "LaTeX")
-                BarraBloques { bloque in insercion = bloque.insercion }
-                EditorCodigo(texto: $texto, archivoID: "seccion:" + sec.titulo, insercion: $insercion)
-            } else if let a = proyecto.seleccionado {
-                cabecera(a.etiqueta, icono: icono(a), sufijo: a.url.pathExtension.uppercased())
-                // Abrir un `.toml` sin saber qué controla es abrir un archivo a ciegas.
-                // Una línea arriba y ya sabés dónde estás parado.
-                if let explicacion = a.explicacion {
-                    Text(explicacion)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Tok.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, Tok.S.lg)
-                        .padding(.vertical, Tok.S.sm)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Tok.azul.bg)
-                        .overlay(alignment: .bottom) {
-                            Rectangle().fill(Tok.azul.tint).frame(height: 1)
-                        }
-                }
-                EditorCodigo(texto: $texto, archivoID: a.url.path, insercion: $insercion)
-            } else {
-                Vacio(icono: "doc.text", titulo: "No hay nada abierto")
-            }
+            Spacer(minLength: 0)
         }
-        .frame(minWidth: 320, idealWidth: 560)
+        // El `maxWidth` no es capricho: adentro de un `HSplitView`, un panel **vacío**
+        // no tiene forma propia y se queda con todo el ancho, dejando al PDF en cero.
+        // Con contenido adentro no pasaba. Poniéndole un techo, el PDF siempre tiene
+        // lugar, y el divisor se sigue pudiendo arrastrar.
+        .frame(minWidth: 320, idealWidth: 560, maxWidth: 900, maxHeight: .infinity)
         .background(Tok.bgBase)
     }
 
