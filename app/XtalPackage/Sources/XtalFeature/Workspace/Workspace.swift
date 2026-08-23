@@ -19,6 +19,13 @@ public struct Workspace: View {
     @State private var secciones: Secciones
     @State private var arbol: Arbol
     @State private var texto: String = ""
+    /// De qué archivo es lo que hay en `texto` ahora mismo.
+    ///
+    /// Sin esto se puede escribir el contenido de un archivo **arriba de otro**: el
+    /// `onChange` del texto dispara con lo que haya cargado y guarda en el archivo que
+    /// esté seleccionado en ese instante, que no siempre es el mismo. Ya vació un
+    /// `graficos/*.toml`. Nada se guarda si estos dos no coinciden.
+    @State private var textoDe: URL?
     @State private var insercion: EditorCodigo.Insercion?
     @Environment(\.colorScheme) private var esquema
 
@@ -118,12 +125,12 @@ public struct Workspace: View {
             // porque mandar un proceso por cada tecla es absurdo.
             if let sec = secciones.seleccionada {
                 secciones.guardar(sec.titulo, cuerpo: nuevo)
-            } else if let url = arbol.seleccionado, Arbol.clase(de: url) == .texto {
-                // Lo de `salida/` no se guarda: se pisa en la próxima compilación, y
-                // dejar que alguien lo edite es dejarlo perder el trabajo.
-                if !generado(url) {
-                    try? nuevo.write(to: url, atomically: true, encoding: .utf8)
-                }
+            } else if let url = arbol.seleccionado, url == textoDe,
+                      Arbol.clase(de: url) == .texto, !generado(url) {
+                // `url == textoDe` es el candado: solo se guarda si lo que hay en el
+                // editor es de ESTE archivo. Y lo de `salida/` no se guarda nunca: se
+                // pisa en la próxima compilación.
+                try? nuevo.write(to: url, atomically: true, encoding: .utf8)
             }
         }
     }
@@ -530,6 +537,9 @@ public struct Workspace: View {
         secciones.seleccionada = nil
         proyecto.seleccionado = nil
         arbol.seleccionado = url
+        // Primero el candado y después el texto: al revés, el `onChange` del texto
+        // dispararía con el candado todavía apuntando al archivo anterior.
+        textoDe = url
         texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
@@ -537,7 +547,7 @@ public struct Workspace: View {
     private func guardarLoAbierto() {
         if let sec = secciones.seleccionada {
             secciones.guardar(sec.titulo, cuerpo: texto)
-        } else if let url = arbol.seleccionado, !generado(url),
+        } else if let url = arbol.seleccionado, url == textoDe, !generado(url),
                   Arbol.clase(de: url) == .texto {
             try? texto.write(to: url, atomically: true, encoding: .utf8)
         }
@@ -641,9 +651,14 @@ public struct Workspace: View {
     }
 
     private func cargarSeleccionado() {
-        if let sec = secciones.seleccionada {
+        if let url = arbol.seleccionado {
+            textoDe = url
+            texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        } else if let sec = secciones.seleccionada {
+            textoDe = nil
             texto = sec.cuerpo
         } else {
+            textoDe = nil
             texto = proyecto.seleccionado.map { proyecto.leer($0) } ?? ""
         }
     }

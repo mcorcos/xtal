@@ -40,6 +40,9 @@ public final class Arbol {
         // Las carpetas de primer nivel arrancan abiertas: un árbol todo cerrado obliga
         // a hacer cinco clicks antes de ver un solo archivo.
         abiertas = Set(raiz.filter(\.esCarpeta).map(\.url))
+        // Y se abre el `xtal.toml`: abrir un proyecto y encontrarse con el panel en
+        // blanco no le dice a nadie qué hacer. El manifiesto es el punto de partida.
+        seleccionado = raiz.first { $0.nombre == "xtal.toml" }?.url
     }
 
     public func recargar() {

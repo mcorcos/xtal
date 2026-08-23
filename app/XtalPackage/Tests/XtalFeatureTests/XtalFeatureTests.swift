@@ -193,3 +193,45 @@ import Testing
     ).ubicar(en: secciones)
     #expect(e.seccion == "Resultados")
 }
+
+// MARK: - El árbol de archivos
+
+@MainActor
+@Test func el_arbol_muestra_todo_y_pone_el_manifiesto_arriba() throws {
+    let base = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-arbol-\(UUID().uuidString)")
+    let fm = FileManager.default
+    try fm.createDirectory(at: base.appendingPathComponent("salida"), withIntermediateDirectories: true)
+    try fm.createDirectory(at: base.appendingPathComponent("mediciones"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+
+    try "".write(to: base.appendingPathComponent("xtal.toml"), atomically: true, encoding: .utf8)
+    try "".write(to: base.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+    // El .tex generado TIENE que aparecer: es justo lo que uno quiere mirar cuando
+    // algo no compila. Antes la app lo escondía.
+    try "".write(to: base.appendingPathComponent("salida/main.tex"), atomically: true, encoding: .utf8)
+
+    let arbol = Arbol(carpeta: base)
+    #expect(arbol.raiz.first?.nombre == "xtal.toml")
+    // Carpetas antes que archivos sueltos.
+    let nombres = arbol.raiz.map(\.nombre)
+    #expect(nombres.firstIndex(of: "mediciones")! < nombres.firstIndex(of: "README.md")!)
+    // Y `salida/` con su contenido, marcada como generada.
+    let salida = try #require(arbol.raiz.first { $0.nombre == "salida" })
+    #expect(salida.hijos.contains { $0.nombre == "main.tex" })
+    #expect(salida.hijos.first?.esGenerado == true)
+    // Al abrir un proyecto se abre el manifiesto: la pantalla en blanco no le dice a
+    // nadie qué hacer.
+    #expect(arbol.seleccionado?.lastPathComponent == "xtal.toml")
+}
+
+@MainActor
+@Test func el_arbol_clasifica_los_archivos_para_saber_como_abrirlos() {
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/a.tex")) == .texto)
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/a.csv")) == .texto)
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/foto.png")) == .imagen)
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/main.pdf")) == .pdf)
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/algo.bin")) == .otro)
+    // Sin extensión —LICENSE, Makefile— es texto: esconderlo sería peor.
+    #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/LICENSE")) == .texto)
+}

@@ -113,6 +113,15 @@ struct VisorArchivo: View {
     @Binding var insercion: EditorCodigo.Insercion?
 
     var body: some View {
+        // El `frame` va acá y no adentro de cada caso: un `NSViewRepresentable` no
+        // tiene tamaño propio, y metido en un `switch` el contenedor no le da ninguno.
+        // Sin esto el panel queda en blanco aunque el archivo se haya leído bien.
+        contenido
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var contenido: some View {
         switch Arbol.clase(de: url) {
         case .texto:
             EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion)
