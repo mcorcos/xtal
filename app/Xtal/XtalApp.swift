@@ -23,7 +23,10 @@ struct XtalApp: App {
                 Button("Guardar y compilar") {
                     NotificationCenter.default.post(name: .xtalGuardarYCompilar, object: nil)
                 }
-                .keyboardShortcut("s", modifiers: .command)
+                // Sin atajo acá: lo tiene el botón de la barra, que está en la
+                // cadena de respuesta de la ventana. Dos vistas con el mismo atajo se
+                // pisan y no dispara ninguna.
+                
             }
 
             CommandGroup(after: .sidebar) {

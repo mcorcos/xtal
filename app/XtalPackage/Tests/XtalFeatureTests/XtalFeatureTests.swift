@@ -235,3 +235,29 @@ import Testing
     // Sin extensión —LICENSE, Makefile— es texto: esconderlo sería peor.
     #expect(Arbol.clase(de: URL(fileURLWithPath: "/x/LICENSE")) == .texto)
 }
+
+// MARK: - El vigía
+
+@Test func la_huella_cambia_al_tocar_un_archivo_pero_no_con_salida() throws {
+    let base = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-vigia-\(UUID().uuidString)")
+    let fm = FileManager.default
+    try fm.createDirectory(at: base.appendingPathComponent("salida"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+
+    let fuente = base.appendingPathComponent("xtal.toml")
+    try "a".write(to: fuente, atomically: true, encoding: .utf8)
+    let antes = Vigia.huellaDe(base)
+
+    // Tocar `salida/` NO cuenta: si contara, cada compilación dispararía la
+    // siguiente y sería un loop infinito de compilaciones.
+    try "generado".write(to: base.appendingPathComponent("salida/main.tex"),
+                         atomically: true, encoding: .utf8)
+    #expect(Vigia.huellaDe(base) == antes)
+
+    // Tocar una fuente sí cuenta.
+    try "b".write(to: fuente, atomically: true, encoding: .utf8)
+    try fm.setAttributes([.modificationDate: Date().addingTimeInterval(10)],
+                         ofItemAtPath: fuente.path)
+    #expect(Vigia.huellaDe(base) != antes)
+}

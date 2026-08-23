@@ -52,9 +52,12 @@ public struct Workspace: View {
     /// Si la lista de archivos del proyecto está desplegada. Arranca cerrada: son la
     /// tripa, no el informe.
     @AppStorage("xtal.panel.archivosCrudos") private var verArchivos2 = false
-    @AppStorage("xtal.compilarAlGuardar") private var compilarAlGuardar = false
+    /// Prendido por default: el PDF tiene que estar al día sin que nadie se acuerde
+    /// de apretar nada. Se puede apagar en Ajustes para un informe grande.
+    @AppStorage("xtal.compilarAlGuardar") private var compilarAlGuardar = true
     /// El compilado automático, con retraso. Compilar en cada tecla es absurdo.
     @State private var compiladoPendiente: Task<Void, Never>?
+    @State private var vigia: Vigia?
 
     let cerrar: () -> Void
 
@@ -99,6 +102,7 @@ public struct Workspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .xtalGuardarYCompilar)) { _ in
             Task { await guardarYCompilar() }
         }
+        .onDisappear { vigia?.parar() }
         .sheet(item: $pidiendoTitulo) { pedido in
             DialogoTitulo(titulo: pedido.titulo, texto: $tituloNuevo) { nombre in
                 Task {
@@ -114,6 +118,14 @@ public struct Workspace: View {
             await ajuste.refrescar()
             await secciones.recargar()
             cargarSeleccionado()
+            // El vigía mira la carpeta: los cambios no vienen todos del editor. Los
+            // hace Claude desde la terminal, o `xtal sim` al traer una simulación.
+            let v = Vigia(carpeta: proyecto.carpeta) {
+                if compilarAlGuardar { programarCompilado() }
+            }
+            v.arrancar()
+            vigia = v
+
             if Desarrollo.compilarAlAbrir {
                 await proyecto.compilar()
                 if let e = proyecto.error {
@@ -220,21 +232,7 @@ public struct Workspace: View {
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task {
-                    // Guardar YA antes de compilar: con el guardado a medio camino,
-                    // el PDF sale con el texto de hace medio segundo.
-                    if let sec = secciones.seleccionada {
-                        await secciones.guardarYa(sec.titulo, cuerpo: texto)
-                    }
-                    await proyecto.compilar()
-                    arbol.recargar()
-                    // Ubicar el error en la sección donde está el texto que rompió:
-                    // el número de línea es del .tex generado y no le sirve a nadie.
-                    if let e = proyecto.error {
-                        proyecto.error = e.ubicar(en: secciones.lista)
-                    }
-                    await git.refrescar()
-                }
+                Task { await guardarYCompilar() }
             } label: {
                 if proyecto.compilando {
                     ProgressView().controlSize(.small)
@@ -242,8 +240,11 @@ public struct Workspace: View {
                     Image(systemName: "play.fill")
                 }
             }
-            .help("Compilar el PDF (⌘R)")
-            .keyboardShortcut("r", modifiers: .command)
+            .help("Guardar y compilar (⌘S)")
+            // El atajo va en el botón de la barra y no solo en el menú: acá está en la
+            // cadena de respuesta de la ventana y funciona aunque el foco esté adentro
+            // del editor de texto.
+            .keyboardShortcut("s", modifiers: .command)
             .disabled(proyecto.compilando)
 
             if modo == .editor {
@@ -580,6 +581,8 @@ public struct Workspace: View {
             proyecto.error = e.ubicar(en: secciones.lista)
         }
         arbol.recargar()
+        // Que la compilación no se cuente a sí misma como un cambio.
+        vigia?.olvidar()
         await git.refrescar()
     }
 
