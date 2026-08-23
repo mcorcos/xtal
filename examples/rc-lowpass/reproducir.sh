@@ -15,8 +15,11 @@ XTAL="${XTAL:-xtal}"
 echo "==> Limpiando lo generado en corridas anteriores"
 rm -rf mediciones graficos esquematicos salida
 
+# `fuentes/` es lo único que NO se toca: son las entradas del ejemplo —el netlist,
+# el CSV del instrumento y el script que lo genera— y todo lo demás sale de ahí.
+
 echo "==> Regenerando el CSV sintético de 'mediciones'"
-python3 generar_csv.py
+python3 fuentes/generar_csv.py
 
 # ---------------------------------------------------------------------------
 # 1. Fuente MEDIDA: el CSV del instrumento.
@@ -26,9 +29,9 @@ python3 generar_csv.py
 # la frecuencia (col 0).
 # ---------------------------------------------------------------------------
 echo "==> [1/3] Importando la medición"
-$XTAL meas import medicion_bode.csv --id medida_mag  --skip-rows 5 --x-col 0 --y-col 1 \
+$XTAL meas import fuentes/medicion_bode.csv --id medida_mag  --skip-rows 5 --x-col 0 --y-col 1 \
       --kind measured --x-unit Hz --y-unit dB    --label "Medida"
-$XTAL meas import medicion_bode.csv --id medida_fase --skip-rows 5 --x-col 0 --y-col 2 \
+$XTAL meas import fuentes/medicion_bode.csv --id medida_fase --skip-rows 5 --x-col 0 --y-col 2 \
       --kind measured --x-unit Hz --y-unit "deg" --label "Medida"
 
 # ---------------------------------------------------------------------------
@@ -53,7 +56,7 @@ $XTAL meas formula --id teorica_fase --expr "-math::atan(f/fc)*57.29577951308232
 # sufijo `_fase`. `sim tran` deja una por nodo volcado (tran_in, tran_out).
 # ---------------------------------------------------------------------------
 echo "==> [3/3] Simulando con ngspice"
-$XTAL circuit import filtro.cir --as filtro
+$XTAL circuit import fuentes/filtro.cir --as filtro
 $XTAL sim ac   filtro --as simulada --node "v(out)" \
       --from 10 --to 100000 --sweep dec --points 50 --label "Simulada"
 $XTAL sim tran filtro --as tran --node "v(in)" --node "v(out)" \

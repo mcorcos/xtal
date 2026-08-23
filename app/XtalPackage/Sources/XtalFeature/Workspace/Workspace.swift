@@ -17,6 +17,7 @@ public struct Workspace: View {
     @State private var git: Git
     @State private var ajuste: Ajuste
     @State private var secciones: Secciones
+    @State private var arbol: Arbol
     @State private var texto: String = ""
     @State private var insercion: EditorCodigo.Insercion?
     @Environment(\.colorScheme) private var esquema
@@ -68,6 +69,7 @@ public struct Workspace: View {
         _git = State(initialValue: Git(carpeta: carpeta))
         _ajuste = State(initialValue: Ajuste(carpeta: carpeta))
         _secciones = State(initialValue: Secciones(carpeta: carpeta))
+        _arbol = State(initialValue: Arbol(carpeta: carpeta))
         self.cerrar = cerrar
     }
 
@@ -116,8 +118,12 @@ public struct Workspace: View {
             // porque mandar un proceso por cada tecla es absurdo.
             if let sec = secciones.seleccionada {
                 secciones.guardar(sec.titulo, cuerpo: nuevo)
-            } else if let a = proyecto.seleccionado {
-                proyecto.escribir(nuevo, en: a)
+            } else if let url = arbol.seleccionado, Arbol.clase(de: url) == .texto {
+                // Lo de `salida/` no se guarda: se pisa en la próxima compilación, y
+                // dejar que alguien lo edite es dejarlo perder el trabajo.
+                if !generado(url) {
+                    try? nuevo.write(to: url, atomically: true, encoding: .utf8)
+                }
             }
         }
     }
@@ -127,13 +133,12 @@ public struct Workspace: View {
     private var modoEditor: some View {
         VSplitView {
             HStack(spacing: 0) {
-                // El corte del medio, y nada más. `HSplitView` trae el divisor
-                // arrastrable de Mac, con su cursor y su comportamiento.
-                //
-                // El panel lateral se sacó: Manu lo miró y prefiere decidirlo desde
-                // cero antes que corregirlo por partes. Las piezas —`listaArchivos`,
-                // `PanelEstado`, `BarraBloques`— siguen en el repo y andan; no se
-                // dibujan, nada más. Volver a poner cualquiera es una línea.
+                if verArchivos {
+                    panelArchivos
+                    Rectangle().fill(Tok.borderSubtle).frame(width: 1)
+                }
+                // El corte del medio. `HSplitView` trae el divisor arrastrable de Mac,
+                // con su cursor y su comportamiento: no hay nada que inventar.
                 HSplitView {
                     editor
                     if verPdf { pdf }
@@ -208,6 +213,7 @@ public struct Workspace: View {
                         await secciones.guardarYa(sec.titulo, cuerpo: texto)
                     }
                     await proyecto.compilar()
+                    arbol.recargar()
                     // Ubicar el error en la sección donde está el texto que rompió:
                     // el número de línea es del .tex generado y no le sirve a nadie.
                     if let e = proyecto.error {
@@ -234,6 +240,9 @@ public struct Workspace: View {
 
             // En modo agente no hay archivos ni cajón de terminal que prender: los
             // botones que no hacen nada confunden más que los que faltan.
+            if modo == .editor {
+                BotonPanel(icono: "sidebar.left", ayuda: "Archivos (⌘1)", prendido: $verArchivos)
+            }
             BotonPanel(icono: "doc.richtext", ayuda: "PDF (⌘2)", prendido: $verPdf)
             if modo == .editor {
                 BotonPanel(icono: "terminal", ayuda: "Terminal (⌘J)", prendido: $verTerminal)
@@ -451,16 +460,87 @@ public struct Workspace: View {
     /// Se conserva la forma exacta que ya funcionaba —un `VStack` con este `frame` y
     /// este fondo— porque adentro de un `HSplitView` un panel sin forma propia se come
     /// todo el ancho y deja al PDF en cero. Ya pasó.
+    /// El explorador. La carpeta tal cual es, como en cualquier editor de código.
+    private var panelArchivos: some View {
+        VStack(spacing: 0) {
+            cabecera(proyecto.nombre, icono: "folder") {
+                Button {
+                    arbol.recargar()
+                } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Tok.textSecondary)
+                .help("Volver a leer la carpeta")
+            }
+
+            ArbolArchivos(arbol: arbol) { url in
+                abrirArchivo(url)
+            }
+
+            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+
+            Button {
+                NSWorkspace.shared.open(proyecto.carpeta)
+            } label: {
+                HStack(spacing: Tok.S.sm) {
+                    Image(systemName: "folder").font(.system(size: 11))
+                    Text("Ver en el Finder").font(Tok.F.label)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Tok.textSecondary)
+                .padding(.horizontal, Tok.S.lg)
+                .frame(height: Tok.H.fila)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(width: 240)
+        .fondoLateral()
+    }
+
     private var editor: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 0)
+            if let url = arbol.seleccionado {
+                cabecera(url.lastPathComponent,
+                         icono: Arbol.icono(de: url, esCarpeta: false, abierta: false),
+                         sufijo: generado(url) ? "generado" : nil)
+                VisorArchivo(url: url, texto: $texto, insercion: $insercion)
+            } else {
+                Spacer(minLength: 0)
+            }
         }
         // El `maxWidth` no es capricho: adentro de un `HSplitView`, un panel **vacío**
         // no tiene forma propia y se queda con todo el ancho, dejando al PDF en cero.
-        // Con contenido adentro no pasaba. Poniéndole un techo, el PDF siempre tiene
-        // lugar, y el divisor se sigue pudiendo arrastrar.
+        // Poniéndole un techo, el PDF siempre tiene lugar, y el divisor se sigue
+        // pudiendo arrastrar.
         .frame(minWidth: 320, idealWidth: 560, maxWidth: 900, maxHeight: .infinity)
         .background(Tok.bgBase)
+    }
+
+    /// Si el archivo lo genera Xtal y no tiene sentido editarlo.
+    private func generado(_ url: URL) -> Bool {
+        url.pathComponents.contains("salida")
+    }
+
+    /// Abre un archivo en el visor.
+    private func abrirArchivo(_ url: URL) {
+        // Guardar lo que estaba escrito antes de cambiar de archivo.
+        guardarLoAbierto()
+        secciones.seleccionada = nil
+        proyecto.seleccionado = nil
+        arbol.seleccionado = url
+        texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }
+
+    /// Escribe al disco lo que hay en el editor, si corresponde.
+    private func guardarLoAbierto() {
+        if let sec = secciones.seleccionada {
+            secciones.guardar(sec.titulo, cuerpo: texto)
+        } else if let url = arbol.seleccionado, !generado(url),
+                  Arbol.clase(de: url) == .texto {
+            try? texto.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 
     /// El lado derecho: el PDF, o —si no compila— por qué no.

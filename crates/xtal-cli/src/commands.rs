@@ -53,7 +53,16 @@ fn scaffold_project(
     format: Option<DocFormat>,
     theme: Option<String>,
 ) -> Result<()> {
-    for sub in ["mediciones", "graficos", "esquematicos", "salida"] {
+    // `imagenes` existe porque el preámbulo ya la busca (ver el `\graphicspath` en
+    // `xtal-render`): sin la carpeta creada, el lugar obvio para una foto no existe y
+    // cada uno la deja donde le parece.
+    for sub in [
+        "mediciones",
+        "graficos",
+        "esquematicos",
+        "imagenes",
+        "salida",
+    ] {
         std::fs::create_dir_all(root.join(sub))?;
     }
     let mut project = Project::new(name);

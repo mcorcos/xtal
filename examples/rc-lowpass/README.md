@@ -30,10 +30,10 @@ fc = 1 / (2π·R·C) = 1 / (2π · 1600 · 100e-9) ≈ 994.7 Hz
 | Fuente | De dónde sale | Comando |
 |---|---|---|
 | **Teórica** | Modelo analítico `\|H\|dB = -10·log₁₀(1 + (f/fc)²)` | `xtal meas formula` |
-| **Simulada** | ngspice sobre `filtro.cir` | `xtal sim ac` / `xtal sim tran` |
-| **Medida** | `medicion_bode.csv` (CSV de instrumento) | `xtal meas import` |
+| **Simulada** | ngspice sobre `fuentes/filtro.cir` | `xtal sim ac` / `xtal sim tran` |
+| **Medida** | `fuentes/medicion_bode.csv` (CSV de instrumento) | `xtal meas import` |
 
-> **Sobre los datos "medidos":** el CSV es **sintético**, generado por `generar_csv.py`.
+> **Sobre los datos "medidos":** el CSV es **sintético**, generado por `fuentes/generar_csv.py`.
 > No son mediciones reales de laboratorio — están para que el ejemplo se pueda correr sin
 > tener el circuito armado. Para que sea didáctico, el generador usa componentes con
 > tolerancia (fc real ≈ 1007 Hz en vez de 994.7 Hz) y le suma ruido: por eso la curva
@@ -72,9 +72,11 @@ El proyecto es una **carpeta de archivos planos**, versionable con git:
 ```
 rc-lowpass/
 ├── xtal.toml              # el proyecto: metadata + secciones del informe
-├── filtro.cir             # netlist de entrada
-├── medicion_bode.csv      # CSV de entrada
-├── generar_csv.py         # genera el CSV sintético
+├── fuentes/               # las entradas del ejemplo, lo único que no se regenera
+│   ├── filtro.cir             # netlist
+│   ├── medicion_bode.csv      # CSV del instrumento
+│   └── generar_csv.py         # genera ese CSV
+├── imagenes/              # dónde va una foto para usarla como figura
 ├── reproducir.sh          # reconstruye todo desde cero
 ├── esquematicos/          # circuitos importados
 ├── mediciones/            # una medición = un .csv (datos) + un .toml (metadata)

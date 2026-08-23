@@ -38,7 +38,9 @@ F_FINAL = 100_000.0
 SIGMA_MAG_DB = 0.12
 SIGMA_FASE_DEG = 1.1
 
-SALIDA = "medicion_bode.csv"
+import os
+
+SALIDA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "medicion_bode.csv")
 
 
 def main() -> None:
