@@ -36,8 +36,19 @@ pub struct Section {
     /// Título de la sección.
     pub title: String,
     /// Cuerpo en LaTeX (puede estar vacío al crearla).
-    #[serde(default)]
+    ///
+    /// **En memoria siempre está lleno.** En disco puede no estar: si la sección tiene
+    /// `body_file`, el texto vive en ese archivo y acá no se escribe nada. Quien carga
+    /// y guarda el proyecto se encarga de las dos direcciones (`xtal-data::store`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub body: String,
+    /// El `.tex` donde vive el cuerpo, relativo a la raíz del proyecto.
+    ///
+    /// Existe para que el texto del informe sea un archivo de verdad y no una string
+    /// adentro de un TOML: así se edita como LaTeX, se ve en un diff de git y no hay
+    /// que escapar nada.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_file: Option<String>,
     /// Subsecciones anidadas.
     #[serde(default)]
     pub subsections: Vec<Section>,
@@ -51,6 +62,7 @@ impl Section {
         Section {
             title: title.into(),
             body: String::new(),
+            body_file: None,
             subsections: Vec::new(),
             figures: Vec::new(),
         }

@@ -13,10 +13,13 @@
    fórmula   ─┼──▶     mediciones/<id>.toml  │
               │                              │
    ngspice   ─┤        graficos/<id>.toml ───┼──▶  salida/main.tex ──▶  salida/main.pdf
-   (.raw)     │           (la receta)        │        (LaTeX)            (Tectonic)
-              │                              │
-   imagen    ─┘        xtal.toml ────────────┘
-   (.png/.pdf)          (el informe entero)
+   (.raw)     │           (la receta)        │        (el esqueleto)     (Tectonic)
+              │                              │             │
+   imagen    ─┤        secciones/<n>.tex ────┤             ├─▶ salida/graficos/<id>.tex
+   (.png/.pdf)│           (tu texto)         │             │      (el eje y el estilo)
+              │                              │             │
+              └        xtal.toml ────────────┘             └─▶ salida/datos/<curva>.dat
+                        (el índice)                              (los números)
 ```
 
 ## Paso por paso
@@ -45,13 +48,26 @@ id— y con qué estilo: color, línea, panel, escala.
 Es lo que permite que la misma medición aparezca en dos gráficos distintos, y que un
 gráfico junte teórica, simulada y medida. Relación muchos-a-muchos.
 
-### 3. El **informe** es el `xtal.toml`
+### 3. El **informe** son el `xtal.toml` y `secciones/`
 
-Título, autores, theme, formato, el plan de gráficos, y el texto de cada sección con las
-figuras que muestra. Un archivo describe el informe entero.
+El `xtal.toml` es el **índice**: título, autores, theme, formato, el plan de gráficos, y
+la lista de secciones —su título, su orden, qué figuras muestra cada una y en qué
+archivo está su texto.
 
-Las secciones se editan desde la app o con `xtal section set`; el TOML es el formato en
-disco, no algo que haya que escribir a mano.
+El texto no vive ahí. Vive en `secciones/<nn>-<nombre>.tex`, un archivo por sección,
+LaTeX plano. Es lo que hace que se pueda escribir a mano, mirar en un diff de git y
+editar con cualquier cosa.
+
+| Archivo | Quién manda |
+|---|---|
+| `xtal.toml` | Xtal y la app. No se edita a mano |
+| `secciones/<nn>-<nombre>.tex` | Vos. Xtal solo lo escribe cuando se lo pedís |
+
+El nombre del archivo se elige una vez y **no se renombra** aunque cambie el título:
+renombrar un archivo abajo de alguien que lo está editando rompe más de lo que ordena.
+
+Un proyecto viejo, con el texto adentro del TOML, sigue compilando igual. `xtal section
+split` lo migra de una; cualquier cambio hecho desde Xtal también.
 
 ### 4. Se arma el **`.tex`**
 
@@ -60,13 +76,37 @@ disco, no algo que haya que escribir a mano.
 
 - **Preámbulo** — paquetes, colores, el theme, y lo que pida el informe. Ver abajo.
 - **Carátula** — según el formato: `facultad` con portada, `paper` a dos columnas.
-- **Cuerpo** — cada sección con su texto, y cada figura convertida a **PGFPlots**: el
-  gráfico se dibuja *adentro del LaTeX*, con los datos incrustados. No hay imágenes
-  intermedias, y por eso las curvas salen vectoriales y con la tipografía del documento.
+- **Cuerpo** — el esqueleto del informe: un `\section` por sección, un
+  `\input{../secciones/...}` que trae tu texto, y un `\xtalGrafico{<id>}` por figura.
+
+El gráfico se dibuja *adentro del LaTeX*, con **PGFPlots**. No hay imágenes intermedias,
+y por eso las curvas salen vectoriales y con la tipografía del documento.
+
+**Nada de eso queda adentro del `main.tex`.** Cada pieza va a su archivo:
+
+| Lo que sale | Qué tiene |
+|---|---|
+| `salida/main.tex` | Preámbulo, carátula y el esqueleto. Unas ochenta líneas |
+| `salida/graficos/<id>.tex` | El eje y el estilo de un gráfico |
+| `salida/datos/<curva>.dat` | Los números de una curva, que PGFPlots lee con `\addplot table` |
+
+Antes iba todo junto: el `main.tex` del ejemplo tenía 4317 líneas y unas 150 eran el
+documento. El resto eran coordenadas.
+
+`\xtalGrafico{bode}` es un `\newcommand` que Xtal define en el preámbulo y que hace el
+`\input` del gráfico. Es lo que deja una sección legible: prosa, y una línea que nombra
+la figura.
+
+Todo lo de `salida/` es generado y se pisa en cada compilación. Lo que se edita a mano
+es `secciones/`, en la raíz del proyecto.
 
 ### 5. **Tectonic** lo compila
 
-`xtal-compile` hace shell-out a `tectonic -X compile salida/main.tex --outdir salida`.
+`xtal-compile` hace shell-out a `tectonic -X compile main.tex --outdir salida`, **parado
+en `salida/`**. El directorio importa: `\input{../secciones/...}` y
+`table {datos/...}` son rutas relativas, y LaTeX las busca desde donde corre el proceso.
+Corriendo desde la raíz del proyecto encontraría `graficos/`, que tiene las recetas en
+TOML y no los gráficos en LaTeX.
 
 Tectonic baja los paquetes de LaTeX que hagan falta **la primera vez que se usan** y los
 deja en su cache. Por eso un informe que pide `mhchem` compila sin que nadie instale

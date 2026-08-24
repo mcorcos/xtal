@@ -115,6 +115,11 @@ xtal plot add-series bode --measurement v_out    --role output
 xtal section add "Resultados" --figure bode --body "Texto en LaTeX."
 ```
 
+El texto de cada sección queda en `secciones/<nn>-<nombre>.tex`, en LaTeX plano. Ese
+archivo se puede editar directo, con el editor que sea; el `xtal.toml` solo guarda el
+índice. Para cuerpos largos conviene `xtal section set "Resultados" --body-file
+archivo.tex`, que evita escapar comillas y barras.
+
 ### 5. Compilar
 
 ```bash
@@ -141,6 +146,10 @@ xtal run
 - **`xtal doctor --fix`** y **`xtal setup`** sin `--yes` — preguntan de forma interactiva
   y se cuelgan esperando una respuesta.
 - Editar `xtal.toml`, `mediciones/` o `graficos/` a mano. Hay un comando para cada cosa.
+  La excepción es `secciones/`: esos `.tex` son el texto del informe y están para
+  escribirlos.
+- Editar cualquier cosa adentro de `salida/`. Todo eso lo genera `xtal run` y se pisa en
+  la próxima compilación.
 
 ---
 

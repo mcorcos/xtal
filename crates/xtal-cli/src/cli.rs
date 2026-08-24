@@ -385,6 +385,12 @@ pub enum SectionCmd {
     },
     /// Lista la estructura de secciones.
     List,
+    /// Saca el texto del `xtal.toml` y lo pone en un `.tex` por sección.
+    ///
+    /// Es para un proyecto viejo, que tenía el texto adentro del manifiesto. Los
+    /// proyectos nuevos ya nacen así, y cualquier cambio hecho desde Xtal también los
+    /// migra: esto es para hacerlo a propósito y de una.
+    Split,
 }
 
 #[derive(Debug, Args)]

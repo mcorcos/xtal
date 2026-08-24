@@ -507,6 +507,41 @@ pub fn cmd_section(cmd: SectionCmd, project: &Option<PathBuf>, json: bool) -> Re
                 );
             }
         }
+        SectionCmd::Split => {
+            // Todo el trabajo lo hace `save_project`: le da su archivo a cada sección
+            // que no tenga uno y escribe el texto ahí. Acá solo se cuenta qué pasó.
+            let antes = proj
+                .sections
+                .iter()
+                .filter(|s| s.body_file.is_none())
+                .count();
+            store::save_project(&root, &proj)?;
+            let proj = store::load_project(&root)?;
+            let archivos: Vec<&str> = proj
+                .sections
+                .iter()
+                .filter_map(|s| s.body_file.as_deref())
+                .collect();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "moved": antes, "files": archivos })
+                );
+            } else if antes == 0 {
+                println!("Las secciones ya estaban en archivos.");
+                for f in archivos {
+                    println!("  {}", style(f).dim());
+                }
+            } else {
+                println!(
+                    "{} {antes} secciones pasaron a ser archivos",
+                    style("✓").green().bold()
+                );
+                for f in archivos {
+                    println!("  {}", style(f).dim());
+                }
+            }
+        }
         SectionCmd::List => {
             // Con --json sale el árbol entero, cuerpos incluidos: es lo que necesita
             // cualquier cosa que quiera mostrar o editar las secciones sin parsear el
@@ -571,15 +606,20 @@ pub fn cmd_export(a: ExportArgs, project: &Option<PathBuf>) -> Result<()> {
         format: a.format.map(Into::into),
         monochrome: if a.monochrome { Some(true) } else { None },
     };
-    let tex = render_project(&root, &overrides)?;
+    let rendered = render_project(&root, &overrides)?;
     let out = a
         .output
         .unwrap_or_else(|| root.join("salida").join("main.tex"));
-    if let Some(parent) = out.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&out, &tex)?;
-    println!("✓ LaTeX generado: {}", out.display());
+    let outdir = out
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| root.join("salida"));
+    write_split(&outdir, &out, &rendered)?;
+    println!(
+        "✓ LaTeX generado: {} (+ {} archivos al lado)",
+        out.display(),
+        rendered.files.len()
+    );
     Ok(())
 }
 
@@ -636,11 +676,10 @@ pub fn cmd_run(a: RunArgs, project: &Option<PathBuf>) -> Result<()> {
         format: a.format.map(Into::into),
         monochrome: if a.monochrome { Some(true) } else { None },
     };
-    let tex = render_project(&root, &overrides)?;
+    let rendered = render_project(&root, &overrides)?;
     let outdir = root.join("salida");
-    std::fs::create_dir_all(&outdir)?;
     let tex_path = outdir.join("main.tex");
-    std::fs::write(&tex_path, &tex)?;
+    write_split(&outdir, &tex_path, &rendered)?;
 
     let engine = if a.pdflatex {
         Engine::Pdflatex
@@ -655,15 +694,60 @@ pub fn cmd_run(a: RunArgs, project: &Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-/// Carga todo el estado y renderiza el documento a String.
-fn render_project(root: &Path, overrides: &PartialConfig) -> Result<String> {
+/// Carga todo el estado y renderiza el informe partido en archivos.
+fn render_project(root: &Path, overrides: &PartialConfig) -> Result<xtal_render::RenderedProject> {
     let project = store::load_project(root)?;
     let resolved = ctx::resolve_config(&project, overrides)?;
     let measurements = ctx::load_measurements(root)?;
     let plots = ctx::load_plots(root)?;
     let theme = xtal_render::Theme::load(&resolved.theme, themes_dir().as_deref())?;
-    let tex = xtal_render::render_document(&project, &resolved, &theme, &measurements, &plots)?;
-    Ok(tex)
+    Ok(xtal_render::render_split(
+        &project,
+        &resolved,
+        &theme,
+        &measurements,
+        &plots,
+    )?)
+}
+
+/// Escribe el informe a disco: el `main.tex` y las tres carpetas de al lado.
+///
+/// Las carpetas generadas se borran antes de escribir. Si no, una sección que se
+/// renombra deja su archivo viejo tirado y el próximo que abra la carpeta no sabe
+/// cuál de los dos vale. Todo lo de acá adentro lo genera Xtal: no hay nada que
+/// perder.
+fn write_split(
+    outdir: &Path,
+    main_path: &Path,
+    rendered: &xtal_render::RenderedProject,
+) -> Result<()> {
+    // Limpiar SOLO adentro de `salida/`.
+    //
+    // Una de las carpetas generadas se llama `graficos`, igual que la carpeta de
+    // recetas del proyecto. Si alguien exporta a la raíz con `--output`, borrar por
+    // nombre le vuela las recetas. Fuera de `salida/` no se borra nada: como mucho
+    // quedan archivos viejos, que es infinitamente mejor que perder el trabajo.
+    if outdir.file_name().and_then(|n| n.to_str()) == Some("salida") {
+        for dir in xtal_render::GENERATED_DIRS {
+            let d = outdir.join(dir);
+            if d.is_dir() {
+                std::fs::remove_dir_all(&d)
+                    .with_context(|| format!("limpiando {}", d.display()))?;
+            }
+        }
+    }
+    std::fs::create_dir_all(outdir)?;
+    std::fs::write(main_path, &rendered.main)
+        .with_context(|| format!("escribiendo {}", main_path.display()))?;
+    for (rel, contenido) in &rendered.files {
+        let path = outdir.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, contenido)
+            .with_context(|| format!("escribiendo {}", path.display()))?;
+    }
+    Ok(())
 }
 
 fn load_theme(root: &Path) -> Result<xtal_render::Theme> {

@@ -24,6 +24,13 @@ pub mod theme;
 pub use error::{RenderError, Result};
 pub use theme::{embedded_theme_names, export_embedded_themes, Theme};
 
+/// Las carpetas que `xtal run` genera adentro de `salida/`.
+///
+/// Están acá para que el que escribe a disco pueda limpiarlas sin adivinar nombres.
+/// **Ojo**: `graficos` se llama igual que la carpeta de recetas del proyecto. Limpiar
+/// esto en cualquier lado que no sea `salida/` te borra las recetas.
+pub const GENERATED_DIRS: [&str; 2] = [document::DIR_DATA, document::DIR_PLOTS];
+
 // Templates embebidos en tiempo de compilación.
 const FACULTAD_TPL: &str = include_str!("../templates/facultad.tex.j2");
 const PAPER_TPL: &str = include_str!("../templates/paper.tex.j2");
@@ -86,6 +93,53 @@ pub fn render_document(
     .map_err(|e| RenderError::Template {
         template: tpl_name.to_string(),
         source: e,
+    })
+}
+
+/// El informe listo para escribir a disco: el `main.tex` y todo lo que va al lado.
+pub struct RenderedProject {
+    /// El contenido de `salida/main.tex`.
+    pub main: String,
+    /// El resto de los archivos, con su ruta relativa a `salida/` como clave:
+    /// `secciones/01-objetivo.tex`, `graficos/bode.tex`, `datos/bode-teorica.dat`.
+    pub files: IndexMap<String, String>,
+}
+
+/// Renderiza el informe partido en archivos.
+///
+/// Es lo que usa `xtal run`. La diferencia con [`render_document`] es que el `.tex`
+/// principal queda corto y legible: el texto de cada sección, cada gráfico y cada
+/// curva viven en su propio archivo, y el `main.tex` los trae con `\input`.
+pub fn render_split(
+    project: &Project,
+    resolved: &ResolvedConfig,
+    theme: &Theme,
+    measurements: &IndexMap<String, Measurement>,
+    plots: &IndexMap<String, Plot>,
+) -> Result<RenderedProject> {
+    let split = document::assemble_split(project, resolved, theme, measurements, plots)?;
+    let env = build_env();
+    let tpl_name = template_name(resolved.format);
+    let tpl = env
+        .get_template(tpl_name)
+        .map_err(|e| RenderError::Template {
+            template: tpl_name.to_string(),
+            source: e,
+        })?;
+    let main = tpl
+        .render(context! {
+            preamble => split.parts.preamble,
+            cover => split.parts.cover,
+            body => split.parts.body,
+            show_toc => split.parts.show_toc,
+        })
+        .map_err(|e| RenderError::Template {
+            template: tpl_name.to_string(),
+            source: e,
+        })?;
+    Ok(RenderedProject {
+        main,
+        files: split.files,
     })
 }
 
@@ -248,5 +302,76 @@ mod tests {
         let tex = render_standalone_plot(plot, &measurements, &theme, false).unwrap();
         assert!(tex.contains("standalone"));
         assert!(tex.contains("\\begin{tikzpicture}"));
+    }
+
+    // --- El informe partido en archivos ---
+    //
+    // La razón de todo esto: el `main.tex` del ejemplo tenía 4317 líneas y solo unas
+    // 150 eran el documento. Lo demás eran coordenadas. Así no se puede editar a mano.
+
+    #[test]
+    fn el_informe_partido_deja_el_main_sin_numeros() {
+        let (project, resolved, theme, measurements, plots) = fixture();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+
+        // Ni un número suelto de una curva en el documento principal.
+        assert!(
+            !r.main.contains("coordinates"),
+            "quedaron coordenadas en el main:\n{}",
+            r.main
+        );
+        // El gráfico y sus números, cada uno en su archivo.
+        assert!(r.files.contains_key("graficos/resp.tex"));
+        assert!(r.files.contains_key("datos/resp-teorica.dat"));
+        // Y el main llama al gráfico por su nombre.
+        assert!(r.main.contains("\\xtalGrafico{resp}"), "{}", r.main);
+        assert!(
+            !r.main.contains("\\begin{tikzpicture}"),
+            "el TikZ se coló en el main"
+        );
+
+        // El gráfico lee los números del `.dat`, no los tiene adentro.
+        let graf = &r.files["graficos/resp.tex"];
+        assert!(
+            graf.contains("table[x=x, y=y] {datos/resp-teorica.dat}"),
+            "{graf}"
+        );
+
+        // Y el `.dat` tiene su encabezado y sus puntos.
+        let dat = &r.files["datos/resp-teorica.dat"];
+        assert!(dat.starts_with("x y\n"), "{dat}");
+        assert_eq!(dat.lines().count(), 4, "encabezado + 3 puntos:\n{dat}");
+    }
+
+    #[test]
+    fn una_seccion_con_archivo_se_trae_por_referencia() {
+        // Es lo que hace que el texto del informe se pueda editar como LaTeX: vive en
+        // un `.tex` de la carpeta del proyecto y el documento generado lo incluye.
+        let (mut project, resolved, theme, measurements, plots) = fixture();
+        project.sections[0].body_file = Some("secciones/01-respuesta.tex".to_string());
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        assert!(
+            r.main.contains("\\input{../secciones/01-respuesta.tex}"),
+            "{}",
+            r.main
+        );
+        // El texto NO se copia: si estuviera en los dos lados, un día no coinciden.
+        assert!(!r.main.contains("El filtro presenta un polo"), "{}", r.main);
+    }
+
+    #[test]
+    fn una_seccion_sin_archivo_se_escribe_adentro() {
+        // Un proyecto viejo, con el texto en el `xtal.toml`, tiene que seguir saliendo.
+        let (project, resolved, theme, measurements, plots) = fixture();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        assert!(r.main.contains("El filtro presenta un polo"), "{}", r.main);
+    }
+
+    #[test]
+    fn el_preambulo_partido_define_el_comando_del_grafico() {
+        let (project, resolved, theme, measurements, plots) = fixture();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        // Sin esto, `\xtalGrafico{...}` en el documento es un comando que no existe.
+        assert!(r.main.contains("\\newcommand{\\xtalGrafico}"), "{}", r.main);
     }
 }

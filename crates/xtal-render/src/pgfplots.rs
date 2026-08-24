@@ -34,21 +34,78 @@ pub fn color_preamble() -> String {
     s
 }
 
-/// Renderiza un gráfico completo a un bloque `tikzpicture`.
+/// Adónde van los números de las series.
 ///
-/// Si es un Bode y hay series asignadas al panel de fase, genera dos paneles apilados
-/// (magnitud arriba, fase abajo) compartiendo el eje de frecuencia. Si no, un solo eje.
+/// Con las coordenadas adentro del `.tex`, el ejemplo daba 4317 líneas de las cuales
+/// unas 150 eran el documento: el resto eran números. Un `.tex` así no se puede leer
+/// ni editar a mano, que es justo lo que uno quiere poder hacer.
+///
+/// Con esto cada curva se escribe en su `.dat` y el gráfico queda como lo que es: un
+/// eje y tres llamadas. Es además la forma estándar de PGFPlots (`\addplot table`).
+pub struct DataFiles<'a> {
+    /// La carpeta de los `.dat`, relativa al `.tex` que compila. Va tal cual adentro
+    /// del `\addplot table`.
+    pub dir: &'a str,
+    /// Los archivos generados: ruta relativa a `salida/` → contenido.
+    pub files: &'a mut IndexMap<String, String>,
+    /// El id del gráfico. Solo se usa para nombrar los archivos.
+    pub plot_id: &'a str,
+}
+
+impl DataFiles<'_> {
+    /// Elige un nombre libre para el `.dat` de una serie.
+    ///
+    /// `<gráfico>-<medición>.dat` es lo que uno espera encontrar. Un mismo gráfico
+    /// puede usar la misma medición dos veces —el Bode la dibuja en magnitud y en
+    /// fase, con escalas distintas— y ahí se numera.
+    fn reserve(&mut self, measurement: &str) -> String {
+        let base = format!("{}-{}", self.plot_id, measurement);
+        let mut name = format!("{}/{}.dat", self.dir, base);
+        let mut n = 2;
+        while self.files.contains_key(&name) {
+            name = format!("{}/{}-{}.dat", self.dir, base, n);
+            n += 1;
+        }
+        name
+    }
+}
+
+/// Renderiza un gráfico completo a un bloque `tikzpicture`, con los números adentro.
+///
+/// Lo usa el documento suelto de `plot preview`, que tiene que compilar sin ningún
+/// archivo al lado. El informe usa [`render_plot_with_data`].
 pub fn render_plot(
     plot: &Plot,
     measurements: &IndexMap<String, Measurement>,
     monochrome: bool,
 ) -> Result<String> {
+    render_inner(plot, measurements, monochrome, None)
+}
+
+/// Igual que [`render_plot`], pero deja los números en archivos `.dat` aparte.
+pub fn render_plot_with_data(
+    plot: &Plot,
+    measurements: &IndexMap<String, Measurement>,
+    monochrome: bool,
+    data: &mut DataFiles<'_>,
+) -> Result<String> {
+    render_inner(plot, measurements, monochrome, Some(data))
+}
+
+/// Si es un Bode y hay series asignadas al panel de fase, genera dos paneles apilados
+/// (magnitud arriba, fase abajo) compartiendo el eje de frecuencia. Si no, un solo eje.
+fn render_inner(
+    plot: &Plot,
+    measurements: &IndexMap<String, Measurement>,
+    monochrome: bool,
+    data: Option<&mut DataFiles<'_>>,
+) -> Result<String> {
     let has_phase =
         plot.kind == PlotKind::Bode && plot.series.iter().any(|s| s.panel == Panel::Phase);
     if has_phase {
-        render_bode_with_phase(plot, measurements, monochrome)
+        render_bode_with_phase(plot, measurements, monochrome, data)
     } else {
-        render_single_axis(plot, measurements, monochrome)
+        render_single_axis(plot, measurements, monochrome, data)
     }
 }
 
@@ -73,6 +130,7 @@ fn render_single_axis(
     plot: &Plot,
     measurements: &IndexMap<String, Measurement>,
     monochrome: bool,
+    mut data: Option<&mut DataFiles<'_>>,
 ) -> Result<String> {
     let x_linear = plot.effective_x_scale() == Scale::Linear;
     let y_linear = plot.effective_y_scale() == Scale::Linear;
@@ -154,7 +212,15 @@ fn render_single_axis(
     for (index, series) in plot.series.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
         render_series(
-            &mut out, series, meas, index, monochrome, xfactor, yfactor, true,
+            &mut out,
+            series,
+            meas,
+            index,
+            monochrome,
+            xfactor,
+            yfactor,
+            true,
+            data.as_deref_mut(),
         );
     }
 
@@ -169,6 +235,7 @@ fn render_bode_with_phase(
     plot: &Plot,
     measurements: &IndexMap<String, Measurement>,
     monochrome: bool,
+    mut data: Option<&mut DataFiles<'_>>,
 ) -> Result<String> {
     let mag: Vec<&Series> = plot
         .series
@@ -203,7 +270,17 @@ fn render_bode_with_phase(
     out.push_str("\\nextgroupplot[ylabel={Magnitud [dB]}]\n");
     for (index, series) in mag.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0, true);
+        render_series(
+            &mut out,
+            series,
+            meas,
+            index,
+            monochrome,
+            1.0,
+            1.0,
+            true,
+            data.as_deref_mut(),
+        );
     }
 
     // --- Panel 2: fase (abajo, lleva la etiqueta de frecuencia). Ticks cada 45°. ---
@@ -227,7 +304,17 @@ fn render_bode_with_phase(
     ));
     for (index, series) in phase.iter().enumerate() {
         let meas = lookup(plot, measurements, series)?;
-        render_series(&mut out, series, meas, index, monochrome, 1.0, 1.0, false);
+        render_series(
+            &mut out,
+            series,
+            meas,
+            index,
+            monochrome,
+            1.0,
+            1.0,
+            false,
+            data.as_deref_mut(),
+        );
     }
 
     out.push_str("\\end{groupplot}\n");
@@ -265,6 +352,7 @@ fn render_series(
     xfactor: f64,
     yfactor: f64,
     with_legend: bool,
+    data: Option<&mut DataFiles<'_>>,
 ) {
     // Resolvemos el estilo final: overrides del usuario > defaults por rol/tipo.
     let style = resolve_style(
@@ -296,13 +384,32 @@ fn render_series(
     }
     opts.push("line width=0.9pt".to_string());
 
-    out.push_str(&format!("\\addplot[{}] coordinates {{\n", opts.join(", ")));
-    for (x, y) in &meas.data {
-        // Aplicamos el factor de escala del eje (prefijo SI). Formato shortest-round-trip
-        // de Rust: determinístico y compacto.
-        out.push_str(&format!("({}, {})\n", x * xfactor, y * yfactor));
+    // Los números: en un `.dat` al lado, o adentro del `.tex` si no hay dónde.
+    //
+    // El factor de escala del eje (prefijo SI) se aplica acá, en los dos casos. El
+    // formato de f64 de Rust es shortest-round-trip: determinístico y compacto.
+    match data {
+        Some(d) => {
+            let name = d.reserve(&meas.id);
+            let mut tabla = String::from("x y\n");
+            for (x, y) in &meas.data {
+                tabla.push_str(&format!("{} {}\n", x * xfactor, y * yfactor));
+            }
+            d.files.insert(name.clone(), tabla);
+            out.push_str(&format!(
+                "\\addplot[{}] table[x=x, y=y] {{{}}};\n",
+                opts.join(", "),
+                name
+            ));
+        }
+        None => {
+            out.push_str(&format!("\\addplot[{}] coordinates {{\n", opts.join(", ")));
+            for (x, y) in &meas.data {
+                out.push_str(&format!("({}, {})\n", x * xfactor, y * yfactor));
+            }
+            out.push_str("};\n");
+        }
     }
-    out.push_str("};\n");
 
     // Entrada de leyenda (etiqueta de la serie o de la medición), escapada.
     if with_legend {

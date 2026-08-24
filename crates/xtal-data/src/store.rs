@@ -29,6 +29,8 @@ const MEAS_DIR: &str = "mediciones";
 const PLOT_DIR: &str = "graficos";
 const CIRCUIT_DIR: &str = "esquematicos";
 const PROJECT_FILE: &str = "xtal.toml";
+/// Donde viven los cuerpos de las secciones, uno por archivo.
+pub const SECTIONS_DIR: &str = "secciones";
 
 /// El `.toml` de metadata de una medición (sin los datos, que van al CSV).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,18 +75,147 @@ pub fn find_project_root(start: &Path) -> Result<PathBuf> {
 
 // ---------- Proyecto ----------
 
-/// Carga el `xtal.toml` desde la raíz del proyecto.
+/// Carga el `xtal.toml` desde la raíz del proyecto, con el texto de cada sección.
+///
+/// El cuerpo de una sección no vive en el TOML: vive en su propio `.tex` adentro de
+/// `secciones/`, y el TOML solo guarda el nombre de ese archivo. Acá se juntan las dos
+/// mitades, así el resto del programa ve una sección con su texto adentro y no se
+/// entera de dónde salió.
 pub fn load_project(root: &Path) -> Result<Project> {
     let path = root.join(PROJECT_FILE);
     let text = read(&path)?;
-    toml::from_str(&text).map_err(|e| DataError::Toml { path, source: e })
+    let mut project: Project =
+        toml::from_str(&text).map_err(|e| DataError::Toml { path, source: e })?;
+    read_section_bodies(root, &mut project.sections);
+    Ok(project)
 }
 
-/// Escribe el `xtal.toml`.
+/// Escribe el `xtal.toml` y el `.tex` de cada sección.
+///
+/// **Una sección sin archivo se lo gana acá.** Es la migración: un proyecto viejo, con
+/// el texto adentro del TOML, sale de este guardado con sus secciones ya en archivos.
+/// Se hace al guardar y no en un comando aparte porque nadie corre una migración que
+/// no sabe que existe.
 pub fn save_project(root: &Path, project: &Project) -> Result<()> {
+    // Se trabaja sobre una copia: lo que va al TOML es el proyecto SIN los cuerpos, y
+    // el que llamó no tiene por qué quedarse con el suyo vacío.
+    let mut copia = project.clone();
+    let mut taken = taken_section_files(&copia.sections);
+    assign_section_files(&mut copia.sections, &mut taken);
+    write_section_bodies(root, &mut copia.sections)?;
     let path = root.join(PROJECT_FILE);
-    let text = toml::to_string_pretty(project).expect("Project siempre serializa a TOML");
+    let text = toml::to_string_pretty(&copia).expect("Project siempre serializa a TOML");
     write(&path, &text)
+}
+
+/// Trae el cuerpo de cada sección desde su archivo.
+///
+/// Un archivo que no está NO es un error: la sección queda vacía y el informe compila
+/// igual. Reventar acá dejaría el proyecto sin poder abrirse porque alguien borró un
+/// `.tex`, y ver el informe sin ese texto es mejor que no ver nada.
+fn read_section_bodies(root: &Path, sections: &mut [xtal_model::Section]) {
+    for section in sections {
+        if let Some(rel) = &section.body_file {
+            if let Ok(texto) = fs::read_to_string(root.join(rel)) {
+                section.body = texto;
+            }
+        }
+        read_section_bodies(root, &mut section.subsections);
+    }
+}
+
+/// Escribe el cuerpo de cada sección a su archivo y lo saca de la copia que va al TOML.
+fn write_section_bodies(root: &Path, sections: &mut [xtal_model::Section]) -> Result<()> {
+    for section in sections {
+        if let Some(rel) = section.body_file.clone() {
+            let mut cuerpo = section.body.trim_end().to_string();
+            cuerpo.push('\n');
+            write(&root.join(&rel), &cuerpo)?;
+            // Fuera del TOML: el archivo es el único dueño del texto. Dejarlo en los
+            // dos lados es garantizar que un día no coincidan.
+            section.body.clear();
+        }
+        write_section_bodies(root, &mut section.subsections)?;
+    }
+    Ok(())
+}
+
+/// Los nombres de archivo que ya están tomados.
+fn taken_section_files(sections: &[xtal_model::Section]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(sections: &[xtal_model::Section], out: &mut Vec<String>) {
+        for s in sections {
+            if let Some(f) = &s.body_file {
+                out.push(f.clone());
+            }
+            walk(&s.subsections, out);
+        }
+    }
+    walk(sections, &mut out);
+    out
+}
+
+/// Le da un archivo a cada sección que no tenga uno.
+///
+/// El nombre se elige una sola vez y **no se renombra nunca más**, ni cuando cambia el
+/// título. Renombrar un archivo abajo de alguien que lo está editando —o que ya lo
+/// tiene en un commit— rompe más de lo que ordena.
+fn assign_section_files(sections: &mut [xtal_model::Section], taken: &mut Vec<String>) {
+    for section in sections {
+        if section.body_file.is_none() {
+            let base = slug(&section.title);
+            let base = if base.is_empty() {
+                "seccion".to_string()
+            } else {
+                base
+            };
+            let mut n = taken.len() + 1;
+            let mut name = format!("{SECTIONS_DIR}/{n:02}-{base}.tex");
+            while taken.contains(&name) {
+                n += 1;
+                name = format!("{SECTIONS_DIR}/{n:02}-{base}.tex");
+            }
+            taken.push(name.clone());
+            section.body_file = Some(name);
+        }
+        assign_section_files(&mut section.subsections, taken);
+    }
+}
+
+/// Minúsculas, alfanumérico y guiones, sin acentos: es un nombre de archivo.
+fn slug(name: &str) -> String {
+    let mut out = String::new();
+    let mut prev_dash = false;
+    for c in name.chars() {
+        let c = fold(c);
+        if c.is_alphanumeric() && c.is_ascii() {
+            out.extend(c.to_lowercase());
+            prev_dash = false;
+        } else if !prev_dash && !out.is_empty() {
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
+/// La letra sin su acento. Solo las del español, que es lo que hay en los títulos.
+fn fold(c: char) -> char {
+    match c {
+        'á' | 'à' | 'ä' | 'â' => 'a',
+        'é' | 'è' | 'ë' | 'ê' => 'e',
+        'í' | 'ì' | 'ï' | 'î' => 'i',
+        'ó' | 'ò' | 'ö' | 'ô' => 'o',
+        'ú' | 'ù' | 'ü' | 'û' => 'u',
+        'ñ' => 'n',
+        'Á' | 'À' | 'Ä' | 'Â' => 'A',
+        'É' | 'È' | 'Ë' | 'Ê' => 'E',
+        'Í' | 'Ì' | 'Ï' | 'Î' => 'I',
+        'Ó' | 'Ò' | 'Ö' | 'Ô' => 'O',
+        'Ú' | 'Ù' | 'Ü' | 'Û' => 'U',
+        'Ñ' => 'N',
+        otra => otra,
+    }
 }
 
 // ---------- Mediciones ----------
@@ -393,5 +524,71 @@ mod tests {
             load_measurement(&root, "nope"),
             Err(DataError::MeasurementNotFound(_))
         ));
+    }
+
+    // --- Las secciones en archivos ---
+    //
+    // El texto del informe tiene que ser un `.tex` de verdad, no una string adentro de
+    // un TOML. Es lo que lo hace editable a mano y legible en un diff.
+
+    #[test]
+    fn guardar_saca_el_texto_del_toml_y_lo_pone_en_un_tex() {
+        let root = temp_root("secciones");
+        let mut proj = Project::new("TP");
+        let mut sec = xtal_model::Section::new("Modelo teórico");
+        sec.body = "El polo está en \\SI{1}{\\kilo\\hertz}.".to_string();
+        proj.sections.push(sec);
+        save_project(&root, &proj).unwrap();
+
+        // En el TOML queda el índice, no el texto.
+        let toml_text = fs::read_to_string(root.join(PROJECT_FILE)).unwrap();
+        assert!(
+            !toml_text.contains("El polo está"),
+            "el texto quedó en el TOML:\n{toml_text}"
+        );
+        assert!(toml_text.contains("body_file = \"secciones/01-modelo-teorico.tex\""));
+
+        // El nombre del archivo va sin acentos: es una ruta adentro de un \input, y
+        // pdflatex es de 8 bits.
+        let tex = root.join("secciones/01-modelo-teorico.tex");
+        assert!(tex.is_file(), "no se escribió {}", tex.display());
+        assert!(fs::read_to_string(&tex).unwrap().contains("El polo está"));
+
+        // Y al cargar vuelve entero: el resto del programa no se entera de nada.
+        let vuelta = load_project(&root).unwrap();
+        assert_eq!(vuelta.sections[0].body.trim(), proj.sections[0].body);
+    }
+
+    #[test]
+    fn editar_el_tex_a_mano_cambia_el_informe() {
+        // Es todo el punto: el archivo manda.
+        let root = temp_root("secciones_mano");
+        let mut proj = Project::new("TP");
+        proj.sections.push(xtal_model::Section::new("Objetivo"));
+        save_project(&root, &proj).unwrap();
+
+        fs::write(root.join("secciones/01-objetivo.tex"), "Escrito a mano.\n").unwrap();
+        let vuelta = load_project(&root).unwrap();
+        assert_eq!(vuelta.sections[0].body.trim(), "Escrito a mano.");
+    }
+
+    #[test]
+    fn el_archivo_de_una_seccion_no_se_renombra_al_cambiar_el_titulo() {
+        // Renombrar un archivo abajo de alguien que lo está editando —o que ya lo
+        // tiene commiteado— rompe más de lo que ordena.
+        let root = temp_root("secciones_rename");
+        let mut proj = Project::new("TP");
+        proj.sections.push(xtal_model::Section::new("Objetivo"));
+        save_project(&root, &proj).unwrap();
+
+        let mut proj = load_project(&root).unwrap();
+        proj.sections[0].title = "Otro título".to_string();
+        save_project(&root, &proj).unwrap();
+
+        let vuelta = load_project(&root).unwrap();
+        assert_eq!(
+            vuelta.sections[0].body_file.as_deref(),
+            Some("secciones/01-objetivo.tex")
+        );
     }
 }

@@ -88,8 +88,8 @@ $XTAL plot add-series transitorio --measurement tran_in  --role input  --label "
 $XTAL plot add-series transitorio --measurement tran_out --role output --label "Salida"
 
 # ---------------------------------------------------------------------------
-# Informe. Las secciones ya viven en xtal.toml (con su cuerpo en LaTeX), así
-# que solo hay que compilar.
+# Informe. El índice vive en xtal.toml y el texto de cada sección en su propio
+# `.tex` adentro de `secciones/`, así que solo hay que compilar.
 # ---------------------------------------------------------------------------
 echo "==> Compilando el informe"
 $XTAL run

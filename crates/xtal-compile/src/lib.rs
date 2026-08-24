@@ -73,14 +73,36 @@ fn pdf_path(tex_path: &Path, outdir: &Path) -> PathBuf {
     outdir.join(format!("{stem}.pdf"))
 }
 
+/// La carpeta del `.tex`, que es desde donde tienen que resolverse sus rutas.
+///
+/// El documento trae `\input{secciones/...}` y `\addplot table {datos/...}`, y esos
+/// nombres son relativos al `main.tex`. LaTeX los busca desde el directorio de trabajo
+/// del proceso, no desde el archivo: sin esto, un `xtal run` corrido desde otro lado
+/// no encuentra nada, o —peor— encuentra la carpeta `graficos/` del proyecto, que
+/// tiene las recetas en TOML y no los gráficos en LaTeX.
+fn tex_dir(tex_path: &Path) -> PathBuf {
+    tex_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// El nombre del archivo, para pasárselo al motor ya parado en su carpeta.
+fn tex_file(tex_path: &Path) -> PathBuf {
+    PathBuf::from(tex_path.file_name().unwrap_or(tex_path.as_os_str()))
+}
+
 fn compile_tectonic(tex_path: &Path, outdir: &Path) -> Result<PathBuf> {
     // V2 CLI: `tectonic -X compile <tex> --outdir <dir> --keep-logs`.
+    let outdir_abs = std::fs::canonicalize(outdir).unwrap_or_else(|_| outdir.to_path_buf());
     let output = Command::new("tectonic")
+        .current_dir(tex_dir(tex_path))
         .arg("-X")
         .arg("compile")
-        .arg(tex_path)
+        .arg(tex_file(tex_path))
         .arg("--outdir")
-        .arg(outdir)
+        .arg(&outdir_abs)
         .arg("--keep-logs")
         .output()
         .map_err(|e| CompileError::Spawn(e.to_string()))?;
@@ -98,13 +120,15 @@ fn compile_tectonic(tex_path: &Path, outdir: &Path) -> Result<PathBuf> {
 
 fn compile_pdflatex(tex_path: &Path, outdir: &Path) -> Result<PathBuf> {
     // pdflatex necesita dos pasadas para resolver el índice/refs.
+    let outdir_abs = std::fs::canonicalize(outdir).unwrap_or_else(|_| outdir.to_path_buf());
     for _ in 0..2 {
         let output = Command::new("pdflatex")
+            .current_dir(tex_dir(tex_path))
             .arg("-interaction=nonstopmode")
             .arg("-halt-on-error")
             .arg("-output-directory")
-            .arg(outdir)
-            .arg(tex_path)
+            .arg(&outdir_abs)
+            .arg(tex_file(tex_path))
             .output()
             .map_err(|e| CompileError::Spawn(e.to_string()))?;
         if !output.status.success() {

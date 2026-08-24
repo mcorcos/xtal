@@ -193,9 +193,21 @@ pub fn build_body(
 ) -> String {
     let mut body = String::new();
     for section in sections {
-        render_section(&mut body, section, 0, rendered_plots);
+        render_section(&mut body, section, 0, rendered_plots, FigureMode::Inline);
     }
     body
+}
+
+/// Cómo entra un gráfico en el cuerpo de una sección.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FigureMode {
+    /// El TikZ completo, pegado en el lugar. Documento de un solo archivo.
+    Inline,
+    /// Una llamada `\xtalGrafico{id}`, que hace el `\input` del gráfico.
+    ///
+    /// Es lo que hace legible una sección: el texto se lee como texto y el gráfico se
+    /// nombra en una línea, en vez de meter mil coordenadas en el medio de la prosa.
+    Call,
 }
 
 /// Renderiza una sección y sus subsecciones recursivamente. `depth` 0 = \section.
@@ -204,6 +216,7 @@ fn render_section(
     section: &Section,
     depth: usize,
     rendered_plots: &IndexMap<String, RenderedFigure>,
+    figures: FigureMode,
 ) {
     let cmd = match depth {
         0 => "section",
@@ -212,16 +225,30 @@ fn render_section(
     };
     out.push_str(&format!("\\{cmd}{{{}}}\n", latex_escape(&section.title)));
 
-    // Cuerpo: LaTeX que escribe el usuario, va crudo.
-    if !section.body.trim().is_empty() {
-        out.push_str(section.body.trim());
-        out.push_str("\n\n");
+    // Cuerpo: LaTeX que escribe el usuario.
+    //
+    // Si vive en un archivo propio, se trae con `\input` en vez de copiarlo. El texto
+    // queda en un solo lado —el archivo que uno edita— y el `.tex` generado no es una
+    // segunda copia que se puede desincronizar.
+    match (figures, &section.body_file) {
+        (FigureMode::Call, Some(archivo)) => {
+            out.push_str(&format!("\\input{{../{archivo}}}\n\n"));
+        }
+        _ if !section.body.trim().is_empty() => {
+            out.push_str(section.body.trim());
+            out.push_str("\n\n");
+        }
+        _ => {}
     }
 
     // Figuras de esta sección.
     for fig_id in &section.figures {
         if let Some(fig) = rendered_plots.get(fig_id) {
-            out.push_str(&figure_env(fig_id, &fig.tikz, &fig.caption, fig.wide));
+            let contenido = match figures {
+                FigureMode::Inline => fig.tikz.clone(),
+                FigureMode::Call => format!("\\xtalGrafico{{{fig_id}}}\n"),
+            };
+            out.push_str(&figure_env(fig_id, &contenido, &fig.caption, fig.wide));
         } else {
             // El gráfico no existe / no se renderizó: dejamos un aviso visible en el
             // PDF en vez de romper el documento.
@@ -233,7 +260,7 @@ fn render_section(
     }
 
     for sub in &section.subsections {
-        render_section(out, sub, depth + 1, rendered_plots);
+        render_section(out, sub, depth + 1, rendered_plots, figures);
     }
 }
 
@@ -244,11 +271,11 @@ fn render_section(
 /// Colocación `[htbp]` y no `[t]`: con `[t]` LaTeX empuja la figura al tope de la página
 /// más cercana, y terminaba apareciendo ANTES de la sección que la menciona (o sola en
 /// una página casi vacía). `[htbp]` deja que caiga donde está en el texto si entra.
-fn figure_env(id: &str, tikz: &str, caption: &str, wide: bool) -> String {
+fn figure_env(id: &str, contenido: &str, caption: &str, wide: bool) -> String {
     let env = if wide { "figure*" } else { "figure" };
     let mut f = String::new();
     f.push_str(&format!("\\begin{{{env}}}[htbp]\n\\centering\n"));
-    f.push_str(tikz);
+    f.push_str(contenido);
     f.push_str(&format!("\\caption{{{}}}\n", latex_escape(caption)));
     f.push_str(&format!("\\label{{fig:{}}}\n", id));
     f.push_str(&format!("\\end{{{env}}}\n\n"));
@@ -357,4 +384,147 @@ pub fn assemble_parts(
         body: build_body(&project.sections, &rendered),
         show_toc: show_toc(format, &project.sections),
     })
+}
+
+// ---------------------------------------------------------------------------
+// El informe partido en archivos
+// ---------------------------------------------------------------------------
+
+/// Las carpetas de la salida. Viven acá y no sueltas por el código para que cambiar
+/// una sea cambiar una línea.
+pub const DIR_DATA: &str = "datos";
+pub const DIR_PLOTS: &str = "graficos";
+
+/// La definición de `\xtalGrafico`, que va en el preámbulo.
+///
+/// Es el "llamar al gráfico desde la sección" y no hay nada más atrás: en LaTeX un
+/// comando es una función, y esta hace el `\input` del archivo del gráfico. Escribir
+/// `\xtalGrafico{bode}` en una sección alcanza.
+pub fn plot_macro() -> String {
+    let mut m = String::new();
+    m.push('\n');
+    m.push_str("% --- Traer un gráfico por su nombre ---\n");
+    m.push_str(&format!(
+        "\\newcommand{{\\xtalGrafico}}[1]{{\\input{{{DIR_PLOTS}/#1.tex}}}}\n"
+    ));
+    m
+}
+
+/// El informe partido: el documento principal más todos los archivos de al lado.
+pub struct SplitDocument {
+    /// Preámbulo, carátula y cuerpo del `main.tex`. El cuerpo son solo `\input`.
+    pub parts: DocumentParts,
+    /// Todo lo demás: ruta relativa a `salida/` → contenido.
+    pub files: IndexMap<String, String>,
+}
+
+/// Arma el informe partido en archivos.
+///
+/// La diferencia con [`assemble_parts`] es dónde termina cada cosa. Ahí sale un
+/// `.tex` solo, con las coordenadas y los ejes adentro del texto; acá sale un
+/// `main.tex` corto que se puede leer, una sección por archivo que se puede editar,
+/// un gráfico por archivo y los números en `.dat`.
+pub fn assemble_split(
+    project: &Project,
+    resolved: &ResolvedConfig,
+    theme: &Theme,
+    measurements: &IndexMap<String, Measurement>,
+    plots: &IndexMap<String, Plot>,
+) -> crate::error::Result<SplitDocument> {
+    let format = resolved.format;
+    let mut files: IndexMap<String, String> = IndexMap::new();
+
+    // 1. Los gráficos usados, con sus números en `.dat`.
+    let rendered = render_used_plots_split(
+        project,
+        plots,
+        measurements,
+        resolved.monochrome,
+        format,
+        &mut files,
+    )?;
+
+    // 2. Un archivo por gráfico, con el `tikzpicture` y nada más. Es lo que trae
+    //    `\xtalGrafico`.
+    for (id, fig) in &rendered {
+        files.insert(format!("{DIR_PLOTS}/{id}.tex"), fig.tikz.clone());
+    }
+
+    // 3. El cuerpo: el esqueleto del informe, con el texto traído por referencia.
+    //
+    //    No se genera una copia de cada sección adentro de `salida/`. El texto ya vive
+    //    en un archivo editable en la raíz del proyecto (`secciones/`), y duplicarlo
+    //    acá sería tener dos veces lo mismo con el nombre de carpeta repetido.
+    let mut body = String::new();
+    for section in &project.sections {
+        render_section(&mut body, section, 0, &rendered, FigureMode::Call);
+    }
+
+    let mut preamble = build_preamble(theme, &project.document);
+    preamble.push_str(&plot_macro());
+
+    Ok(SplitDocument {
+        parts: DocumentParts {
+            preamble,
+            cover: build_cover(project, theme, format),
+            body,
+            show_toc: show_toc(format, &project.sections),
+        },
+        files,
+    })
+}
+
+/// Como [`render_used_plots`], pero mandando los números a archivos `.dat`.
+fn render_used_plots_split(
+    project: &Project,
+    plots: &IndexMap<String, Plot>,
+    measurements: &IndexMap<String, Measurement>,
+    monochrome: bool,
+    format: DocFormat,
+    files: &mut IndexMap<String, String>,
+) -> crate::error::Result<IndexMap<String, RenderedFigure>> {
+    let mut used = IndexMap::new();
+    let mut pendientes: Vec<String> = Vec::new();
+    collect_used_ids(&project.sections, &mut pendientes);
+    for id in pendientes {
+        if used.contains_key(&id) {
+            continue;
+        }
+        let Some(plot) = plots.get(&id) else { continue };
+        let mut data = pgfplots::DataFiles {
+            dir: DIR_DATA,
+            files,
+            plot_id: &id,
+        };
+        let tikz = pgfplots::render_plot_with_data(plot, measurements, monochrome, &mut data)?;
+        used.insert(id.clone(), figure_of(plot, tikz, format));
+    }
+    Ok(used)
+}
+
+/// Los ids de gráfico que menciona el informe, en orden y con repetidos.
+fn collect_used_ids(sections: &[Section], out: &mut Vec<String>) {
+    for section in sections {
+        out.extend(section.figures.iter().cloned());
+        collect_used_ids(&section.subsections, out);
+    }
+}
+
+/// Arma la figura (caption y ancho) de un gráfico ya renderizado.
+fn figure_of(plot: &Plot, tikz: String, format: DocFormat) -> RenderedFigure {
+    let caption = plot
+        .title
+        .clone()
+        .unwrap_or_else(|| plot.id.replace(['_', '-'], " "));
+    let has_phase = plot.kind == xtal_model::PlotKind::Bode
+        && plot
+            .series
+            .iter()
+            .any(|s| s.panel == xtal_model::Panel::Phase);
+    let wide = matches!(format, DocFormat::Paper) && has_phase;
+    RenderedFigure {
+        tikz,
+        caption,
+        wide,
+    }
 }
