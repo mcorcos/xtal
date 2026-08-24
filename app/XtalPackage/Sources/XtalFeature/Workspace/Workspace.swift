@@ -56,7 +56,6 @@ public struct Workspace: View {
         }
     }
 
-    @AppStorage("xtal.modo") private var modoCrudo = Modo.editor.rawValue
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
     @AppStorage("xtal.panel.terminal") private var verTerminal = false
@@ -99,9 +98,12 @@ public struct Workspace: View {
     /// El mismo fondo que la terminal pinta por dentro, para que el aire no se note.
     private var fondoTerminal: Color { esquema == .dark ? .hex("1c1c1e") : .hex("fbfbfb") }
 
+    /// El selector de modo está sacado de la barra por ahora, así que la app siempre
+    /// abre en editor. El modo agente sigue existiendo y se llega con el override de
+    /// desarrollo (`Desarrollo.modoForzado`).
     private var modo: Modo {
         if let forzado = Desarrollo.modoForzado, let m = Modo(rawValue: forzado) { return m }
-        return Modo(rawValue: modoCrudo) ?? .editor
+        return .editor
     }
 
     public init(carpeta: URL, cerrar: @escaping () -> Void) {
@@ -257,19 +259,6 @@ public struct Workspace: View {
                 .help("Volver a la pantalla de inicio")
         }
 
-        ToolbarItem(placement: .principal) {
-            Picker("", selection: Binding(
-                get: { modo },
-                set: { modoCrudo = $0.rawValue }
-            )) {
-                ForEach(Modo.allCases) { m in
-                    Label(m.titulo, systemImage: m.icono).tag(m)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 190)
-            .help("Editor: escribís vos. Agente: le hablás a Claude.")
-        }
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {

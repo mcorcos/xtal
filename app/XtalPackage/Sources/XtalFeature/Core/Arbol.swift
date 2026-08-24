@@ -42,9 +42,9 @@ public final class Arbol {
         // La que sí arranca abierta es `salida/`, porque ahí está el `.tex`.
         let tripa: Set<String> = ["mediciones", "graficos", "esquematicos", "fuentes"]
         abiertas = Set(raiz.filter { $0.esCarpeta && !tripa.contains($0.nombre) }.map(\.url))
-        // Y se abre el `xtal.toml`: abrir un proyecto y encontrarse con el panel en
-        // blanco no le dice a nadie qué hacer. El manifiesto es el punto de partida.
-        seleccionado = raiz.first { $0.nombre == "xtal.toml" }?.url
+        // Y no se abre ningún archivo: el punto de partida es la primera sección del
+        // informe, que la elige `Secciones`. Abrir el proyecto mostrando su manifiesto
+        // es mostrar la tripa antes que el trabajo.
     }
 
     public func recargar() {
@@ -66,9 +66,15 @@ public final class Arbol {
 
     /// Lee una carpeta y sus hijas.
     ///
-    /// Se saltean los ocultos —`.git`, `.DS_Store`— y nada más. Todo lo demás se
+    /// Se saltean los ocultos —`.git`, `.DS_Store`— y el `xtal.toml`. Todo lo demás se
     /// muestra, incluido `salida/`: el `.tex` generado es justamente algo que uno
     /// quiere poder mirar cuando algo no compila.
+    ///
+    /// **El `xtal.toml` no se lista a propósito.** Es el manifiesto del informe: el
+    /// título, la institución, el formato y el texto de cada sección. Todo eso ya se
+    /// edita desde la app, y editarlo además como texto crea dos dueños del mismo
+    /// archivo — el editor con su copia en memoria y la CLI escribiendo por abajo —
+    /// que se pisan entre ellos.
     static func leer(_ dir: URL) -> [Nodo] {
         let fm = FileManager.default
         guard let contenido = try? fm.contentsOfDirectory(
@@ -77,7 +83,7 @@ public final class Arbol {
             options: [.skipsHiddenFiles]
         ) else { return [] }
 
-        var nodos: [Nodo] = contenido.map { url in
+        var nodos: [Nodo] = contenido.filter { $0.lastPathComponent != "xtal.toml" }.map { url in
             let esCarpeta = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             return Nodo(
                 url: url,
@@ -87,11 +93,8 @@ public final class Arbol {
         }
 
         // Carpetas primero y después archivos, cada grupo alfabético — el orden de
-        // cualquier explorador. Con una excepción: el `xtal.toml` va arriba de todo,
-        // porque es el archivo que describe el informe entero.
+        // cualquier explorador.
         nodos.sort { a, b in
-            if a.nombre == "xtal.toml" { return true }
-            if b.nombre == "xtal.toml" { return false }
             if a.esCarpeta != b.esCarpeta { return a.esCarpeta }
             return a.nombre.localizedStandardCompare(b.nombre) == .orderedAscending
         }

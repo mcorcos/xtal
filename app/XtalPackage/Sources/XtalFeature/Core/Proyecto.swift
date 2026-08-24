@@ -107,6 +107,9 @@ public final class Proyecto {
                 let partes = url.pathComponents.dropFirst(profundidadRaiz)
                 // `salida/` es producto del compilador, no fuente.
                 if partes.first == "salida" { continue }
+                // El `xtal.toml` no se lista: se edita desde la app, no a mano. Ver el
+                // comentario largo en `Arbol.leer`.
+                if url.lastPathComponent == "xtal.toml" { continue }
                 guard editables.contains(url.pathExtension) else { continue }
                 encontrados.append(Archivo(
                     url: url,
@@ -115,10 +118,7 @@ public final class Proyecto {
             }
         }
 
-        // El `xtal.toml` primero siempre: es el manifiesto, el archivo que uno busca.
         archivos = encontrados.sorted {
-            if $0.nombre == "xtal.toml" { return true }
-            if $1.nombre == "xtal.toml" { return false }
             if $0.grupo != $1.grupo { return $0.grupo < $1.grupo }
             return $0.nombre < $1.nombre
         }

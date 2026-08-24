@@ -12,10 +12,13 @@ public enum XtalCLI {
     /// El PATH de una app de GUI no es el de tu terminal — no pasa por el `.zshrc` — así
     /// que buscar `xtal` con `which` desde acá no alcanza. Se prueban las rutas donde de
     /// verdad queda instalado.
+    /// El orden es el mismo que el del PATH de una terminal: lo del usuario primero,
+    /// lo del sistema después. Si alguien se instaló una versión en su home, esa es la
+    /// que usa desde la consola, y la app tiene que coincidir.
     static let candidatos = [
+        NSHomeDirectory() + "/.local/bin/xtal",  // install.sh
         "/opt/homebrew/bin/xtal",           // Homebrew en Apple Silicon
         "/usr/local/bin/xtal",              // Homebrew en Intel, y el instalador
-        NSHomeDirectory() + "/.local/bin/xtal",  // install.sh
         NSHomeDirectory() + "/.cargo/bin/xtal",  // cargo install
     ]
 
