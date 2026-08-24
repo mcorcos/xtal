@@ -25,6 +25,7 @@ struct PanelAgentes: View {
     @State private var cargando = true
     @State private var trabajando: String?
     @State private var error: String?
+    @State private var agregando = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tok.S.xxl) {
@@ -46,6 +47,16 @@ struct PanelAgentes: View {
                         }
                     }
                 }
+            }
+
+            // El agente que no está en la lista. Es el "Add Agent Integration" de
+            // Supacode: salen agentes nuevos todo el tiempo y el que usa uno no tiene
+            // por qué esperar a que salga una version de Xtal para poder enchufarlo.
+            HStack(spacing: Tok.S.md) {
+                Button("Agregar agente…") { agregando = true }
+                Text("Si usás un agente que no está en la lista, decinos dónde busca sus skills.")
+                    .font(Tok.F.label)
+                    .foregroundStyle(Tok.textTertiary)
             }
 
             if let error {
@@ -76,6 +87,11 @@ struct PanelAgentes: View {
             }
         }
         .task { await refrescar() }
+        .sheet(isPresented: $agregando) {
+            HojaAgregarAgente { nombre, carpeta in
+                await agregar(nombre: nombre, carpeta: carpeta)
+            }
+        }
     }
 
     /// La línea de abajo del título: qué le falta si le falta algo, y si no, qué archivos
@@ -94,7 +110,11 @@ struct PanelAgentes: View {
                 Chip(texto: "No está", familia: Tok.gris)
             } else if a.ready {
                 Chip(texto: "Enchufado", familia: Tok.verde, icono: "checkmark")
-                Button("Quitar") { Task { await accion("uninstall", a) } }
+                // Al que agregó el usuario se lo saca de la lista entero; a los de
+                // fábrica solo se los desenchufa, porque la fila sigue existiendo.
+                Button(a.custom ? "Sacar" : "Quitar") {
+                    Task { await accion(a.custom ? "remove" : "uninstall", a) }
+                }
             } else {
                 Chip(texto: "Falta enchufarlo", familia: Tok.ambar)
                 Button("Enchufar") { Task { await accion("install", a) } }
@@ -124,6 +144,92 @@ struct PanelAgentes: View {
     }
 }
 
+extension PanelAgentes {
+    /// Suma un agente propio. La app no valida la ruta: eso lo hace la CLI, que además
+    /// es la que sabe qué error dar si la carpeta no existe.
+    fileprivate func agregar(nombre: String, carpeta: String) async {
+        do {
+            let r = try await XtalCLI.correr(["--json", "agents", "add", nombre, "--skills", carpeta])
+            if !r.ok { error = r.texto }
+        } catch {
+            self.error = error.localizedDescription
+        }
+        await refrescar()
+    }
+}
+
+/// El formulario para sumar un agente: un nombre y la carpeta donde busca sus skills.
+///
+/// Son los dos únicos datos que hacen falta, y el segundo es el que la gente no sabe de
+/// memoria: por eso hay un botón para elegirla y un ejemplo escrito abajo.
+private struct HojaAgregarAgente: View {
+    let agregar: (String, String) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var nombre = ""
+    @State private var carpeta = ""
+    @State private var trabajando = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tok.S.lg) {
+            Text("Agregar un agente")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Tok.textPrimary)
+
+            Text("Xtal le va a dejar su skill adentro de esa carpeta, en `xtal/SKILL.md`. Es lo que hace que el agente sepa que Xtal existe. La carpeta la dice la documentación de tu agente — suele ser algo como ~/.mi-agente/skills.")
+                .font(Tok.F.label)
+                .foregroundStyle(Tok.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: Tok.S.xs) {
+                Text("Nombre").font(Tok.F.label).foregroundStyle(Tok.textSecondary)
+                TextField("Mi agente", text: $nombre)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: Tok.S.xs) {
+                Text("Carpeta de skills").font(Tok.F.label).foregroundStyle(Tok.textSecondary)
+                HStack(spacing: Tok.S.sm) {
+                    TextField("~/.mi-agente/skills", text: $carpeta)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Elegir…") { elegirCarpeta() }
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancelar") { dismiss() }
+                Button("Agregar") {
+                    trabajando = true
+                    Task {
+                        await agregar(nombre, carpeta)
+                        trabajando = false
+                        dismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(nombre.isEmpty || carpeta.isEmpty || trabajando)
+            }
+        }
+        .padding(Tok.S.xxl)
+        .frame(width: 460)
+        .background(Tok.bgApp)
+    }
+
+    private func elegirCarpeta() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        // Las carpetas de los agentes empiezan con punto y el panel las esconde por
+        // default: sin esto, la carpeta que se busca no se puede ni ver.
+        panel.showsHiddenFiles = true
+        if panel.runModal() == .OK, let url = panel.url {
+            carpeta = url.path
+        }
+    }
+}
+
 // MARK: - Lo que devuelve `xtal --json agents`
 
 struct RespuestaAgentes: Decodable, Sendable {
@@ -141,4 +247,6 @@ struct Agente: Decodable, Sendable, Identifiable {
     let ready: Bool
     /// Qué le falta, en castellano. `nil` si no le falta nada.
     let missing: String?
+    /// `true` si lo agregó el usuario: ese se saca de la lista, no se desenchufa.
+    let custom: Bool
 }

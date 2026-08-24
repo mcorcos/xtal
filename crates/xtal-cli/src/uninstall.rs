@@ -47,7 +47,7 @@ pub fn cmd_uninstall(args: UninstallArgs) -> Result<()> {
     );
 
     // --- Qué hay para sacar ---
-    let clientes: Vec<McpClientArg> = crate::agents::AGENTES
+    let clientes: Vec<McpClientArg> = crate::agents::todos()
         .iter()
         .filter_map(|a| a.mcp)
         .filter(|c| {
@@ -166,7 +166,7 @@ fn a_borrar() -> Vec<Item> {
 
     // Un skill por agente. Sale de la tabla de `agents.rs`: si mañana se suma un
     // agente, desinstalar lo saca solo, sin que nadie se acuerde de tocar este archivo.
-    for agente in crate::agents::AGENTES {
+    for agente in crate::agents::todos() {
         let Some(path) = agente.skill_path() else {
             continue;
         };

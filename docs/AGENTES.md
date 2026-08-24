@@ -42,6 +42,32 @@ Hoy están: Claude Code, Claude Desktop, Codex, GitHub Copilot CLI y opencode.
 No inventamos rutas. Un skill escrito en una carpeta que el agente no lee es basura en el
 home de alguien: si no sabemos dónde los busca, ese agente no va en la tabla.
 
+### Traé el tuyo
+
+Sale un agente nuevo cada dos meses, y el que lo usa no tiene por qué esperar a que salga
+una version de Xtal. Si sabe en qué carpeta busca los skills, lo suma él:
+
+```bash
+xtal agents add "Mi agente" --skills ~/.mi-agente/skills
+xtal agents remove --agent mi-agente
+```
+
+Queda guardado en `~/.config/xtal/agents.toml` y aparece en la lista como uno más, con la
+marca «lo agregaste vos». En la app es el botón **Agregar agente…**, que es el
+`Add Agent Integration` de Supacode.
+
+Dos reglas:
+
+- **La carpeta tiene que existir.** Es la única validación posible —no sabemos nada más de
+  ese agente— y ataja el error de verdad: un typo en la ruta deja el skill escrito donde
+  nadie lo lee, y desde afuera se ve igual que si anduviera.
+- **A un agente propio solo se le deja el skill.** No sabemos escribir la config del MCP
+  de un programa que no conocemos, y no vamos a adivinarla.
+
+Un id repetido pisa al de fábrica: si alguien sabe mejor que nosotros dónde busca los
+skills su Codex, manda él. Y `remove` borra también el skill — dejarlo en una carpeta que
+Xtal ya no mira sería dejar basura.
+
 ---
 
 ## Los comandos
@@ -52,6 +78,8 @@ xtal agents install --all                # enchufa todos los que estén instalad
 xtal agents install --agent codex        # uno solo
 xtal agents install --agent codex --no-mcp   # solo el skill, sin tocar config ajena
 xtal agents uninstall --agent codex      # saca el skill y desregistra el MCP
+xtal agents add "Mi agente" --skills ~/.mi-agente/skills   # uno que Xtal no conoce
+xtal agents remove --agent mi-agente     # lo saca de la lista, y borra su skill
 ```
 
 Todo acepta `--json`, que es lo que consume el panel de la app.
@@ -150,7 +178,8 @@ agente, desinstalar lo saca solo.
 
 | Archivo | Qué tiene |
 |---|---|
-| `crates/xtal-cli/src/agents.rs` | La tabla de agentes, el estado, instalar/desinstalar, `xtal agents` |
+| `crates/xtal-cli/src/agents.rs` | La tabla de agentes, el estado, instalar/desinstalar/agregar, `xtal agents` |
+| `~/.config/xtal/agents.toml` | Los agentes que agregó el usuario (no lo escribe nadie a mano) |
 | `crates/xtal-cli/src/ai.rs` | La primera corrida: config global + sync de los skills |
 | `crates/xtal-cli/src/inventory.rs` | El orden de la carpeta y `xtal scan` |
 | `crates/xtal-cli/templates/skill.md` | El skill, uno solo para todos los agentes |

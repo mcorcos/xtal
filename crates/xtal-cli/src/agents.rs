@@ -13,8 +13,8 @@
 //!
 //! ## La regla de oro: decir qué se toca
 //!
-//! Cada fila lleva un campo `toca` con los archivos exactos que Xtal escribe en ese
-//! agente, y se imprime **antes** de escribir nada. Estamos tocando la config de otro
+//! Cada agente sabe decir (`toca()`) los archivos exactos que Xtal le escribe, y eso se
+//! imprime **antes** de escribir nada. Estamos tocando la config de otro
 //! programa; que el usuario tenga que adivinar qué le vamos a modificar no es una
 //! opción. Es lo mismo que hace Supacode en su panel de integraciones, y por lo mismo.
 //!
@@ -34,118 +34,255 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use console::style;
 
-use crate::cli::{AgentsArgs, AgentsCmd, McpClientArg};
+use crate::cli::{AgentsAddArgs, AgentsArgs, AgentsCmd, AgentsRemoveArgs, McpClientArg};
 
 /// El skill que los agentes descubren solos. Uno solo para todos: la herramienta es la
 /// misma, y mantener una variante por agente sería mantener N documentaciones.
 pub const SKILL: &str = include_str!("../templates/skill.md");
 
-/// Dónde vive la carpeta de configuración de un agente.
+/// Dónde vive una carpeta de un agente.
 ///
 /// La mayoría usa `~/.algo`; las apps de escritorio de macOS usan
-/// `~/Library/Application Support/…`. La distinción importa para detectarlos.
-#[derive(Debug, Clone, Copy)]
+/// `~/Library/Application Support/…`; y un agente que agregó el usuario puede vivir en
+/// cualquier lado. La distinción importa para detectarlos.
+#[derive(Debug, Clone)]
 enum Ubicacion {
     /// Relativa al home del usuario.
-    Home(&'static str),
+    Home(String),
     /// Relativa a la carpeta de config del sistema operativo.
-    Config(&'static str),
+    Config(String),
+    /// Una ruta absoluta, tal cual la escribió el usuario.
+    Absoluta(PathBuf),
 }
 
 impl Ubicacion {
-    fn ruta(self) -> Option<PathBuf> {
-        let dirs = directories::BaseDirs::new()?;
-        Some(match self {
-            Ubicacion::Home(rel) => dirs.home_dir().join(rel),
-            Ubicacion::Config(rel) => dirs.config_dir().join(rel),
-        })
+    fn ruta(&self) -> Option<PathBuf> {
+        match self {
+            Ubicacion::Absoluta(p) => Some(p.clone()),
+            Ubicacion::Home(rel) => Some(directories::BaseDirs::new()?.home_dir().join(rel)),
+            Ubicacion::Config(rel) => Some(directories::BaseDirs::new()?.config_dir().join(rel)),
+        }
+    }
+
+    /// Cómo se escribe para mostrarla: `~/…` si cuelga del home, la ruta si no.
+    fn legible(&self) -> String {
+        match self {
+            Ubicacion::Home(rel) => format!("~/{rel}"),
+            _ => self
+                .ruta()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Lee una ruta escrita por el usuario. `~/x` cuelga del home; el resto es absoluta.
+    fn desde_usuario(texto: &str) -> Ubicacion {
+        match texto.strip_prefix("~/") {
+            Some(rel) => Ubicacion::Home(rel.to_string()),
+            None => Ubicacion::Absoluta(PathBuf::from(texto)),
+        }
     }
 }
 
 /// Un agente de IA al que Xtal se puede enchufar.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Agente {
     /// Id estable para la CLI y el JSON (`xtal agents install --agent claude-code`).
-    pub id: &'static str,
+    pub id: String,
     /// El nombre con el que lo conoce el usuario.
-    pub label: &'static str,
-    /// Qué archivos toca Xtal en este agente. Se imprime antes de escribir.
-    pub toca: &'static str,
+    pub label: String,
     /// Su carpeta de configuración. Que exista es la señal de que está instalado.
     dir: Ubicacion,
     /// Su comando, si tiene uno. Segunda forma de detectarlo: alguien puede tenerlo
     /// instalado y no haberlo corrido nunca, así que la carpeta todavía no existe.
-    bin: Option<&'static str>,
+    bin: Option<String>,
     /// Dónde van los skills, si los lee. `None` = este agente no tiene skills.
     skills: Option<Ubicacion>,
     /// Cómo registrarle el MCP, si sabemos escribir su config.
     pub mcp: Option<McpClientArg>,
+    /// `true` si lo agregó el usuario con `xtal agents add`.
+    pub propio: bool,
 }
 
-/// La tabla. Para sumar un agente: una fila más, nada más.
+/// Un agente que agregó el usuario, tal como se guarda en `agents.toml`.
+///
+/// Existe porque la tabla de abajo no puede saberlo todo: salen agentes nuevos todo el
+/// tiempo, y el que usa uno que no está no tiene por qué esperar a que salga una version
+/// de Xtal. Si sabe dónde busca los skills su agente, lo enchufa hoy.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgentePropio {
+    pub id: String,
+    pub label: String,
+    /// Carpeta donde el agente busca sus skills. Admite `~/`.
+    pub skills: String,
+    /// Su comando, si tiene. Sirve para detectarlo cuando la carpeta todavía no existe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bin: Option<String>,
+}
+
+/// El archivo donde viven los agentes que agregó el usuario.
+///
+/// Va aparte del `config.toml` a propósito: ese archivo es la configuración de los
+/// documentos (theme, formato) y se copia entre máquinas; esto es qué programas tenés
+/// instalados en ESTA, que es otra cosa.
+pub fn archivo_propios() -> Option<PathBuf> {
+    Some(xtal_config::paths::config_dir()?.join("agents.toml"))
+}
+
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct ArchivoPropios {
+    #[serde(default, rename = "agent")]
+    agents: Vec<AgentePropio>,
+}
+
+/// Los agentes que agregó el usuario. Si el archivo está roto, se ignora: no vamos a
+/// dejar a alguien sin poder correr `xtal` por un TOML mal escrito a mano.
+pub fn propios() -> Vec<AgentePropio> {
+    let Some(path) = archivo_propios() else {
+        return Vec::new();
+    };
+    let Ok(texto) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    toml::from_str::<ArchivoPropios>(&texto)
+        .map(|a| a.agents)
+        .unwrap_or_default()
+}
+
+fn guardar_propios(lista: &[AgentePropio]) -> Result<PathBuf> {
+    let path = archivo_propios().ok_or_else(|| anyhow::anyhow!("no pude resolver el home"))?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let texto = toml::to_string_pretty(&ArchivoPropios {
+        agents: lista.to_vec(),
+    })?;
+    std::fs::write(&path, texto).with_context(|| format!("escribiendo {}", path.display()))?;
+    Ok(path)
+}
+
+impl AgentePropio {
+    fn a_agente(&self) -> Agente {
+        let skills = Ubicacion::desde_usuario(&self.skills);
+        Agente {
+            id: self.id.clone(),
+            label: self.label.clone(),
+            // La carpeta de skills es también la señal de que el agente está: no
+            // sabemos nada más de él. Si además nos dieron un comando, mejor.
+            dir: skills.clone(),
+            bin: self.bin.clone(),
+            skills: Some(skills),
+            // No sabemos escribir la config de un agente que no conocemos. El skill sí,
+            // porque el usuario nos dijo dónde va.
+            mcp: None,
+            propio: true,
+        }
+    }
+}
+
+/// Los agentes que Xtal conoce de fábrica.
 ///
 /// Están los que de verdad sabemos manejar. No inventamos rutas: un skill escrito en
-/// una carpeta que el agente no lee es basura en el home de alguien.
-pub const AGENTES: &[Agente] = &[
-    Agente {
-        id: "claude-code",
-        label: "Claude Code",
-        toca: "skill en ~/.claude/skills/xtal/ y el server MCP en ~/.claude.json",
-        dir: Ubicacion::Home(".claude"),
-        bin: Some("claude"),
-        skills: Some(Ubicacion::Home(".claude/skills")),
-        mcp: Some(McpClientArg::ClaudeCode),
-    },
-    Agente {
-        id: "claude-desktop",
-        label: "Claude Desktop",
-        // No lee skills: la app de escritorio no tiene bash, y todo lo que sabe de Xtal
-        // se lo dan las instructions del server MCP.
-        toca: "el server MCP en claude_desktop_config.json",
-        dir: Ubicacion::Config("Claude"),
-        bin: None,
-        skills: None,
-        mcp: Some(McpClientArg::ClaudeDesktop),
-    },
-    Agente {
-        id: "codex",
-        label: "Codex",
-        toca: "skill en ~/.codex/skills/xtal/ y el server MCP en ~/.codex/config.toml",
-        dir: Ubicacion::Home(".codex"),
-        bin: Some("codex"),
-        skills: Some(Ubicacion::Home(".codex/skills")),
-        mcp: Some(McpClientArg::Codex),
-    },
-    Agente {
-        id: "copilot",
-        label: "GitHub Copilot CLI",
-        toca: "skill en ~/.copilot/skills/xtal/",
-        dir: Ubicacion::Home(".copilot"),
-        bin: Some("copilot"),
-        skills: Some(Ubicacion::Home(".copilot/skills")),
-        // Todavía no sabemos escribirle la config del MCP. Con el skill y bash le
-        // alcanza: la CLI es la herramienta, el MCP es la comodidad.
-        mcp: None,
-    },
-    Agente {
-        id: "opencode",
-        label: "opencode",
-        toca: "skill en ~/.config/opencode/skills/xtal/",
-        dir: Ubicacion::Home(".config/opencode"),
-        bin: Some("opencode"),
-        skills: Some(Ubicacion::Home(".config/opencode/skills")),
-        mcp: None,
-    },
-];
+/// una carpeta que el agente no lee es basura en el home de alguien. Para el que no
+/// está, existe `xtal agents add`.
+fn de_fabrica() -> Vec<Agente> {
+    fn agente(
+        id: &str,
+        label: &str,
+        dir: Ubicacion,
+        bin: Option<&str>,
+        skills: Option<Ubicacion>,
+        mcp: Option<McpClientArg>,
+    ) -> Agente {
+        Agente {
+            id: id.to_string(),
+            label: label.to_string(),
+            dir,
+            bin: bin.map(str::to_string),
+            skills,
+            mcp,
+            propio: false,
+        }
+    }
+
+    vec![
+        agente(
+            "claude-code",
+            "Claude Code",
+            Ubicacion::Home(".claude".into()),
+            Some("claude"),
+            Some(Ubicacion::Home(".claude/skills".into())),
+            Some(McpClientArg::ClaudeCode),
+        ),
+        // Claude Desktop no lee skills: la app de escritorio no tiene bash, y todo lo
+        // que sabe de Xtal se lo dan las instructions del server MCP.
+        agente(
+            "claude-desktop",
+            "Claude Desktop",
+            Ubicacion::Config("Claude".into()),
+            None,
+            None,
+            Some(McpClientArg::ClaudeDesktop),
+        ),
+        agente(
+            "codex",
+            "Codex",
+            Ubicacion::Home(".codex".into()),
+            Some("codex"),
+            Some(Ubicacion::Home(".codex/skills".into())),
+            Some(McpClientArg::Codex),
+        ),
+        // De Copilot y opencode todavía no sabemos escribir la config del MCP. Con el
+        // skill y bash les alcanza: la CLI es la herramienta, el MCP es la comodidad.
+        agente(
+            "copilot",
+            "GitHub Copilot CLI",
+            Ubicacion::Home(".copilot".into()),
+            Some("copilot"),
+            Some(Ubicacion::Home(".copilot/skills".into())),
+            None,
+        ),
+        agente(
+            "opencode",
+            "opencode",
+            Ubicacion::Home(".config/opencode".into()),
+            Some("opencode"),
+            Some(Ubicacion::Home(".config/opencode/skills".into())),
+            None,
+        ),
+    ]
+}
+
+/// La tabla completa: los de fábrica más los que agregó el usuario.
+///
+/// Es la única definición que hay. La recorren `xtal agents`, `setup`, `doctor` y
+/// `uninstall`; agregar un agente es agregar una fila, acá o en `agents.toml`.
+pub fn todos() -> Vec<Agente> {
+    mezclar(de_fabrica(), propios())
+}
+
+/// Junta las dos listas. Aparte para poder testearla sin tocar el home.
+fn mezclar(mut base: Vec<Agente>, propios: Vec<AgentePropio>) -> Vec<Agente> {
+    for propio in propios {
+        // Un id repetido pisa al de fábrica: si alguien sabe mejor que nosotros dónde
+        // busca los skills su Codex, manda él.
+        let nuevo = propio.a_agente();
+        match base.iter().position(|a| a.id == nuevo.id) {
+            Some(i) => base[i] = nuevo,
+            None => base.push(nuevo),
+        }
+    }
+    base
+}
 
 /// Busca un agente por su id.
-pub fn buscar(id: &str) -> Option<&'static Agente> {
-    AGENTES.iter().find(|a| a.id == id)
+pub fn buscar(id: &str) -> Option<Agente> {
+    todos().into_iter().find(|a| a.id == id)
 }
 
 /// Los agentes que están instalados en esta máquina.
-pub fn presentes() -> Vec<&'static Agente> {
-    AGENTES.iter().filter(|a| a.presente()).collect()
+pub fn presentes() -> Vec<Agente> {
+    todos().into_iter().filter(|a| a.presente()).collect()
 }
 
 /// En qué estado está el skill de un agente.
@@ -206,7 +343,7 @@ impl McpState {
 /// La foto completa de un agente: si está, y cómo quedó enchufado.
 #[derive(Debug)]
 pub struct Estado {
-    pub agente: &'static Agente,
+    pub agente: Agente,
     pub presente: bool,
     pub skill: SkillState,
     pub skill_path: Option<PathBuf>,
@@ -245,20 +382,49 @@ impl Estado {
 }
 
 impl Agente {
+    /// Qué archivos suyos le toca Xtal, en una línea.
+    ///
+    /// **Es la regla de oro del módulo**: estamos escribiendo en la config de otro
+    /// programa, y el usuario tiene que poder leer qué le vamos a modificar antes de que
+    /// haya nada que apretar. Se arma de las mismas rutas que se usan para escribir, no
+    /// de un texto aparte: un texto aparte se desactualiza y miente.
+    pub fn toca(&self) -> String {
+        let skill = self
+            .skills
+            .as_ref()
+            .map(|u| format!("skill en {}/xtal/", u.legible()));
+        let mcp = self.mcp.map(|c| {
+            format!(
+                "el server MCP en {}",
+                match c {
+                    McpClientArg::ClaudeCode => "~/.claude.json",
+                    McpClientArg::ClaudeDesktop => "claude_desktop_config.json",
+                    McpClientArg::Codex => "~/.codex/config.toml",
+                }
+            )
+        });
+        match (skill, mcp) {
+            (Some(s), Some(m)) => format!("{s} y {m}"),
+            (Some(s), None) => s,
+            (None, Some(m)) => m,
+            (None, None) => "nada: no sabemos dónde escribirle".to_string(),
+        }
+    }
+
     /// ¿Está instalado en esta máquina?
     pub fn presente(&self) -> bool {
         if self.dir.ruta().is_some_and(|p| p.is_dir()) {
             return true;
         }
-        self.bin.is_some_and(|b| which(b).is_some())
+        self.bin.as_deref().is_some_and(|b| which(b).is_some())
     }
 
     /// Dónde iría —o dónde está— nuestro skill en este agente.
     pub fn skill_path(&self) -> Option<PathBuf> {
-        Some(self.skills?.ruta()?.join("xtal").join("SKILL.md"))
+        Some(self.skills.as_ref()?.ruta()?.join("xtal").join("SKILL.md"))
     }
 
-    pub fn estado(&'static self) -> Estado {
+    pub fn estado(&self) -> Estado {
         let presente = self.presente();
         let skill_path = self.skill_path();
 
@@ -279,7 +445,7 @@ impl Agente {
         };
 
         Estado {
-            agente: self,
+            agente: self.clone(),
             presente,
             skill,
             skill_path,
@@ -424,11 +590,147 @@ pub fn cmd_agents(args: AgentsArgs, json: bool) -> Result<()> {
         None => listar(json),
         Some(AgentsCmd::Install(a)) => instalar(a.agent, a.all, a.no_mcp, json),
         Some(AgentsCmd::Uninstall(a)) => quitar(a.agent, a.all, json),
+        Some(AgentsCmd::Add(a)) => agregar(a, json),
+        Some(AgentsCmd::Remove(a)) => sacar(a, json),
     }
 }
 
+/// `xtal agents add` — sumar un agente que Xtal no conoce.
+///
+/// El caso real: sale un agente nuevo cada dos meses, y el que lo usa no tiene por qué
+/// esperar a que salga una version de Xtal para poder enchufarlo. Si sabe en qué carpeta
+/// busca los skills, con eso alcanza.
+///
+/// Lo único que Xtal hace con un agente propio es dejarle el skill: no sabemos escribir
+/// la config del MCP de un programa que no conocemos.
+fn agregar(a: AgentsAddArgs, json: bool) -> Result<()> {
+    let id = a.id.unwrap_or_else(|| slug(&a.label));
+    if id.is_empty() {
+        anyhow::bail!("el nombre no da ningún id usable; pasá `--id` a mano");
+    }
+
+    let nuevo = AgentePropio {
+        id: id.clone(),
+        label: a.label,
+        skills: a.skills,
+        bin: a.bin,
+    };
+
+    // La carpeta tiene que existir. Es la única validación posible —no sabemos nada más
+    // de este agente— y ataja el error real: un typo en la ruta deja el skill escrito en
+    // una carpeta que nadie lee, y desde afuera se ve igual que si anduviera.
+    let agente = nuevo.a_agente();
+    let carpeta = agente
+        .skills
+        .as_ref()
+        .and_then(|u| u.ruta())
+        .ok_or_else(|| anyhow::anyhow!("no pude resolver la carpeta de skills"))?;
+    if !carpeta.is_dir() {
+        anyhow::bail!(
+            "{} no existe. Creála primero, o revisá la ruta: si está mal, el skill queda escrito donde nadie lo lee.",
+            carpeta.display()
+        );
+    }
+
+    let mut lista = propios();
+    match lista.iter().position(|p| p.id == id) {
+        Some(i) => lista[i] = nuevo,
+        None => lista.push(nuevo),
+    }
+    let archivo = guardar_propios(&lista)?;
+
+    // Se agrega y se enchufa en el mismo paso: agregarlo sin dejarle el skill no hace
+    // nada por nadie.
+    let skill = agente.instalar_skill()?;
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "added": id,
+                "file": archivo.display().to_string(),
+                "skill": skill.as_ref().map(|p| p.display().to_string()),
+            })
+        );
+        return Ok(());
+    }
+
+    println!();
+    println!(
+        "  {} {} quedó en la lista",
+        style("✓").green().bold(),
+        style(&agente.label).bold()
+    );
+    println!(
+        "      {}",
+        style(format!("guardado en {}", archivo.display())).dim()
+    );
+    if let Some(path) = skill {
+        println!(
+            "      {}",
+            style(format!("skill → {}", path.display())).dim()
+        );
+    }
+    println!();
+    Ok(())
+}
+
+/// `xtal agents remove` — sacar de la lista un agente propio.
+///
+/// Le borra el skill de paso: dejarlo escrito en una carpeta que Xtal ya no mira sería
+/// dejar basura en el home de alguien.
+fn sacar(a: AgentsRemoveArgs, json: bool) -> Result<()> {
+    let lista = propios();
+    if !lista.iter().any(|p| p.id == a.agent) {
+        anyhow::bail!(
+            "'{}' no es un agente agregado por vos. Los de fábrica no salen de la lista: se desenchufan con `xtal agents uninstall --agent {}`.",
+            a.agent,
+            a.agent
+        );
+    }
+
+    let acciones = match buscar(&a.agent) {
+        Some(agente) => agente.desinstalar()?,
+        None => Vec::new(),
+    };
+    let quedan: Vec<AgentePropio> = lista.into_iter().filter(|p| p.id != a.agent).collect();
+    guardar_propios(&quedan)?;
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({ "removed": a.agent, "actions": acciones })
+        );
+        return Ok(());
+    }
+    println!();
+    println!(
+        "  {} {} salió de la lista",
+        style("✓").green().bold(),
+        style(&a.agent).bold()
+    );
+    for accion in &acciones {
+        println!("      {}", style(accion).dim());
+    }
+    println!();
+    Ok(())
+}
+
+/// El nombre en minúsculas, sin espacios ni símbolos: `Mi Agente` → `mi-agente`.
+fn slug(texto: &str) -> String {
+    let mut out = String::new();
+    for c in texto.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
 fn estados() -> Vec<Estado> {
-    AGENTES.iter().map(|a| a.estado()).collect()
+    todos().iter().map(|a| a.estado()).collect()
 }
 
 fn listar(json: bool) -> Result<()> {
@@ -439,13 +741,14 @@ fn listar(json: bool) -> Result<()> {
             .iter()
             .map(|e| {
                 serde_json::json!({
-                    "id": e.agente.id,
-                    "label": e.agente.label,
-                    "touches": e.agente.toca,
+                    "id": &e.agente.id,
+                    "label": &e.agente.label,
+                    "touches": e.agente.toca(),
                     "installed": e.presente,
                     "skill": e.skill.clave(),
                     "skill_path": e.skill_path.as_ref().map(|p| p.display().to_string()),
                     "mcp": e.mcp.clave(),
+                    "custom": e.agente.propio,
                     "ready": e.listo(),
                     "missing": e.falta(),
                 })
@@ -476,12 +779,17 @@ fn listar(json: bool) -> Result<()> {
             style("falta enchufarlo".to_string()).yellow()
         };
         println!(
-            "  {} {:<22} {}",
+            "  {} {:<22} {}{}",
             punto(e),
-            style(e.agente.label).bold(),
-            chip
+            style(&e.agente.label).bold(),
+            chip,
+            if e.agente.propio {
+                style("  · lo agregaste vos").dim().to_string()
+            } else {
+                String::new()
+            }
         );
-        println!("      {}", style(e.agente.toca).dim());
+        println!("      {}", style(e.agente.toca()).dim());
         if let Some(falta) = e.falta() {
             println!("      {} {}", style("→").dim(), style(falta).yellow());
         }
@@ -501,6 +809,14 @@ fn listar(json: bool) -> Result<()> {
             style("xtal agents install --all  para enchufar los que faltan").cyan()
         );
     }
+    // El agente que no está en la lista también se puede enchufar: alcanza con saber
+    // dónde busca sus skills.
+    println!(
+        "  {} {}",
+        style("→").dim(),
+        style("xtal agents add \"Mi agente\" --skills ~/.mi-agente/skills   para uno que no esté")
+            .dim()
+    );
     println!();
     Ok(())
 }
@@ -531,8 +847,8 @@ fn instalar(agent: Option<String>, all: bool, no_mcp: bool, json: bool) -> Resul
         // Se dice qué se va a tocar antes de tocarlo. Es config de otro programa.
         if !json {
             println!();
-            println!("  {} {}", style("·").dim(), style(agente.label).bold());
-            println!("      {}", style(agente.toca).dim());
+            println!("  {} {}", style("·").dim(), style(&agente.label).bold());
+            println!("      {}", style(agente.toca()).dim());
         }
 
         match agente.instalar_skill() {
@@ -556,7 +872,7 @@ fn instalar(agent: Option<String>, all: bool, no_mcp: bool, json: bool) -> Resul
                 println!("      {} {}", style("✓").green(), style(a).dim());
             }
         }
-        hechos.push(serde_json::json!({ "id": agente.id, "actions": acciones }));
+        hechos.push(serde_json::json!({ "id": &agente.id, "actions": acciones }));
     }
 
     if json {
@@ -581,7 +897,7 @@ fn quitar(agent: Option<String>, all: bool, json: bool) -> Result<()> {
         let acciones = agente.desinstalar().unwrap_or_else(|e| vec![e.to_string()]);
         if !json {
             println!();
-            println!("  {} {}", style("·").dim(), style(agente.label).bold());
+            println!("  {} {}", style("·").dim(), style(&agente.label).bold());
             if acciones.is_empty() {
                 println!("      {}", style("no había nada instalado").dim());
             }
@@ -589,7 +905,7 @@ fn quitar(agent: Option<String>, all: bool, json: bool) -> Result<()> {
                 println!("      {} {}", style("✓").green(), style(a).dim());
             }
         }
-        hechos.push(serde_json::json!({ "id": agente.id, "actions": acciones }));
+        hechos.push(serde_json::json!({ "id": &agente.id, "actions": acciones }));
     }
 
     if json {
@@ -601,12 +917,16 @@ fn quitar(agent: Option<String>, all: bool, json: bool) -> Result<()> {
 }
 
 /// A qué agentes aplica el comando: al que pidieron, o a todos los que están.
-fn elegir(agent: Option<String>, all: bool) -> Result<Vec<&'static Agente>> {
+fn elegir(agent: Option<String>, all: bool) -> Result<Vec<Agente>> {
     if let Some(id) = agent {
         let agente = buscar(&id).ok_or_else(|| {
             anyhow::anyhow!(
                 "no conozco el agente '{id}'. Los que hay: {}",
-                AGENTES.iter().map(|a| a.id).collect::<Vec<_>>().join(", ")
+                todos()
+                    .iter()
+                    .map(|a| a.id.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         })?;
         return Ok(vec![agente]);
@@ -666,7 +986,7 @@ mod tests {
     fn los_ids_de_los_agentes_son_unicos_y_estables() {
         // Los usa la app y el `--agent` de la CLI: un duplicado haría que `buscar`
         // devuelva cualquiera de los dos.
-        let mut ids: Vec<&str> = AGENTES.iter().map(|a| a.id).collect();
+        let mut ids: Vec<String> = de_fabrica().iter().map(|a| a.id.clone()).collect();
         let total = ids.len();
         ids.sort_unstable();
         ids.dedup();
@@ -679,8 +999,8 @@ mod tests {
     fn cada_agente_dice_que_archivos_toca() {
         // La regla de oro del módulo: no se escribe en la config de otro programa sin
         // decir antes qué se va a tocar.
-        for a in AGENTES {
-            assert!(!a.toca.is_empty(), "{} no dice qué toca", a.id);
+        for a in de_fabrica() {
+            assert!(!a.toca().is_empty(), "{} no dice qué toca", a.id);
         }
     }
 
@@ -690,6 +1010,64 @@ mod tests {
         // arregle algo que no existe.
         let desktop = buscar("claude-desktop").unwrap();
         assert!(desktop.skill_path().is_none());
+    }
+
+    #[test]
+    fn el_slug_sale_del_nombre() {
+        assert_eq!(slug("Mi Agente"), "mi-agente");
+        assert_eq!(slug("  Raro!!  ¿che?  "), "raro-che");
+        // Un nombre que no deja ninguna letra ASCII no da id: el comando pide `--id`
+        // en vez de guardar una fila con id vacío, que después no se puede sacar.
+        assert_eq!(slug("¿?¡!"), "");
+    }
+
+    #[test]
+    fn un_agente_propio_se_suma_y_puede_pisar_al_de_fabrica() {
+        let propios = vec![
+            AgentePropio {
+                id: "mi-agente".into(),
+                label: "Mi Agente".into(),
+                skills: "~/.mi-agente/skills".into(),
+                bin: None,
+            },
+            // Mismo id que uno de fábrica: manda el del usuario. Es a propósito — si
+            // sabe mejor que nosotros dónde su Codex busca los skills, es su máquina.
+            AgentePropio {
+                id: "codex".into(),
+                label: "Codex mío".into(),
+                skills: "~/.otra/skills".into(),
+                bin: None,
+            },
+        ];
+        let lista = mezclar(de_fabrica(), propios);
+
+        let codex = lista.iter().find(|a| a.id == "codex").unwrap();
+        assert_eq!(codex.label, "Codex mío");
+        assert!(codex.propio);
+        assert_eq!(lista.iter().filter(|a| a.id == "codex").count(), 1);
+
+        let mio = lista.iter().find(|a| a.id == "mi-agente").unwrap();
+        assert!(mio.toca().contains("~/.mi-agente/skills/xtal/"));
+        // De un agente que no conocemos no sabemos escribir la config del MCP.
+        assert!(mio.mcp.is_none());
+    }
+
+    #[test]
+    fn una_ruta_con_tilde_cuelga_del_home() {
+        // `~/x` tiene que resolver contra el home y mostrarse como `~/x`; una ruta
+        // absoluta se guarda tal cual.
+        assert!(matches!(
+            Ubicacion::desde_usuario("~/.mi-agente/skills"),
+            Ubicacion::Home(_)
+        ));
+        assert_eq!(
+            Ubicacion::desde_usuario("~/.mi-agente/skills").legible(),
+            "~/.mi-agente/skills"
+        );
+        assert!(matches!(
+            Ubicacion::desde_usuario("/opt/agente/skills"),
+            Ubicacion::Absoluta(_)
+        ));
     }
 
     #[test]

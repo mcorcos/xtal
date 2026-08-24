@@ -215,6 +215,13 @@ que corre `xtal agents --json`.
   home de alguien. Las de la tabla salen de las que instala Supacode.
 - Un MCP **sin registrar** no cuenta como roto (en un agente con bash es una comodidad);
   uno que apunta a un binario muerto sí, porque falla en silencio.
+- **`xtal agents add "Mi agente" --skills <carpeta>`** suma un agente que la tabla no
+  conoce (el `Add Agent Integration` de Supacode; en la app, el botón «Agregar agente…»).
+  Se guarda en `~/.config/xtal/agents.toml`, aparte del `config.toml` a propósito: ese es
+  la config de los documentos y se copia entre máquinas, esto es qué programas tenés en
+  ESTA. La carpeta **tiene que existir** —única validación posible— porque un typo deja
+  el skill donde nadie lo lee y se ve igual que si anduviera. A un agente propio solo se
+  le deja el skill: no sabemos escribir la config del MCP de un programa que no conocemos.
 
 ### El orden de la carpeta — HECHO (2026-08-23), pedido de Manu
 El agente sabía crear cosas pero no qué hacer con lo que ya estaba en la carpeta.
@@ -285,7 +292,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
-`example` · `update` · `setup` · `agents [install|uninstall]` · `uninstall` ·
+`example` · `update` · `setup` · `agents [install|uninstall|add|remove]` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)

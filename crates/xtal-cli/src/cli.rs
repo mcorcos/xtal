@@ -623,6 +623,34 @@ pub enum AgentsCmd {
     /// Saca el skill y el registro del MCP de uno o de todos los agentes.
     /// No toca nada más de la config del agente.
     Uninstall(AgentsUninstallArgs),
+    /// Suma un agente que Xtal todavía no conoce, diciéndole dónde busca sus skills.
+    /// Queda guardado y aparece en la lista como uno más.
+    Add(AgentsAddArgs),
+    /// Saca de la lista un agente que agregaste vos (y su skill).
+    Remove(AgentsRemoveArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsAddArgs {
+    /// Cómo se llama, tal cual querés verlo en la lista. Por ejemplo "Mi agente".
+    pub label: String,
+    /// Carpeta donde ESE agente busca sus skills. Admite `~/`.
+    /// Xtal va a escribir `<carpeta>/xtal/SKILL.md`.
+    #[arg(long)]
+    pub skills: String,
+    /// Id para la CLI y el JSON. Por default, el nombre en minúsculas con guiones.
+    #[arg(long)]
+    pub id: Option<String>,
+    /// Su comando, si tiene. Sirve para detectarlo antes de que exista la carpeta.
+    #[arg(long)]
+    pub bin: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsRemoveArgs {
+    /// Id del agente que agregaste.
+    #[arg(long)]
+    pub agent: String,
 }
 
 #[derive(Debug, Args)]

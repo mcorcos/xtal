@@ -96,6 +96,13 @@ xtal agents                       # la lista, con el estado de cada uno
 xtal agents install --all         # los que falten
 ```
 
+¿Usás un agente que no está en la lista? Decile dónde busca sus skills y queda como uno
+más:
+
+```bash
+xtal agents add "Mi agente" --skills ~/.mi-agente/skills
+```
+
 Y si querés elegir theme y formato a mano, o registrar el MCP en Claude Desktop:
 
 ```bash
@@ -304,7 +311,7 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
 `xtal example [nombre] [--run] [--open]` · `xtal update [--check]` ·
-`xtal agents [install|uninstall]` · `xtal uninstall [--yes]` ·
+`xtal agents [install|uninstall|add|remove]` · `xtal uninstall [--yes]` ·
 `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`
 

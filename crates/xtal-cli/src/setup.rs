@@ -334,8 +334,8 @@ fn ai_integration(args: &SetupArgs) -> Result<()> {
 
     for agente in agentes {
         println!();
-        println!("    {} {}", style("·").dim(), style(agente.label).bold());
-        println!("      {}", style(agente.toca).dim());
+        println!("    {} {}", style("·").dim(), style(&agente.label).bold());
+        println!("      {}", style(agente.toca()).dim());
 
         match agente.instalar_skill() {
             Ok(Some(path)) => println!(

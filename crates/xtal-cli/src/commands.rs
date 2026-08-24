@@ -894,7 +894,7 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
     println!();
     println!("  {}", style("Integración con IA").bold());
     let agentes: Vec<crate::agents::Estado> =
-        crate::agents::AGENTES.iter().map(|a| a.estado()).collect();
+        crate::agents::todos().iter().map(|a| a.estado()).collect();
     if agentes.iter().all(|e| !e.presente) {
         println!(
             "    {} {:<14} {}",
@@ -947,7 +947,7 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
 
     // La integración con IA cuenta para el resumen: "todo listo" con el skill sin
     // instalar es mentira, porque la mitad del producto es que Claude lo maneje.
-    let ia_rota = crate::agents::AGENTES
+    let ia_rota = crate::agents::todos()
         .iter()
         .map(|a| a.estado())
         .any(|e| !e.listo());
@@ -1024,8 +1024,8 @@ fn arreglar_ia() -> Result<()> {
         if estado.listo() {
             continue;
         }
-        println!("    {} {}", style("·").dim(), style(agente.label).bold());
-        println!("        {}", style(agente.toca).dim());
+        println!("    {} {}", style("·").dim(), style(&agente.label).bold());
+        println!("        {}", style(agente.toca()).dim());
         match agente.instalar_skill() {
             Ok(Some(path)) => println!("        {} skill → {}", style("✓").green(), path.display()),
             Ok(None) => {}
@@ -1064,11 +1064,11 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
         // solo de que está mal enchufado y ofrecer `xtal doctor --fix`. El detalle
         // completo, agente por agente, sale de `xtal agents --json`.
         "ai": {
-            "agents": crate::agents::AGENTES.iter().map(|a| {
+            "agents": crate::agents::todos().iter().map(|a| {
                 let e = a.estado();
                 serde_json::json!({
-                    "id": a.id,
-                    "name": a.label,
+                    "id": &a.id,
+                    "name": &a.label,
                     "installed": e.presente,
                     "skill": e.skill.clave(),
                     "mcp": e.mcp.clave(),
@@ -1076,7 +1076,7 @@ fn doctor_json(deps: &[Dep]) -> Result<()> {
                     "missing": e.falta(),
                 })
             }).collect::<Vec<_>>(),
-            "ok": crate::agents::AGENTES.iter().all(|a| a.estado().listo()),
+            "ok": crate::agents::todos().iter().all(|a| a.estado().listo()),
         },
         // El dato que de verdad importa: ¿puede compilar un informe?
         "can_build": crate::deps::is_available("tectonic") || crate::deps::is_available("pdflatex"),
