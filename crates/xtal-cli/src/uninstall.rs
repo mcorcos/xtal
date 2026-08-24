@@ -47,15 +47,15 @@ pub fn cmd_uninstall(args: UninstallArgs) -> Result<()> {
     );
 
     // --- Qué hay para sacar ---
-    let clientes: Vec<McpClientArg> = crate::ai::detect_clients()
-        .into_iter()
+    let clientes: Vec<McpClientArg> = crate::agents::todos()
+        .iter()
+        .filter_map(|a| a.mcp)
         .filter(|c| {
             !matches!(
-                crate::ai::mcp_status(c.arg),
-                crate::ai::McpState::NoRegistrado
+                crate::agents::mcp_status(*c),
+                crate::agents::McpState::NoRegistrado
             )
         })
-        .map(|c| c.arg)
         .collect();
 
     let archivos = a_borrar();
@@ -151,7 +151,7 @@ pub fn cmd_uninstall(args: UninstallArgs) -> Result<()> {
 /// Los archivos y carpetas que Xtal escribió en el home, si están.
 ///
 /// Solo lo que escribimos nosotros. La carpeta `~/.claude` es de Claude Code: sacamos
-/// nuestro skill de adentro y nada más.
+/// nuestro skill de adentro y nada más. Lo mismo con la de cada agente.
 fn a_borrar() -> Vec<Item> {
     let mut out = Vec::new();
 
@@ -164,12 +164,17 @@ fn a_borrar() -> Vec<Item> {
         }
     }
 
-    if let Some(dirs) = directories::BaseDirs::new() {
-        let skill = dirs.home_dir().join(".claude").join("skills").join("xtal");
-        if skill.is_dir() {
+    // Un skill por agente. Sale de la tabla de `agents.rs`: si mañana se suma un
+    // agente, desinstalar lo saca solo, sin que nadie se acuerde de tocar este archivo.
+    for agente in crate::agents::todos() {
+        let Some(path) = agente.skill_path() else {
+            continue;
+        };
+        let dir = path.parent().expect("SKILL.md siempre tiene carpeta");
+        if dir.is_dir() {
             out.push(Item {
-                label: "skill de Claude".to_string(),
-                path: skill,
+                label: format!("skill de {}", agente.label),
+                path: dir.to_path_buf(),
             });
         }
     }
@@ -178,7 +183,10 @@ fn a_borrar() -> Vec<Item> {
 }
 
 /// Saca la entrada de Xtal de la config de un cliente.
-fn desregistrar(client: McpClientArg) -> Result<()> {
+///
+/// La usa también `xtal agents uninstall`: desregistrar es lo mismo se llegue por donde
+/// se llegue, y tener dos copias sería tener dos formas de equivocarse.
+pub(crate) fn desregistrar(client: McpClientArg) -> Result<()> {
     match client {
         // Claude Code guarda los servers en su config interna y expone su propia CLI
         // para escribirla. Igual que al registrar, usamos el comando y no el archivo.
@@ -189,7 +197,7 @@ fn desregistrar(client: McpClientArg) -> Result<()> {
                     "remove",
                     "--scope",
                     "user",
-                    crate::ai::MCP_SERVER_NAME,
+                    crate::agents::MCP_SERVER_NAME,
                 ])
                 .status()
                 .context("no pude ejecutar `claude mcp remove`")?;
@@ -226,7 +234,7 @@ fn sacar_de_json(path: &Path) -> Result<()> {
     let Some(servers) = root.get_mut("mcpServers").and_then(|v| v.as_object_mut()) else {
         return Ok(());
     };
-    if servers.remove(crate::ai::MCP_SERVER_NAME).is_none() {
+    if servers.remove(crate::agents::MCP_SERVER_NAME).is_none() {
         return Ok(());
     }
 
@@ -246,7 +254,7 @@ fn sacar_de_toml(path: &Path) -> Result<()> {
     let Some(servers) = doc.get_mut("mcp_servers").and_then(|v| v.as_table_mut()) else {
         return Ok(());
     };
-    if servers.remove(crate::ai::MCP_SERVER_NAME).is_none() {
+    if servers.remove(crate::agents::MCP_SERVER_NAME).is_none() {
         return Ok(());
     }
 

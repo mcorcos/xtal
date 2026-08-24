@@ -4,3 +4,9 @@ source = "csv"
 label = "Medida"
 x_unit = "Hz"
 y_unit = "deg"
+
+[csv]
+file = "fuentes/medicion_bode.csv"
+skip_rows = 5
+x_col = "0"
+y_col = "2"

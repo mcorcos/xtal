@@ -42,6 +42,9 @@ pub enum Command {
     Plan(PlanArgs),
     /// Qué hay y qué falta para que el informe esté completo.
     Status(StatusArgs),
+    /// El orden de la carpeta: qué es cada archivo que hay adentro, cuál ya se usó
+    /// y con qué comando se usa el que falta.
+    Scan(ScanArgs),
     /// Secciones del informe.
     #[command(subcommand)]
     Section(SectionCmd),
@@ -84,6 +87,9 @@ pub enum Command {
     /// Saca de la máquina lo que Xtal dejó fuera de su binario: la config global,
     /// el skill de Claude y el registro del MCP. No toca el binario ni tus proyectos.
     Uninstall(UninstallArgs),
+    /// Los agentes de IA de esta máquina y cómo está enchufado Xtal en cada uno.
+    /// Sin subcomando, los lista con su estado.
+    Agents(AgentsArgs),
     /// Servidor MCP sobre stdio, para clientes de IA que no tienen bash
     /// (Claude Desktop, Codex). `xtal mcp` a secas arranca el server.
     Mcp(McpArgs),
@@ -528,6 +534,13 @@ pub struct PlanAddArgs {
 pub struct StatusArgs {}
 
 #[derive(Debug, Args)]
+pub struct ScanArgs {
+    /// Muestra solo lo que falta hacer, sin lo que ya está usado y en su lugar.
+    #[arg(long)]
+    pub pending: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct WatchArgs {
     /// Abre el PDF después de la primera compilación exitosa.
     #[arg(long)]
@@ -594,6 +607,74 @@ pub struct UpdateArgs {
 // ===========================================================================
 // mcp — servidor Model Context Protocol
 // ===========================================================================
+
+// --- agents ---
+
+#[derive(Debug, Args)]
+pub struct AgentsArgs {
+    #[command(subcommand)]
+    pub command: Option<AgentsCmd>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AgentsCmd {
+    /// Deja el skill (y el server MCP donde se pueda) en uno o en todos los agentes.
+    Install(AgentsInstallArgs),
+    /// Saca el skill y el registro del MCP de uno o de todos los agentes.
+    /// No toca nada más de la config del agente.
+    Uninstall(AgentsUninstallArgs),
+    /// Suma un agente que Xtal todavía no conoce, diciéndole dónde busca sus skills.
+    /// Queda guardado y aparece en la lista como uno más.
+    Add(AgentsAddArgs),
+    /// Saca de la lista un agente que agregaste vos (y su skill).
+    Remove(AgentsRemoveArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsAddArgs {
+    /// Cómo se llama, tal cual querés verlo en la lista. Por ejemplo "Mi agente".
+    pub label: String,
+    /// Carpeta donde ESE agente busca sus skills. Admite `~/`.
+    /// Xtal va a escribir `<carpeta>/xtal/SKILL.md`.
+    #[arg(long)]
+    pub skills: String,
+    /// Id para la CLI y el JSON. Por default, el nombre en minúsculas con guiones.
+    #[arg(long)]
+    pub id: Option<String>,
+    /// Su comando, si tiene. Sirve para detectarlo antes de que exista la carpeta.
+    #[arg(long)]
+    pub bin: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsRemoveArgs {
+    /// Id del agente que agregaste.
+    #[arg(long)]
+    pub agent: String,
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsInstallArgs {
+    /// Id del agente (`claude-code`, `codex`, ...). Sin esto, usá `--all`.
+    #[arg(long)]
+    pub agent: Option<String>,
+    /// Todos los agentes que estén instalados en esta máquina.
+    #[arg(long)]
+    pub all: bool,
+    /// Instala solo el skill, sin registrar el server MCP.
+    #[arg(long)]
+    pub no_mcp: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct AgentsUninstallArgs {
+    /// Id del agente. Sin esto, usá `--all`.
+    #[arg(long)]
+    pub agent: Option<String>,
+    /// Todos los agentes que estén instalados en esta máquina.
+    #[arg(long)]
+    pub all: bool,
+}
 
 #[derive(Debug, Args)]
 pub struct McpArgs {

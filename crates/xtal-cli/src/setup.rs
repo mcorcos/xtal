@@ -22,7 +22,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use xtal_config::PartialConfig;
 use xtal_model::DocFormat;
 
-use crate::ai;
 use crate::cli::SetupArgs;
 use crate::deps;
 
@@ -302,61 +301,65 @@ fn ensure_dependencies(args: &SetupArgs, engine: LatexEngine) -> Result<()> {
 // Integración con los clientes de IA
 // ---------------------------------------------------------------------------
 
-/// Deja Xtal enchufado a los clientes de IA que haya en la máquina.
+/// Deja Xtal enchufado a los agentes de IA que haya en la máquina.
 ///
-/// Son dos cosas distintas:
-///   - el **skill** de Claude Code (`~/.claude/skills/xtal/`), que es un archivo nuestro
-///     en el home del usuario. Se instala siempre, sin preguntar: es lo que hace que
-///     Claude sepa que Xtal existe sin que nadie se lo cuente.
+/// Son dos cosas distintas, y por eso se tratan distinto:
+///   - el **skill** (`<skills>/xtal/SKILL.md`), que es un archivo nuestro en el home del
+///     usuario. Se instala siempre, sin preguntar: es lo que hace que el agente sepa que
+///     Xtal existe sin que nadie se lo cuente.
 ///   - el **server MCP**, que se registra en la config de OTRO programa. Eso sí se
-///     pregunta en modo interactivo, porque estamos editando algo que no es nuestro.
+///     pregunta en modo interactivo, porque estamos editando algo que no es nuestro, y
+///     antes de preguntar se dice qué archivo se va a tocar.
 ///
 /// En `--yes` se registra igual: ese modo es "instalá y dejámelo listo", y es el que
 /// corre `install.sh`. Con `--no-ai` no se toca nada de esto.
+///
+/// La lista de agentes sale de `agents.rs`, que es la única definición que hay.
 fn ai_integration(args: &SetupArgs) -> Result<()> {
     if args.no_ai {
         return Ok(());
     }
 
     println!();
-    println!("  {}", style("Clientes de IA:").bold());
+    println!("  {}", style("Agentes de IA:").bold());
 
-    match ai::install_skill() {
-        Ok(Some(path)) => {
-            println!(
-                "    {} skill de Claude Code → {}",
-                style("✓").green().bold(),
-                style(path.display()).cyan()
-            );
-            println!(
-                "      {}",
-                style("Claude ya sabe que Xtal existe y cómo usarlo.").dim()
-            );
-        }
-        Ok(None) => println!(
-            "    {} no encontré Claude Code; salteo el skill.",
+    let agentes = crate::agents::presentes();
+    if agentes.is_empty() {
+        println!(
+            "    {} no encontré ningún agente de IA instalado.",
             style("·").dim()
-        ),
-        Err(e) => println!("    {} no pude escribir el skill: {e}", style("!").yellow()),
-    }
-
-    let clientes = ai::detect_clients();
-    if clientes.is_empty() {
+        );
         return Ok(());
     }
 
-    for cliente in clientes {
-        let pregunta = format!("¿Registrar el server MCP en {}?", cliente.label);
+    for agente in agentes {
+        println!();
+        println!("    {} {}", style("·").dim(), style(&agente.label).bold());
+        println!("      {}", style(agente.toca()).dim());
+
+        match agente.instalar_skill() {
+            Ok(Some(path)) => println!(
+                "      {} skill → {}",
+                style("✓").green().bold(),
+                style(path.display()).cyan()
+            ),
+            Ok(None) => {}
+            Err(e) => println!(
+                "      {} no pude escribir el skill: {e}",
+                style("!").yellow()
+            ),
+        }
+
+        if agente.mcp.is_none() {
+            continue;
+        }
+        let pregunta = format!("¿Registrar el server MCP en {}?", agente.label);
         // En modo silencioso no hay a quién preguntarle: se hace.
         if !args.yes && !deps::confirm(&pregunta, true)? {
             continue;
         }
-        if let Err(e) = ai::register(cliente.arg) {
-            println!(
-                "    {} no pude registrarlo en {}: {e}",
-                style("!").yellow(),
-                cliente.label
-            );
+        if let Err(e) = agente.instalar_mcp() {
+            println!("      {} no pude registrarlo: {e}", style("!").yellow());
         }
     }
     Ok(())

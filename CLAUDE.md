@@ -105,7 +105,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
 - **MCP server — HECHO (2026-08-14, "Tanda 2").** Ver `docs/MCP.md`. `xtal mcp` levanta un
   server **stdio** (lo prende el cliente, no hay daemon ni puerto). Módulo
   `crates/xtal-cli/src/mcp/`: `protocol.rs` (JSON-RPC a mano, sin SDK — no queríamos
-  tokio), `tools.rs` (13 tools), `install.rs`, `mod.rs` (loop + despacho).
+  tokio), `tools.rs` (14 tools), `install.rs`, `mod.rs` (loop + despacho).
   - **Las tools ejecutan el propio binario como subproceso**, no llaman a `commands.rs`:
     en modo MCP stdout es el canal del protocolo, y así el MCP no puede desincronizarse
     de la CLI.
@@ -202,6 +202,44 @@ El núcleo es análisis de circuitos + consolidación de datos.
   producto, las decisiones ya tomadas para no re-discutirlas, y las trampas conocidas.
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
+### La integración con agentes, como la de Supacode — HECHO (2026-08-23) → `docs/AGENTES.md`
+Se copió la disciplina del panel de integraciones de Supacode: **una tabla de agentes**
+en `crates/xtal-cli/src/agents.rs` (Claude Code, Claude Desktop, Codex, Copilot CLI,
+opencode), con `xtal agents [install|uninstall]` y un panel `Ajustes → Agentes` en la app
+que corre `xtal agents --json`.
+- **Cada agente declara qué archivos suyos toca**, y se imprime antes de escribir nada.
+  Es config de otro programa: que el usuario adivine no es una opción.
+- Antes lo mismo estaba escrito a mano en `setup`, `doctor` y `uninstall`, y solo para
+  Claude Code. Ahora los tres recorren la tabla. Agregar un agente es agregar una fila.
+- **No se inventan rutas.** Un skill en una carpeta que el agente no lee es basura en el
+  home de alguien. Las de la tabla salen de las que instala Supacode.
+- Un MCP **sin registrar** no cuenta como roto (en un agente con bash es una comodidad);
+  uno que apunta a un binario muerto sí, porque falla en silencio.
+- **`xtal agents add "Mi agente" --skills <carpeta>`** suma un agente que la tabla no
+  conoce (el `Add Agent Integration` de Supacode; en la app, el botón «Agregar agente…»).
+  Se guarda en `~/.config/xtal/agents.toml`, aparte del `config.toml` a propósito: ese es
+  la config de los documentos y se copia entre máquinas, esto es qué programas tenés en
+  ESTA. La carpeta **tiene que existir** —única validación posible— porque un typo deja
+  el skill donde nadie lo lee y se ve igual que si anduviera. A un agente propio solo se
+  le deja el skill: no sabemos escribir la config del MCP de un programa que no conocemos.
+
+### El orden de la carpeta — HECHO (2026-08-23), pedido de Manu
+El agente sabía crear cosas pero no qué hacer con lo que ya estaba en la carpeta.
+- `crates/xtal-cli/src/inventory.rs` define **el orden** (`ORDEN`, la única definición:
+  la usa `xtal new` para crear las carpetas, el `AGENTS.md` para explicarlas y `xtal scan`
+  para verificarlas) y clasifica lo que hay: qué es cada archivo, si ya se usó, si está
+  fuera de lugar, y **el comando que lo convierte en parte del informe**.
+- Nueva carpeta **`fuentes/`**: lo que traés de afuera (CSV del instrumento, `.raw`,
+  netlists). Antes no existía y cada uno lo dejaba donde le parecía.
+- `xtal scan [--pending]` + tool MCP `xtal_scan`; `xtal status` muestra el resumen.
+- Para saber qué CSV ya se importó hizo falta que la medición lo registre: bloque
+  **`[csv]`** en su `.toml` (`CsvSpec` en `xtal-data`), como ya hacían `[sim]` y `[raw]`.
+  El ejemplo se regeneró con `reproducir.sh` para que lo tenga.
+- La detección de "ya se usó" es a propósito tonta —buscar el nombre del archivo en los
+  `.toml` de Xtal y en el LaTeX—: un registro aparte se desincroniza del disco.
+- `XTAL_BIN=/ruta/xtal` en la app: probarla contra el binario de un worktree. Sin eso le
+  habla al `xtal` de brew y la función nueva "no aparece".
+
 ### Núcleo vs addon de electrónica — HECHO (2026-08-22) → `docs/ARQUITECTURA.md`
 Xtal hace dos cosas distintas: **armar un informe** (todo el mundo) y **conseguir datos
 de un circuito** (algunos). La segunda es un addon detrás de la feature `electronics`,
@@ -249,12 +287,13 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 - `xtal-cli` — binario `xtal` (clap), orquesta todo, salida `--json` para Claude.
 
 ### Comandos
-`xtal new|init` · `plan [add|list|remove]` · `status` · `meas import|formula|random|list|show` ·
+`xtal new|init` · `plan [add|list|remove]` · `status` · `scan` · `meas import|formula|random|list|show` ·
 `plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
-`example` · `update` · `setup` · `uninstall` · `mcp [serve|install]` · `completions` · `man`.
+`example` · `update` · `setup` · `agents [install|uninstall|add|remove]` · `uninstall` ·
+`mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
 `xtal raw import <archivo.raw>` lee el resultado de una corrida hecha en **LTspice/ngspice**

@@ -84,6 +84,7 @@ Después de instalar en Claude Desktop hay que reiniciar la app.
 | `xtal_list_projects` | Busca proyectos (carpetas con `xtal.toml`) abajo de un directorio |
 | `xtal_open_project` | Fija el proyecto por default de la sesión |
 | **`xtal_status`** | **Qué falta para el informe, gráfico por gráfico. La primera que hay que llamar** |
+| `xtal_scan` | Qué archivos hay en la carpeta sin usar todavía, y el comando que usa cada uno |
 | `xtal_plan_add` | Anota que el informe va a tener este gráfico y qué curvas espera |
 | `xtal_project_status` | Inventario crudo: mediciones, gráficos y secciones que ya existen |
 | `xtal_new_project` | Crea una carpeta-proyecto y la deja abierta |

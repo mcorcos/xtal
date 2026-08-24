@@ -11,6 +11,7 @@ public struct Ajustes: View {
         case general = "General"
         case editor = "Editor"
         case herramientas = "Herramientas"
+        case agentes = "Agentes"
         case cuentas = "Cuentas"
 
         var id: String { rawValue }
@@ -19,6 +20,7 @@ public struct Ajustes: View {
             case .general: return "gearshape"
             case .editor: return "text.cursor"
             case .herramientas: return "wrench.and.screwdriver"
+            case .agentes: return "sparkles"
             case .cuentas: return "person.crop.circle"
             }
         }
@@ -59,6 +61,7 @@ public struct Ajustes: View {
                 case .general: PanelGeneral()
                 case .editor: PanelEditor()
                 case .herramientas: PanelHerramientas()
+                case .agentes: PanelAgentes()
                 case .cuentas: PanelCuentas()
                 }
             }
