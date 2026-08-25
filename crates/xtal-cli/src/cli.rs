@@ -87,6 +87,9 @@ pub enum Command {
     /// Saca de la máquina lo que Xtal dejó fuera de su binario: la config global,
     /// el skill de Claude y el registro del MCP. No toca el binario ni tus proyectos.
     Uninstall(UninstallArgs),
+    /// La app de escritorio: abrirle un proyecto, compilar, cambiar de modo, mostrar
+    /// los errores. Es la única forma que tiene una IA de manejar la ventana.
+    App(AppArgs),
     /// Los agentes de IA de esta máquina y cómo está enchufado Xtal en cada uno.
     /// Sin subcomando, los lista con su estado.
     Agents(AgentsArgs),
@@ -1055,4 +1058,91 @@ pub struct RawImportArgs {
     /// Tipo del gráfico a crear con --plot (default: según el análisis del rawfile).
     #[arg(long = "plot-kind", value_enum)]
     pub plot_kind: Option<PlotKindArg>,
+}
+
+// ---------------------------------------------------------------------------------
+// La app de escritorio
+// ---------------------------------------------------------------------------------
+
+#[derive(Debug, Args)]
+pub struct AppArgs {
+    /// Traer la app adelante de todo. Por default la orden llega sin robar el foco:
+    /// el que la manda suele estar escribiendo adentro de la app.
+    #[arg(long)]
+    pub frente: bool,
+
+    #[command(subcommand)]
+    pub command: Option<AppCmd>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AppCmd {
+    /// Abre un proyecto en la app. Sin carpeta, el proyecto donde estás parado.
+    Abrir(AppAbrirArgs),
+    /// Guarda y compila, lo mismo que ⌘S adentro de la app.
+    Compilar,
+    /// Cambia de modo: `editor` (escribís vos) o `agente` (le hablás a tu agente).
+    Modo(AppModoArgs),
+    /// Qué se mira en el panel derecho: el PDF o los errores de compilación.
+    Ver(AppVerArgs),
+    /// Prende o apaga un panel. Sin `--on` ni `--off`, lo alterna.
+    Panel(AppPanelArgs),
+    /// Abre otra terminal en el panel del agente.
+    Terminal,
+    /// Trae la app al frente.
+    Frente,
+}
+
+#[derive(Debug, Args)]
+pub struct AppAbrirArgs {
+    /// La carpeta del proyecto.
+    pub carpeta: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct AppModoArgs {
+    #[arg(value_enum)]
+    pub modo: ModoAppArg,
+}
+
+#[derive(Debug, Args)]
+pub struct AppVerArgs {
+    #[arg(value_enum)]
+    pub que: VistaAppArg,
+}
+
+#[derive(Debug, Args)]
+pub struct AppPanelArgs {
+    #[arg(value_enum)]
+    pub cual: PanelAppArg,
+    /// Prenderlo.
+    #[arg(long)]
+    pub on: bool,
+    /// Apagarlo.
+    #[arg(long)]
+    pub off: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ModoAppArg {
+    Editor,
+    Agente,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum VistaAppArg {
+    Pdf,
+    Errores,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum PanelAppArg {
+    /// El PDF, a la derecha.
+    Pdf,
+    /// Los archivos del proyecto, a la izquierda (modo editor).
+    Archivos,
+    /// El cajón de la terminal (modo editor).
+    Terminal,
+    /// Qué falta y las secciones, a la izquierda (modo agente).
+    Informe,
 }

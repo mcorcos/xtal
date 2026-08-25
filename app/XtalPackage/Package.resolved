@@ -1,22 +1,22 @@
 {
-  "originHash" : "e622211668ba5ecbddec7dddfe4183bf7c45d3c8977b7da0d2fa68260b4cef2e",
+  "originHash" : "7cfb803f399483141f78e82e19e36371cc9406566150d16be98bab27079da588",
   "pins" : [
     {
-      "identity" : "swift-argument-parser",
+      "identity" : "libghostty-spm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
+      "location" : "https://github.com/Lakr233/libghostty-spm.git",
       "state" : {
-        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
-        "version" : "1.8.2"
+        "revision" : "356f730bec03281fc7b83666a129b0246137ea26",
+        "version" : "1.4.0"
       }
     },
     {
-      "identity" : "swiftterm",
+      "identity" : "msdisplaylink",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm",
+      "location" : "https://github.com/Lakr233/MSDisplayLink.git",
       "state" : {
-        "revision" : "ca6f80ef534248d2f65c1b640656e3c9a270bfeb",
-        "version" : "1.10.0"
+        "revision" : "87eb0af130744c8cbe2e31b6e1a5bcd659f1c220",
+        "version" : "2.2.0"
       }
     }
   ],

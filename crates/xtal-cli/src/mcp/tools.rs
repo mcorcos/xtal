@@ -709,6 +709,60 @@ pub fn all() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "xtal_app",
+            title: "Manejar la app de escritorio",
+            description: "Le da una orden a la app de escritorio de Xtal (solo macOS): \
+                          abrir este proyecto, compilar, mostrar el PDF o el error, cambiar \
+                          de modo, sumar una terminal. **Es la única forma de mover la \
+                          ventana**: apretar un botón necesita el permiso de accesibilidad \
+                          del sistema. Usala después de compilar (`ver_pdf`) o cuando algo \
+                          falla (`ver_errores`): deja el resultado a la vista en vez de \
+                          pegar un log. Si la app no está instalada devuelve error; no \
+                          insistas y seguí por la CLI.",
+            schema: || {
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "accion": {
+                            "type": "string",
+                            "enum": [
+                                "abrir", "compilar", "ver_pdf", "ver_errores",
+                                "modo_editor", "modo_agente", "terminal", "frente"
+                            ],
+                            "description": "Qué hacer. `abrir` abre el proyecto en la app."
+                        },
+                        "frente": {
+                            "type": "boolean",
+                            "description": "Traer la app adelante. Por default NO: si la persona está escribiendo, no se le saca el teclado."
+                        },
+                        "project": project_prop()
+                    },
+                    "required": ["accion"],
+                    "additionalProperties": false
+                })
+            },
+            handler: |s, args| {
+                let accion = opt_str(args, "accion").unwrap_or_default();
+                let mut argv: Vec<String> = vec!["app".into()];
+                if opt_bool(args, "frente") {
+                    argv.push("--frente".into());
+                }
+                match accion.as_str() {
+                    "abrir" => argv.push("abrir".into()),
+                    "compilar" => argv.push("compilar".into()),
+                    "ver_pdf" => argv.extend(["ver".to_string(), "pdf".to_string()]),
+                    "ver_errores" => argv.extend(["ver".to_string(), "errores".to_string()]),
+                    "modo_editor" => argv.extend(["modo".to_string(), "editor".to_string()]),
+                    "modo_agente" => argv.extend(["modo".to_string(), "agente".to_string()]),
+                    "terminal" => argv.push("terminal".into()),
+                    "frente" => argv.push("frente".into()),
+                    otra => return Err(format!("no conozco la acción `{otra}`")),
+                }
+                argv.push("--json".into());
+                s.exec(s.project_for(args).as_deref(), None, &argv)
+            },
+        },
+        Tool {
             name: "xtal_run_command",
             title: "Comando arbitrario de Xtal",
             description: "Escape hatch: corre cualquier subcomando de la CLI de Xtal con los \

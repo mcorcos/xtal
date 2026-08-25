@@ -105,7 +105,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
 - **MCP server — HECHO (2026-08-14, "Tanda 2").** Ver `docs/MCP.md`. `xtal mcp` levanta un
   server **stdio** (lo prende el cliente, no hay daemon ni puerto). Módulo
   `crates/xtal-cli/src/mcp/`: `protocol.rs` (JSON-RPC a mano, sin SDK — no queríamos
-  tokio), `tools.rs` (14 tools), `install.rs`, `mod.rs` (loop + despacho).
+  tokio), `tools.rs` (17 tools), `install.rs`, `mod.rs` (loop + despacho).
   - **Las tools ejecutan el propio binario como subproceso**, no llaman a `commands.rs`:
     en modo MCP stdout es el canal del protocolo, y así el MCP no puede desincronizarse
     de la CLI.
@@ -223,6 +223,108 @@ que corre `xtal agents --json`.
   el skill donde nadie lo lee y se ve igual que si anduviera. A un agente propio solo se
   le deja el skill: no sabemos escribir la config del MCP de un programa que no conocemos.
 
+### La app se maneja desde el agente — HECHO (2026-08-25), pedido de Manu
+El agujero: adentro de la app corre un agente con bash, pero **no puede apretar un
+botón** —eso necesita el permiso de accesibilidad del sistema—, así que todo lo que la
+app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cosa».
+- **`xtal://` es la puerta** (`app/Config/Info.plist` la declara, `Ordenes.swift` la
+  atiende) y **`xtal app` es quien la usa** (`crates/xtal-cli/src/app.rs`). Es la forma
+  de Supacode: la app registra un esquema de URL y la CLI lo dispara con `open`. Sin
+  socket, sin puerto y sin daemon — la misma decisión que el MCP sobre stdio.
+- Órdenes: `abrir` (un proyecto), `compilar` (⌘S), `modo editor|agente`,
+  `ver pdf|errores`, `panel pdf|archivos|terminal|informe [--on|--off]`, `terminal`
+  (una más), `frente`. Todas aceptan `--frente`.
+- **Por default no roban el foco** (`open -g`). El que manda la orden suele estar
+  escribiendo adentro de la app.
+- Una orden no toca vistas: termina en **un ajuste** (que las vistas ya miran con
+  `@AppStorage`) o en **un aviso** que escucha la vista que corresponde. Es el camino
+  que ya usaban ⌘S y el cambio de PDF, y por eso no hizo falta un objeto global con el
+  estado de la app.
+- **`XTAL_APP=/ruta/Xtal.app`** fuerza a qué copia va la orden. Sin eso decide el
+  sistema, y mientras se desarrolla hay varias (la de Xcode, la de un worktree): la
+  primera prueba terminó manejando la instancia que Manu tenía abierta en Xcode. Es la
+  contraparte de `XTAL_BIN`.
+- **Tool MCP `xtal_app`** para los clientes que no tienen bash, y la sección nueva en el
+  skill y en el `AGENTS.md` de cada proyecto: sin eso el agente no se entera de que la
+  app existe. Fue justamente lo que pasó — una sesión adentro de la app dijo que Xtal
+  «no tiene interfaz».
+- Cuándo sirve, en concreto: después de compilar, `xtal app ver pdf` deja el resultado a
+  la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
+  pegar un log en el chat.
+
+### El modo agente, segunda vuelta — HECHO (2026-08-25), pedido de Manu
+Xtal **no abre el agente por vos**: la terminal está para que abras el que uses. Lo que
+faltaba era que esa terminal se comporte como corresponde.
+- **La sesión no se muere.** Las terminales viven en `Agentes` (`Terminal/Sesiones.swift`),
+  que es del workspace, y la vista de AppKit la guarda la sesión: `VistaSesion` **no crea
+  la vista, devuelve la que ya existe**. Un `NSViewRepresentable` normal fabrica una vista
+  nueva cada vez que aparece en otro lugar del árbol —cambiar de modo, abrir el cajón—, y
+  cada una de esas veces mataba el proceso. Ghostty lo contempla: mientras la vista siga
+  viva, sacarla de la ventana solo apaga el dibujado.
+  - **El cajón del modo editor muestra las mismas sesiones.** Dejás al agente trabajando,
+    te vas a escribir, y lo encontrás donde lo dejaste.
+  - Verificado de verdad: mismo PID del shell y el mismo scrollback después de ir a
+    editor y volver.
+- **La campana avisa.** Es cómo un agente dice que terminó. La sesión es delegada de la
+  vista, así que se entera del título, de la campana, del aviso de escritorio (OSC 9) y
+  de que el proceso se fue. Si no estás mirando esa terminal: punto ámbar en la solapa,
+  sonido y un salto del ícono en el Dock. **Nada de notificaciones del sistema**: eso pide
+  firma y permiso, y lo que hace falta es que se entere el que tiene la app abierta atrás.
+- **Varias terminales**, con solapas. Cada una dice **qué está corriendo adentro** (el
+  título que reporta el programa, no «Terminal 1»). La que no estás mirando no arranca su
+  proceso hasta que la abrís: Ghostty crea la superficie recién cuando la vista entra a
+  la ventana.
+- **Si el proceso se va**, la terminal no queda en negro: dice que se cerró y hay un botón
+  para volver a abrir, parada en la misma carpeta.
+- **El tamaño de la letra** está en Ajustes → Agentes. Va por `setTerminalConfiguration`
+  del controlador —uno solo para todas las sesiones— y **no** por las opciones de la
+  superficie: cambiar las opciones la rehace, y rehacerla es matar el proceso. Verificado:
+  la letra cambia y el shell sigue siendo el mismo.
+- **Copiar y pegar ya venían**: la vista del paquete implementa `copy:`, `paste:` y
+  `selectAll:`, así que los items del menú Edición se prenden solos.
+- **`XTAL_DEV=1` + la notificación distribuida `xtal.dev.ajuste`** (`Desarrollo.swift`):
+  la app se cambia su propio ajuste cuando alguien se lo pide de afuera. Sin esto no hay
+  forma de probar «cambiar de modo no mata al agente» desde una sesión sin manos —
+  `defaults` desde la terminal **no le llega a la app** (el CLI resuelve al contenedor
+  viejo de `~/Library/Containers`, y aunque no lo hiciera, una app ya arrancada no se
+  entera de que le tocaron el archivo). Se manda con `osascript -l JavaScript`.
+- **Trampa del retrato, anotada en `Desarrollo.swift`:** un `PDFView` creado después de
+  que la ventana se dibujó sale **en blanco en el PNG** aunque en la app se vea bien
+  (verificado con `NSLog`: tamaño, escala y páginas están). Media hora de perseguir un
+  bug que no existía.
+
+### El modo agente, en serio — HECHO (2026-08-24), pedido de Manu
+Dos cosas: **la terminal se ve como se tiene que ver** y **la pantalla es izquierda y
+derecha**.
+- **La terminal la dibuja libghostty**, el núcleo de Ghostty, en vez de SwiftTerm. Es el
+  mismo motor que usa Supacode (su `.app` trae el terminfo de `xterm-ghostty` y los
+  temas de Ghostty adentro). SwiftTerm dibuja con CoreText en la CPU; adentro corre
+  `claude`, que repinta la pantalla entera muchas veces por segundo, y ahí se nota.
+- Viene por SwiftPM de **`Lakr233/libghostty-spm`**, que publica el XCFramework **ya
+  compilado**: `binaryTarget` por URL con checksum, así que el binario no vive en el repo
+  y **no hace falta Zig** para compilar la app. Ghostty upstream NO publica este
+  xcframework (solo `ghostty-vt`, que es el parser sin renderer): compilarlo a mano es
+  clonar Ghostty y correr `zig build`. Ese paquete además trae la capa de AppKit/SwiftUI
+  —teclado, IME, selección, links, scrollback— que si no habría que escribir contra la
+  API en C, que son miles de líneas (es lo que tiene la app de Ghostty).
+- El aire de adentro ahora es `window-padding` de Ghostty y no un `.padding()` de
+  SwiftUI: un padding de afuera achica la vista y la grilla se corta antes de tiempo.
+  Los colores salen de `Tok.Term` — la terminal se configura con **texto**, no con
+  `Color`, así que sus hexes viven ahí y no sueltos en la vista.
+- **Los errores pasaron a estar DETRÁS del PDF**, en una solapa con un punto ámbar, en
+  vez de reemplazarlo. El informe que no compila hoy compilaba hace un minuto, y esa
+  versión es lo que uno mira mientras arregla. Lo único que pasa al frente solo es el
+  error de un informe que todavía no compiló nunca.
+- **El lateral del modo agente** (⌘1, arranca cerrado) es «qué falta» + las secciones, no
+  un explorador de archivos. Revive el panel que estaba escrito y no usaba nadie. Tocar
+  una sección te lleva al editor con ella abierta: **un click que no hace nada es peor
+  que un botón que no está**.
+- **Volvió el selector de modo a la barra.** Estaba sacado y al modo agente solo se
+  llegaba con `XTAL_MODO`: una pantalla a la que no se llega es una pantalla que no
+  existe.
+- Se probó con el retrato de `Desarrollo` (`XTAL_SNAPSHOT`): **la superficie de Ghostty
+  sale en el PNG**, así que el modo agente se puede revisar sin mirar la pantalla.
+
 ### El orden de la carpeta — HECHO (2026-08-23), pedido de Manu
 El agente sabía crear cosas pero no qué hacer con lo que ya estaba en la carpeta.
 - `crates/xtal-cli/src/inventory.rs` define **el orden** (`ORDEN`, la única definición:
@@ -292,7 +394,8 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
-`example` · `update` · `setup` · `agents [install|uninstall|add|remove]` · `uninstall` ·
+`example` · `update` · `setup` · `agents [install|uninstall|add|remove]` ·
+`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)

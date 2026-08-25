@@ -30,6 +30,12 @@ public struct Raiz: View {
             }
         }
         .preferredColorScheme(esquema)
+        // Abrir un proyecto desde afuera (`xtal app abrir`). Ver `Ordenes.swift`.
+        .onReceive(NotificationCenter.default.publisher(for: .xtalAbrirCarpeta)) { aviso in
+            guard let url = aviso.object as? URL else { return }
+            Recientes.agregar(url)
+            carpeta = url
+        }
     }
 
     private var esquema: ColorScheme? {

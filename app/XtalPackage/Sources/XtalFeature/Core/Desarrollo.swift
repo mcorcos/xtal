@@ -40,9 +40,54 @@ public enum Desarrollo {
         return v.isEmpty ? nil : v
     }
 
+    /// `XTAL_SESIONES=2` — abre esa cantidad de terminales al arrancar, en vez de una.
+    /// Sirve para retratar las solapas sin tener que apretar el `+`.
+    public static var sesionesIniciales: Int {
+        max(1, Int(ProcessInfo.processInfo.environment["XTAL_SESIONES"] ?? "") ?? 1)
+    }
+
     /// `XTAL_COMPILAR=1` — compila apenas abre, sin esperar un ⌘R.
     public static var compilarAlAbrir: Bool {
         ProcessInfo.processInfo.environment["XTAL_COMPILAR"] == "1"
+    }
+
+    /// `XTAL_DEV=1` — la app escucha órdenes de afuera y cambia un ajuste.
+    ///
+    /// ## Por qué existe
+    ///
+    /// Una sesión de Claude no puede apretar un botón: para eso hace falta el permiso
+    /// de accesibilidad, que se le da a la app que corre la terminal. Y los ajustes
+    /// tampoco se pueden cambiar desde afuera con `defaults`: el `defaults` de la
+    /// línea de comandos y la app no siempre hablan del mismo lugar, y aunque hablaran,
+    /// una app que ya arrancó no se entera de que alguien le tocó el archivo.
+    ///
+    /// Con esto la app se cambia su propio ajuste, desde adentro, cuando alguien se lo
+    /// pide. Es lo que permite probar de verdad cosas como «cambiar de modo no mata al
+    /// agente» o «subir el tamaño de la letra no corta lo que está corriendo».
+    ///
+    /// Se manda una notificación distribuida `xtal.dev.ajuste` con la clave y el valor:
+    ///
+    ///     osascript -l JavaScript -e 'ObjC.import("Foundation"); ...'
+    ///
+    /// **Sin `XTAL_DEV=1` no escucha nada**, así que en la app de una persona esto no
+    /// existe.
+    public static func escucharOrdenes() {
+        guard ProcessInfo.processInfo.environment["XTAL_DEV"] == "1" else { return }
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("xtal.dev.ajuste"), object: nil, queue: .main
+        ) { aviso in
+            guard let clave = aviso.userInfo?["clave"] as? String else { return }
+            let d = UserDefaults.standard
+            // Los tres tipos que usan los ajustes de la app. Van como texto porque una
+            // notificación distribuida solo lleva valores de lista de propiedades.
+            if let v = aviso.userInfo?["texto"] as? String {
+                d.set(v, forKey: clave)
+            } else if let v = aviso.userInfo?["numero"] as? String, let n = Double(v) {
+                d.set(n, forKey: clave)
+            } else if let v = aviso.userInfo?["bool"] as? String {
+                d.set(v == "1", forKey: clave)
+            }
+        }
     }
 
     /// `XTAL_SNAPSHOT=/ruta/salida.png` — se retrata y se cierra.
@@ -118,6 +163,13 @@ public enum Desarrollo {
             ctx.clear(CGRect(x: 0, y: 0, width: CGFloat(ancho), height: CGFloat(alto)))
             vista.layer?.render(in: ctx)
 
+            // **Lo que el retrato NO puede capturar.** Un `PDFView` creado DESPUÉS de
+            // que la ventana ya se dibujó sale en blanco acá, aunque en la app se vea
+            // perfecto: pasa al apagar y prender el panel del PDF, o al cambiar de
+            // modo. Se verificó con `NSLog` que la vista queda con su tamaño, su escala
+            // y sus páginas — es el retrato el que no la agarra, no la app.
+            //
+            // Vale la pena tenerlo escrito: perseguir ese "bug" cuesta media hora.
             guard let imagen = ctx.makeImage() else { return }
             let rep = NSBitmapImageRep(cgImage: imagen)
             guard let png = rep.representation(using: .png, properties: [:]) else { return }
