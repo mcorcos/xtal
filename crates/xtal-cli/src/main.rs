@@ -6,6 +6,7 @@
 
 mod agents;
 mod ai;
+mod app;
 mod cli;
 mod commands;
 mod convert;
@@ -84,6 +85,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Update(a) => update::cmd_update(a),
         Command::Setup(a) => setup::cmd_setup(a),
         Command::Uninstall(a) => uninstall::cmd_uninstall(a),
+        Command::App(a) => app::cmd_app(a, &project, json),
         Command::Agents(a) => agents::cmd_agents(a, json),
         Command::Mcp(a) => mcp::cmd_mcp(a),
         Command::Completions(a) => gen::cmd_completions(a),

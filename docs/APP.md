@@ -41,13 +41,89 @@ distintas — no la misma con cosas apagadas.
 | Modo | Qué ves | Cuándo |
 |---|---|---|
 | **Editor** | Archivos · texto · PDF | Escribís vos |
-| **Agente** | Terminal grande · PDF | Le hablás a Claude |
+| **Agente** | Agente · PDF | Le hablás a Claude |
 
-En modo agente la terminal **no es un cajón que se abre: es la pantalla**. Abrís `claude`
-adentro y trabajás hablando, mirando el PDF salir al lado. Es lo que hace Conductor.
+Se cambia de modo en la barra de arriba, y la app se acuerda de cuál elegiste.
 
-No hay lista de archivos ni editor en ese modo, y es a propósito: si estás ahí, los
-archivos los toca él.
+### Modo agente: izquierda y derecha
+
+**Dos cosas y nada más**: a la izquierda el agente, a la derecha lo que sale. La terminal
+no es un cajón que se abre — es la pantalla. Abrís `claude` adentro y trabajás hablando,
+mirando el PDF salir al lado.
+
+**Los errores viven detrás del PDF**, en su solapa, con un punto ámbar cuando hay algo.
+Antes el error reemplazaba al PDF y eso estaba mal: el informe que no compila hoy
+compilaba hace un minuto, y esa versión es justo lo que necesitás mirar mientras
+arreglás. Lo único que pasa al frente solo es el error de un informe que **todavía no
+compiló nunca**: ahí no hay nada que dejar adelante.
+
+**El lateral está, pero cerrado** (⌘1). Es «qué falta» —`xtal status` hecho pantalla— y
+las secciones del informe. No es un explorador de archivos: al lado de un agente la
+pregunta no es qué archivos hay, sino qué le falta al informe. Tocar una sección te
+lleva al editor con esa sección abierta.
+
+### La app se maneja desde el agente
+
+Adentro de la app corre un agente, y el agente tiene bash: escribe archivos y corre
+`xtal`. Lo que **no** puede es apretar un botón — eso necesita el permiso de
+accesibilidad del sistema. Sin una puerta, todo lo que la app hace y la CLI no le queda
+afuera, y termina diciendo «apretá vos tal cosa».
+
+La puerta es un esquema de URL, `xtal://`, y quien la usa es `xtal app`:
+
+```
+xtal app abrir [carpeta]     abrir un proyecto (sin carpeta: el actual)
+xtal app compilar            guardar y compilar (⌘S)
+xtal app modo editor|agente
+xtal app ver pdf|errores     qué se mira en el panel derecho
+xtal app panel <cual> [--on|--off]    pdf · archivos · terminal · informe
+xtal app terminal            otra terminal en el panel del agente
+xtal app frente              traer la app adelante
+```
+
+Es la forma de Supacode: la app registra el esquema, la CLI lo dispara con `open`, macOS
+enruta. **Sin socket, sin puerto y sin daemon** — la misma decisión que el MCP sobre
+stdio. Del otro lado atiende `Ordenes.swift`, y una orden nunca toca una vista: termina
+en un ajuste que las vistas ya miran, o en un aviso que escucha la que corresponde.
+
+**Ninguna orden roba el foco** salvo que le pases `--frente`: quien la manda suele estar
+escribiendo adentro de la app.
+
+Para los clientes de IA que no tienen bash está la tool `xtal_app` del MCP. Y
+`XTAL_APP=/ruta/Xtal.app` fuerza a qué copia va la orden, que hace falta mientras se
+desarrolla y hay varias instaladas.
+
+### Las terminales no se mueren
+
+Las sesiones viven en el workspace, no en la pantalla que las muestra. Cambiás de modo,
+cerrás el cajón, apagás el panel: **lo que estaba corriendo sigue corriendo**, con su
+scrollback. El cajón del modo editor y el panel del modo agente muestran las mismas
+sesiones, así que podés dejar al agente trabajando, irte a escribir, y volver.
+
+Lo demás que hace que se comporte como corresponde:
+
+| Qué | Cómo |
+|---|---|
+| Varias terminales | Solapas, con el `+`. Cada una dice qué está corriendo adentro. |
+| El agente terminó | Suena la campana: punto ámbar en la solapa, sonido y salto del Dock. |
+| El proceso se fue | «Esta terminal se cerró» y un botón para volver a abrir. |
+| Tamaño de la letra | Ajustes → Agentes. Cambia al toque, sin cortar lo que corre. |
+
+**Xtal no abre el agente por vos.** La terminal está para que abras el que uses — Claude,
+Codex, el que sea. Lo que Xtal hace es que tu agente encuentre el proyecto: arranca en la
+carpeta, con `XTAL_PROJECT` puesto, y con el skill y el MCP ya instalados
+(Ajustes → Agentes).
+
+### La terminal es Ghostty
+
+La dibuja **libghostty**: la emulación VT, el renderer en Metal y el rasterizado de
+fuentes con CoreText del mismo Ghostty, que es lo que usa Supacode. No es un detalle de
+implementación — adentro corre `claude`, que es una TUI que repinta la pantalla entera
+muchas veces por segundo, y un emulador que dibuja por CPU se arrastra.
+
+Xtal le pone tres cosas: la carpeta donde arranca, los colores de la app (claro y
+oscuro, atados a los mismos tokens que el resto) y el aire de adentro. Todo lo demás
+—selección, copiar y pegar, links, scrollback, ligaduras, IME— viene hecho.
 
 ## Git adentro, en símbolos
 

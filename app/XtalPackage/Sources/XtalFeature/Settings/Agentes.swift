@@ -27,8 +27,28 @@ struct PanelAgentes: View {
     @State private var error: String?
     @State private var agregando = false
 
+    /// El tamaño de la letra de la terminal donde corre el agente.
+    ///
+    /// Va acá y no en Editor porque no es el texto del editor: es la pantalla donde
+    /// trabaja el agente, y se mira distinto — uno lee su salida de lejos.
+    @AppStorage("xtal.terminal.tamano") private var tamanoTerminal = 13.0
+
     var body: some View {
         VStack(alignment: .leading, spacing: Tok.S.xxl) {
+            GrupoAjustes(titulo: "La terminal") {
+                FilaAjuste(titulo: "Tamaño del texto",
+                           detalle: "El de las terminales donde abrís tu agente. Cambia al toque, sin cortar lo que esté corriendo.",
+                           conSeparador: false) {
+                    HStack(spacing: Tok.S.md) {
+                        Slider(value: $tamanoTerminal, in: 10...20, step: 0.5).frame(width: 140)
+                        Text(String(format: "%.1f", tamanoTerminal))
+                            .font(Tok.F.mono)
+                            .foregroundStyle(Tok.textSecondary)
+                            .frame(width: 32, alignment: .trailing)
+                    }
+                }
+            }
+
             GrupoAjustes(titulo: "Agentes de IA") {
                 if cargando {
                     FilaAjuste(titulo: "Consultando…", conSeparador: false) {

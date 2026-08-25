@@ -21,6 +21,9 @@ MACOSX_DEPLOYMENT_TARGET = 15.0
 // Info PLIST
 // ==========================================
 GENERATE_INFOPLIST_FILE = YES
+// Xcode genera el Info.plist, pero no sabe generar el esquema de URL: eso se declara
+// a mano acá y Xcode mezcla lo suyo adentro de este archivo.
+INFOPLIST_FILE = Config/Info.plist
 
 // ==========================================
 // Entitlements

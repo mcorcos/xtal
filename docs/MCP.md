@@ -95,6 +95,7 @@ Después de instalar en Claude Desktop hay que reiniciar la app.
 | `xtal_add_series` | Le agrega una medición al gráfico |
 | `xtal_add_section` | Agrega una sección al informe, con sus figuras |
 | `xtal_build_report` | Compila el PDF (o solo el `.tex` con `tex_only`) |
+| `xtal_app` | Le da una orden a la app de escritorio: abrir, compilar, mostrar el PDF o el error |
 | `xtal_run_command` | Escape hatch: cualquier subcomando de la CLI con argumentos crudos |
 
 El par `xtal_plan_add` + `xtal_status` es el que cambia cómo se trabaja. Sin él, el
@@ -103,7 +104,7 @@ primero y después `xtal_status` le va diciendo qué queda, con el comando exact
 falta. El plan vive adentro del `xtal.toml`, así que sobrevive a que se cierre la
 conversación.
 
-Son quince, no una por subcomando. La CLI tiene una superficie enorme (`sim` sola tiene
+Son diecisiete, no una por subcomando. La CLI tiene una superficie enorme (`sim` sola tiene
 once análisis) y exponerla entera llenaría el contexto del modelo de ruido. Están las del
 camino que se recorre en el 95% de los informes; para el resto está `xtal_run_command`,
 que corre cualquier cosa — incluido `--help` para descubrir qué acepta un subcomando.

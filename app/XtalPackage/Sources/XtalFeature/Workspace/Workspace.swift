@@ -13,6 +13,12 @@ import SwiftUI
 ///
 /// Un solo interruptor cambia entre los dos. **No hay más estados**: es a propósito.
 public struct Workspace: View {
+    /// Las terminales del proyecto.
+    ///
+    /// **Viven acá y no adentro de la pantalla que las muestra.** Es lo que hace que
+    /// cambiar de modo, cerrar el cajón o apagar el panel no mate al agente que estaba
+    /// trabajando. Mientras la carpeta esté abierta, las sesiones siguen.
+    @State private var agentes: Agentes
     @State private var proyecto: Proyecto
     @State private var git: Git
     @State private var ajuste: Ajuste
@@ -69,9 +75,20 @@ public struct Workspace: View {
         }
     }
 
+    /// Qué se mira en el panel de la derecha.
+    ///
+    /// **No es estado guardado**: al abrir un proyecto se mira el PDF. Los errores son
+    /// de cuando pasan.
+    @State private var solapa: Salida = .pdf
+
+    enum Salida { case pdf, errores }
+
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
     @AppStorage("xtal.panel.terminal") private var verTerminal = false
+    /// El lateral del modo agente. Arranca **cerrado**: el modo agente son dos cosas,
+    /// la conversación y el resultado. Lo demás se abre si interesa.
+    @AppStorage("xtal.panel.agente.informe") private var verInforme = false
     /// Si la lista de archivos del proyecto está desplegada. Arranca cerrada: son la
     /// tripa, no el informe.
     @AppStorage("xtal.panel.archivosCrudos") private var verArchivos2 = false
@@ -108,18 +125,34 @@ public struct Workspace: View {
         var icono: String { self == .editor ? "text.cursor" : "sparkles" }
     }
 
-    /// El mismo fondo que la terminal pinta por dentro, para que el aire no se note.
-    private var fondoTerminal: Color { esquema == .dark ? .hex("1c1c1e") : .hex("fbfbfb") }
+    /// En qué modo estás, y se acuerda entre sesiones.
+    ///
+    /// Si trabajás hablándole al agente, la app abre en agente: tener que elegirlo cada
+    /// vez que abrís es pedirle a la persona que se acuerde de algo que la app ya sabe.
+    @AppStorage("xtal.modo") private var modoGuardado = Modo.editor.rawValue
 
-    /// El selector de modo está sacado de la barra por ahora, así que la app siempre
-    /// abre en editor. El modo agente sigue existiendo y se llega con el override de
-    /// desarrollo (`Desarrollo.modoForzado`).
+    /// `XTAL_MODO` sigue ganando, pero es para desarrollo: sirve para retratar un modo
+    /// sin dejarlo elegido.
     private var modo: Modo {
         if let forzado = Desarrollo.modoForzado, let m = Modo(rawValue: forzado) { return m }
-        return .editor
+        return Modo(rawValue: modoGuardado) ?? .editor
     }
 
+    /// Ir al editor con algo abierto. Es lo que hacen los items del panel del informe
+    /// cuando estás en modo agente: **un click que no hace nada es peor que un botón
+    /// que no está**, y lo que uno quiere al tocar una sección es tocarla a mano.
+    private func alEditor(_ abrir: () -> Void) {
+        modoGuardado = Modo.editor.rawValue
+        abrir()
+    }
+
+    /// El tamaño de la letra de la terminal. Se lee del disco a mano en el `init`
+    /// porque `@AppStorage` todavía no existe cuando se arman las sesiones.
+    @AppStorage("xtal.terminal.tamano") private var tamanoTerminal = 13.0
+
     public init(carpeta: URL, cerrar: @escaping () -> Void) {
+        let tamano = UserDefaults.standard.object(forKey: "xtal.terminal.tamano") as? Double ?? 13
+        _agentes = State(initialValue: Agentes(carpeta: carpeta, tamano: tamano))
         _proyecto = State(initialValue: Proyecto(carpeta: carpeta))
         _git = State(initialValue: Git(carpeta: carpeta))
         _ajuste = State(initialValue: Ajuste(carpeta: carpeta))
@@ -143,6 +176,13 @@ public struct Workspace: View {
         .onAppear { cargarSeleccionado() }
         .onReceive(NotificationCenter.default.publisher(for: .xtalGuardarYCompilar)) { _ in
             Task { await guardarYCompilar() }
+        }
+        // Las dos órdenes de afuera que necesitan tocar el estado de esta pantalla.
+        .onReceive(NotificationCenter.default.publisher(for: .xtalVerSolapa)) { aviso in
+            solapa = (aviso.object as? String) == "errores" ? .errores : .pdf
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .xtalTerminalNueva)) { _ in
+            agentes.abrir()
         }
         .onDisappear { vigia?.parar() }
         .sheet(item: $pedidoArchivo) { pedido in
@@ -188,6 +228,7 @@ public struct Workspace: View {
                 }
             }
         }
+        .onChange(of: tamanoTerminal) { _, nuevo in agentes.cambiarTamano(nuevo) }
         .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
             // El texto lo acaba de poner la app, no el usuario: se muestra y no se
@@ -229,13 +270,13 @@ public struct Workspace: View {
                 // con su cursor y su comportamiento: no hay nada que inventar.
                 HSplitView {
                     editor
-                    if verPdf { pdf }
+                    if verPdf { panelSalida }
                 }
             }
             .frame(minHeight: 240)
 
             if verTerminal {
-                CajonTerminal(carpeta: proyecto.carpeta, abierto: $verTerminal)
+                CajonTerminal(agentes: agentes, abierto: $verTerminal)
                     .frame(minHeight: 120, idealHeight: 220)
             }
         }
@@ -243,30 +284,35 @@ public struct Workspace: View {
 
     // MARK: - Modo agente
 
-    /// La terminal a la izquierda y el PDF a la derecha.
+    /// **Izquierda y derecha, y nada más.** El agente a la izquierda, lo que sale a la
+    /// derecha.
     ///
-    /// Acá la terminal no es un cajón que se abre: **es la pantalla**. Abrís `claude`
-    /// adentro y trabajás hablando, mirando el PDF salir al lado.
+    /// Acá la terminal no es un cajón que se abre: es la pantalla. Abrís `claude`
+    /// adentro y trabajás hablando, mirando el PDF salir al lado. Los errores viven
+    /// detrás del PDF, en su solapa: cuando algo no compila, lo último que sí compiló
+    /// sigue estando adelante.
+    ///
+    /// El lateral está, pero cerrado. Se prende cuando querés ver qué falta.
     private var modoAgente: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                cabecera("Terminal · \(proyecto.carpeta.lastPathComponent)", icono: "terminal")
-                // La terminal va adentro de una tarjeta, como cualquier otro panel de
-                // la app: redondeada, con su borde y con aire alrededor. Pegada al
-                // borde de la ventana se ve como una consola metida a la fuerza.
-                TerminalIntegrada(carpeta: proyecto.carpeta)
-                    .id(proyecto.carpeta.path)
-                    .padding(.horizontal, Tok.S.lg)
-                    .padding(.vertical, Tok.S.md)
-                    .background(fondoTerminal)
-                    .clipShape(RoundedRectangle(cornerRadius: Tok.R.panel, style: .continuous))
-                    .borde(Tok.borderSubtle, radio: Tok.R.panel)
-                    .padding(Tok.S.md)
+        HStack(spacing: 0) {
+            if verInforme {
+                panelInforme
+                Rectangle().fill(Tok.borderSubtle).frame(width: 1)
             }
-            .frame(minWidth: 380, idealWidth: 700)
-
-            if verPdf { pdf }
+            HSplitView {
+                panelAgente
+                if verPdf { panelSalida }
+            }
         }
+    }
+
+    /// El lado del agente: las terminales, con sus solapas arriba.
+    ///
+    /// Las mismas que muestra el cajón del modo editor. Abrís el agente que uses —Xtal
+    /// no elige por vos— y podés tener más de uno al mismo tiempo.
+    private var panelAgente: some View {
+        PanelTerminales(agentes: agentes)
+            .frame(minWidth: 420, idealWidth: 720)
     }
 
     // MARK: - Barra
@@ -296,22 +342,46 @@ public struct Workspace: View {
             .keyboardShortcut("s", modifiers: .command)
             .disabled(proyecto.compilando)
 
-            if modo == .editor {
-                menuFacultad
-            }
+            menuFacultad
 
             Divider()
 
-            // En modo agente no hay archivos ni cajón de terminal que prender: los
-            // botones que no hacen nada confunden más que los que faltan.
-            if modo == .editor {
+            selectorModo
+
+            Divider()
+
+            // Cada modo prende lo suyo. Un botón que no hace nada confunde más que uno
+            // que no está: en agente no hay editor al que abrirle un cajón de terminal,
+            // y el lateral no es el mismo panel que en editor.
+            switch modo {
+            case .editor:
                 BotonPanel(icono: "sidebar.left", ayuda: "Archivos (⌘1)", prendido: $verArchivos)
-            }
-            BotonPanel(icono: "doc.richtext", ayuda: "PDF (⌘2)", prendido: $verPdf)
-            if modo == .editor {
+                BotonPanel(icono: "doc.richtext", ayuda: "PDF (⌘2)", prendido: $verPdf)
                 BotonPanel(icono: "terminal", ayuda: "Terminal (⌘J)", prendido: $verTerminal)
+            case .agente:
+                BotonPanel(icono: "sidebar.left", ayuda: "Qué falta (⌘1)", prendido: $verInforme)
+                BotonPanel(icono: "doc.richtext", ayuda: "Resultado (⌘2)", prendido: $verPdf)
             }
         }
+    }
+
+    /// Los dos modos, en la barra.
+    ///
+    /// Estaba sacado y por eso al modo agente solo se llegaba con una variable de
+    /// entorno: una pantalla a la que no se llega es una pantalla que no existe.
+    private var selectorModo: some View {
+        Picker("Modo", selection: Binding(
+            get: { modo },
+            set: { modoGuardado = $0.rawValue }
+        )) {
+            ForEach(Modo.allCases) { m in
+                Text(m.titulo).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .help("Escribir vos, o hablarle al agente")
     }
 
     /// Cambiar de theme es, en la práctica, **cambiar de facultad**: la carátula, los
@@ -350,93 +420,32 @@ public struct Workspace: View {
 
     // MARK: - Paneles
 
-    /// El panel lateral es **el informe**, no la carpeta.
+    /// El lateral del modo agente: **qué falta y qué hay**.
     ///
-    /// Antes era un explorador de archivos: una lista de `.toml` de mediciones, de
-    /// gráficos y de circuitos. Eso es la tripa de Xtal, no el informe — y nadie abre
-    /// `node_modules` para escribir su aplicación. Los archivos siguen ahí, en la
-    /// carpeta, y se pueden mirar si uno quiere; pero no son la pantalla.
+    /// No es un explorador de archivos. Al lado de un agente, la pregunta no es qué
+    /// archivos hay —los toca él— sino qué le falta al informe y qué secciones tiene.
+    /// Los archivos siguen en la carpeta y el modo editor los muestra.
     ///
-    /// Lo que se ve acá es lo que hay en el informe: qué falta, y sus secciones con las
-    /// figuras que muestra cada una.
-    private var listaArchivos: some View {
+    /// Tocar una sección te lleva al editor con esa sección abierta.
+    private var panelInforme: some View {
         VStack(spacing: 0) {
             cabecera("Qué falta", icono: "checklist")
-            PanelEstado(carpeta: proyecto.carpeta)
-            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
-
-            cabecera("El informe", icono: "text.alignleft") {
-                Button {
-                    tituloNuevo = ""
-                    pidiendoTitulo = PedidoDeTitulo(clase: .nueva(bajo: nil))
-                } label: {
-                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Tok.textSecondary)
-                .help("Agregar una sección")
-            }
-            listaSecciones
-            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
-
-            // Los archivos van plegados y al final. Están para el que los quiera —
-            // son archivos de texto y son suyos— pero abrir uno no es parte de escribir
-            // un informe.
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) { verArchivos2.toggle() }
-            } label: {
-                HStack(spacing: Tok.S.sm) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Tok.textTertiary)
-                        .rotationEffect(.degrees(verArchivos2 ? 90 : 0))
-                    Text("Archivos del proyecto")
-                        .font(Tok.F.label)
-                        .foregroundStyle(Tok.textTertiary)
-                    Spacer()
-                }
-                .padding(.horizontal, Tok.S.lg)
-                .frame(height: Tok.H.fila)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if verArchivos2 {
             ScrollView {
-                // Una lista plana, sin `Section` y sin `LazyVStack`.
-                //
-                // `Section` solo se dibuja adentro de un `List`, un `Form` o un
-                // contenedor lazy con encabezados fijados; en un `VStack` común no
-                // renderiza nada y el panel queda en blanco. Y la pereza no compra nada
-                // con decenas de archivos.
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filas) { fila in
-                        switch fila.clase {
-                        case .encabezado(let texto):
-                            Text(texto)
-                                .font(Tok.F.label)
-                                .foregroundStyle(Tok.textTertiary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, Tok.S.md)
-                                .frame(height: 24)
-                        case .archivo(let a):
-                            ItemNav(titulo: a.etiqueta, icono: icono(a),
-                                    detalle: a.nombre,
-                                    activo: proyecto.seleccionado?.id == a.id) {
-                                // Guardar por `abierto` y no por la sección
-                                // seleccionada: si lo que está en el editor es un
-                                // archivo, `texto` no es el cuerpo de ninguna sección
-                                // y escribirlo ahí pisa el texto del informe.
-                                guardarLoAbierto()
-                                secciones.seleccionada = nil
-                                proyecto.seleccionado = a
-                            }
-                        }
+                VStack(spacing: 0) {
+                    PanelEstado(carpeta: proyecto.carpeta)
+                    Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+                        .padding(.top, Tok.S.sm)
+                    HStack(spacing: Tok.S.sm) {
+                        Image(systemName: "text.alignleft")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Tok.textTertiary)
+                        Text("El informe").font(Tok.F.label).foregroundStyle(Tok.textSecondary)
+                        Spacer()
                     }
+                    .padding(.horizontal, Tok.S.lg)
+                    .frame(height: Tok.H.fila)
+                    listaSecciones
                 }
-                .padding(Tok.S.xs)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
             }
 
             Spacer(minLength: 0)
@@ -457,7 +466,7 @@ public struct Workspace: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(width: 232)
+        .frame(width: 240)
         .fondoLateral()
     }
 
@@ -478,8 +487,8 @@ public struct Workspace: View {
                 ForEach(secciones.lista) { sec in
                     ItemNav(titulo: sec.titulo,
                             icono: sec.figuras.isEmpty ? "text.alignleft" : "chart.xyaxis.line",
-                            activo: secciones.seleccionada?.id == sec.id) {
-                        elegirSeccion(sec)
+                            activo: modo == .editor && secciones.seleccionada?.id == sec.id) {
+                        alEditor { elegirSeccion(sec) }
                     }
                     .padding(.leading, CGFloat(sec.nivel) * 14)
                     .contextMenu {
@@ -610,7 +619,7 @@ public struct Workspace: View {
         let tex = proyecto.carpeta.appendingPathComponent("salida/main.tex")
         if FileManager.default.fileExists(atPath: tex.path) {
             Button {
-                abrirArchivo(tex)
+                alEditor { abrirArchivo(tex) }
             } label: {
                 Text("ver el .tex").font(.system(size: 11, weight: .medium))
             }
@@ -757,30 +766,71 @@ public struct Workspace: View {
         }
     }
 
-    /// El lado derecho: el PDF, o —si no compila— por qué no.
+    /// El lado derecho: el resultado. El PDF adelante, los errores atrás.
     ///
-    /// El error va acá y no en un panel aparte porque este es el lugar donde uno mira
-    /// para ver el resultado. Si no hay resultado, acá va la explicación.
-    private var pdf: some View {
+    /// **Antes el error reemplazaba al PDF** y eso estaba mal por una razón concreta:
+    /// el informe que no compila hoy compilaba hace un minuto, y esa versión es lo que
+    /// uno necesita mirar mientras arregla. Sacarla de la pantalla justo cuando algo
+    /// falla es sacar la única referencia que había.
+    ///
+    /// Ahora son dos solapas. El PDF se queda adelante y la solapa de errores se marca
+    /// con un punto. Lo único que cambia solo es el caso en que **no hay PDF todavía**:
+    /// ahí no hay nada que dejar adelante y la explicación pasa al frente.
+    private var panelSalida: some View {
         VStack(spacing: 0) {
-            if let e = proyecto.error {
-                cabecera("No compila", icono: "exclamationmark.triangle.fill")
-                PanelError(error: e) { titulo in
-                    if let sec = secciones.lista.first(where: { $0.titulo == titulo }) {
-                        elegirSeccion(sec)
-                    }
+            barraSalida
+            switch solapa {
+            case .pdf:
+                if proyecto.pdf != nil {
+                    VisorPDF(url: proyecto.pdf)
+                } else {
+                    Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
+                          detalle: "Apretá ⌘S y el PDF aparece acá")
                 }
-            } else if proyecto.pdf != nil {
-                cabecera("main.pdf", icono: "doc.richtext") { botonVerLatex }
-                VisorPDF(url: proyecto.pdf)
-            } else {
-                cabecera("Sin compilar", icono: "doc.richtext")
-                Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
-                      detalle: "Apretá ⌘R y el PDF aparece acá")
+            case .errores:
+                if let e = proyecto.error {
+                    PanelError(error: e) { titulo in
+                        if let sec = secciones.lista.first(where: { $0.titulo == titulo }) {
+                            alEditor { elegirSeccion(sec) }
+                        }
+                    }
+                } else {
+                    Vacio(icono: "checkmark.seal", titulo: "No hay errores",
+                          detalle: "La última compilación salió limpia")
+                }
             }
         }
         .frame(minWidth: 280, idealWidth: 520)
         .background(Tok.bgApp)
+        // El PDF vuelve al frente solo cuando el error se arregla: te quedaste mirando
+        // el error, lo corregiste, y lo que querés ver es el resultado.
+        .onChange(of: proyecto.error?.mensaje) { _, nuevo in
+            if nuevo == nil {
+                solapa = .pdf
+            } else if proyecto.pdf == nil {
+                solapa = .errores
+            }
+        }
+    }
+
+    /// La barra del panel de la derecha: las dos solapas y, si hay PDF, el link al .tex.
+    private var barraSalida: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Tok.S.xs) {
+                Solapa(titulo: "main.pdf", icono: "doc.richtext",
+                       activa: solapa == .pdf) { solapa = .pdf }
+                Solapa(titulo: "Errores", icono: "exclamationmark.triangle",
+                       activa: solapa == .errores, alerta: proyecto.error != nil) {
+                    solapa = .errores
+                }
+                Spacer()
+                if solapa == .pdf { botonVerLatex }
+            }
+            .padding(.horizontal, Tok.S.md)
+            .frame(height: Tok.H.fila)
+            Rectangle().fill(Tok.borderSubtle).frame(height: 1)
+        }
+        .fondoBarra()
     }
 
     private func cabecera<Accesorio: View>(
@@ -809,40 +859,6 @@ public struct Workspace: View {
     }
 
     // MARK: - Auxiliares
-
-    /// Una fila del panel: o un encabezado de carpeta, o un archivo.
-    private struct Fila: Identifiable {
-        enum Clase {
-            case encabezado(String)
-            case archivo(Proyecto.Archivo)
-        }
-        let id: String
-        let clase: Clase
-    }
-
-    /// La lista aplanada: cada carpeta con su encabezado y sus archivos debajo.
-    private var filas: [Fila] {
-        var out: [Fila] = []
-        var grupoActual: String?
-        for a in proyecto.archivos {
-            if a.grupo != grupoActual {
-                grupoActual = a.grupo
-                out.append(Fila(id: "grupo:" + a.grupo, clase: .encabezado(a.grupo)))
-            }
-            out.append(Fila(id: a.url.path, clase: .archivo(a)))
-        }
-        return out
-    }
-
-    private func icono(_ a: Proyecto.Archivo) -> String {
-        switch a.url.pathExtension {
-        case "tex", "j2": return "doc.text"
-        case "toml": return "gearshape"
-        case "cir", "net", "sp": return "waveform.path"
-        case "md": return "text.alignleft"
-        default: return "doc"
-        }
-    }
 
     private func elegirSeccion(_ sec: Secciones.Seccion) {
         // Guardar lo que estaba abierto antes de perderlo. `guardarLoAbierto` mira

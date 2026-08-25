@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  El resto del Info.plist lo genera Xcode (`GENERATE_INFOPLIST_FILE = YES`) y lo
+	  mezcla adentro de este archivo. Acá va solo lo que Xcode no sabe generar.
+
+	  `xtal://` es la puerta de la app: la usa `xtal app` para manejarla desde afuera,
+	  que es lo único que puede hacer un agente — apretar un botón necesita el permiso
+	  de accesibilidad del sistema. El detalle está en `Ordenes.swift`.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.unit.xtal</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>xtal</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

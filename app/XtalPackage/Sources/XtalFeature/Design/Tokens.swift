@@ -62,6 +62,23 @@ public enum Tok {
     public static let azul = Familia(bg: .hex("e5eeff"), tint: .hex("d6e5ff"), deep: .hex("215bc4"))
     public static let gris = Familia(bg: .hex("f6f7f7"), tint: .hex("eeeff1"), deep: .hex("505155"))
 
+    // MARK: - Terminal
+    //
+    // La terminal se configura con **texto**, no con `Color`: adentro corre libghostty,
+    // que lee su configuración como la leería de un archivo. Por eso sus colores son el
+    // hex pelado. Viven acá igual que todos los demás — un hex escrito en otro archivo
+    // es un color que nadie va a volver a encontrar.
+    //
+    // Son los mismos valores que `bgSidebar` y `textPrimary`: la terminal tiene que
+    // verse como una parte de la app y no como una consola pegada adentro.
+
+    public enum Term {
+        public static let fondo = (claro: "fbfbfb", oscuro: "1c1c1e")
+        public static let texto = (claro: "101112", oscuro: "f2f2f3")
+        public static let cursor = (claro: "266df0", oscuro: "5c92f5")
+        public static let seleccion = (claro: "d6e5ff", oscuro: "284b62")
+    }
+
     // MARK: - Radios
     //
     // Se eligen por el ALTO de la pieza, no por gusto: ronda un tercio. Un chip de 22

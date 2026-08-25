@@ -133,6 +133,43 @@ sola. No pases colores ni estilos salvo que el usuario quiera pisar algo a prop�
 
 ---
 
+## La app de escritorio
+
+Xtal también es una **app de Mac**: editor a la izquierda, PDF a la derecha, y un modo
+agente donde la terminal ocupa media pantalla. Si estás corriendo adentro de esa terminal
+tenés `XTAL_PROJECT` en el entorno.
+
+Podés manejarla con `xtal app` (necesita macOS y la app instalada). **Es lo único que te
+permite mover la ventana**: apretar un botón necesita el permiso de accesibilidad del
+sistema, así que sin esto solo te queda pedirle a la persona que apriete.
+
+```bash
+xtal app abrir              # abre este proyecto en la app (sin carpeta: el actual)
+xtal app compilar           # guardar y compilar, lo mismo que ⌘S
+xtal app ver errores        # mostrale el error de compilación
+xtal app ver pdf            # volver al PDF
+xtal app modo agente        # o `editor`
+xtal app panel informe --on # el lateral con qué falta y las secciones
+xtal app terminal           # otra terminal en el panel del agente
+xtal app --frente ...       # además, traer la app adelante
+```
+
+Cuándo sirve, en la práctica:
+
+- **Terminaste de cargar datos y compilaste**: `xtal app ver pdf` y la persona ve el
+  resultado sin buscar nada.
+- **No compila**: `xtal app ver errores` y estás señalando el problema en pantalla, en
+  vez de pegar un log en el chat.
+- **Creaste un proyecto**: `xtal app abrir` y ya lo tiene abierto.
+
+Por default las órdenes **no roban el foco**: si la persona está escribiendo, no le sacás
+el teclado. `--frente` es para cuando de verdad tiene que mirar.
+
+Si `xtal app` dice que no encuentra la app, no está instalada: seguí por la CLI y no
+insistas.
+
+---
+
 ## Cosas que NO conviene correr
 
 - `xtal watch` — no termina nunca. Es para que un humano lo deje corriendo.

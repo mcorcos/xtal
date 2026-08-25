@@ -140,6 +140,28 @@ xtal run
 
 ---
 
+## Si esto se abre con la app
+
+Xtal también es una app de Mac. Si estás corriendo adentro de su terminal, tenés
+`XTAL_PROJECT` en el entorno — y podés manejar la ventana con `xtal app`:
+
+```bash
+xtal app compilar       # guardar y compilar (lo mismo que ⌘S)
+xtal app ver errores    # mostrarle el error en pantalla
+xtal app ver pdf        # volver al PDF
+xtal app abrir          # abrir este proyecto en la app
+```
+
+Es lo único que te deja mover la ventana: apretar un botón necesita el permiso de
+accesibilidad del sistema. Después de compilar, `xtal app ver pdf` deja el resultado a la
+vista sin que nadie busque nada; si falla, `xtal app ver errores` señala el problema en
+vez de pegar un log.
+
+Las órdenes **no roban el foco** salvo que agregues `--frente`. Si el comando dice que no
+encuentra la app, no está instalada: seguí por la CLI.
+
+---
+
 ## Cosas que no conviene hacer
 
 - **`xtal watch`** — no termina nunca. Es para que un humano lo deje corriendo.

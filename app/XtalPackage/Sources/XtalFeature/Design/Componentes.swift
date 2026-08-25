@@ -200,6 +200,45 @@ struct BotonPanel: View {
 
 // MARK: - Estado vacío
 
+/// Una solapa del panel de la derecha.
+///
+/// Son dos y nunca van a ser más: el PDF y los errores. Por eso no es un `TabView` —
+/// un `TabView` de Mac trae su propio marco, su propio fondo y su propio ritmo, y
+/// adentro de un panel que ya tiene barra queda un marco arriba de otro.
+///
+/// El punto es la relación: **el PDF adelante y los errores atrás**, no uno en lugar
+/// del otro. Cuando algo no compila, lo último que compiló sigue ahí para mirar.
+struct Solapa: View {
+    let titulo: String
+    let icono: String
+    let activa: Bool
+    /// El puntito. Está para avisar sin gritar: que haya errores no tiene por qué
+    /// sacarte el PDF de adelante, pero tenés que enterarte.
+    var alerta: Bool = false
+    let tocar: () -> Void
+
+    var body: some View {
+        Button(action: tocar) {
+            HStack(spacing: Tok.S.xs) {
+                Image(systemName: icono).font(.system(size: 11))
+                Text(titulo).font(Tok.F.label).lineLimit(1)
+                if alerta {
+                    Circle()
+                        .fill(Tok.ambar.deep)
+                        .frame(width: 5, height: 5)
+                }
+            }
+            .foregroundStyle(activa ? Tok.textPrimary : Tok.textTertiary)
+            .padding(.horizontal, Tok.S.md)
+            .frame(height: 22)
+            .background(activa ? Tok.bgActive : .clear,
+                        in: RoundedRectangle(cornerRadius: Tok.R.chip, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct Vacio: View {
     let icono: String
     let titulo: String

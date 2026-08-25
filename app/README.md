@@ -159,6 +159,13 @@ cd app/XtalPackage && swift test
 - **El sandbox está apagado a propósito.** La app corre el binario `xtal`, abre tu shell
   y escribe en la carpeta que elegís. Nada de eso se puede hacer en sandbox. El motivo
   completo está escrito adentro de `Config/Xtal.entitlements`.
-- **SwiftTerm está clavado en 1.10.0.** De 1.11 en adelante trae un build plugin y un
-  renderer en Metal: el plugin hay que aprobarlo en cada build por línea de comandos y el
-  Metal obliga a bajar varios GB de toolchain. 1.10.0 es la última sin ninguna de las dos.
+- **La terminal la dibuja libghostty**, el núcleo de Ghostty: emulación VT, renderer en
+  Metal y fuentes con CoreText. Antes era SwiftTerm, que dibuja por CPU; adentro corre
+  `claude`, que repinta la pantalla entera muchas veces por segundo, y ahí se nota.
+  Es el mismo motor que usa Supacode.
+
+  Viene por SwiftPM desde `Lakr233/libghostty-spm`, que lo publica **ya compilado** como
+  XCFramework: un `binaryTarget` por URL con checksum, así que el binario no vive en el
+  repo y no hace falta Zig para compilar la app. Ese paquete además le pone arriba la
+  capa de AppKit y SwiftUI —teclado, IME, selección, links, scrollback— que si no habría
+  que escribir a mano contra la API en C.
