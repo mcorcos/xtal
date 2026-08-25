@@ -645,6 +645,21 @@ pub fn cmd_compile(a: CompileArgs, project: &Option<PathBuf>) -> Result<()> {
         );
     }
 
+    // **Un pedazo del informe no es un documento.** Los `.tex` de `secciones/` son el
+    // cuerpo de una sección: no tienen `\documentclass` ni `\begin{document}`, y el
+    // motor los rechaza con «Missing \begin{document}» — un error que no dice nada a
+    // quien solo escribió texto. Peor: Tectonic corre con `--keep-logs` y deja un
+    // `.log` al lado del `.tex`, adentro de la carpeta que el usuario edita.
+    //
+    // Se corta antes de llamar al motor: sin log, sin PDF a medias, y el mensaje dice
+    // qué hacer en su lugar.
+    if es_fragmento(&tex_path) {
+        bail!(
+            "{} es un pedazo del informe, no un documento entero: no tiene \\begin{{document}}.\nPara verlo compilado, corré `xtal run`, que arma el informe con todas las secciones.",
+            tex_path.display()
+        );
+    }
+
     // El PDF va al lado del `.tex`, no siempre a `salida/`: si estás compilando un
     // `.tex` que escribiste vos en otra carpeta, el resultado tiene que quedar ahí.
     let outdir = tex_path
@@ -667,6 +682,21 @@ pub fn cmd_compile(a: CompileArgs, project: &Option<PathBuf>) -> Result<()> {
         open_file(&pdf);
     }
     Ok(())
+}
+
+/// ¿Este `.tex` es un pedazo de otro documento y no uno entero?
+///
+/// La prueba es `\begin{document}`: es lo que separa un documento de un fragmento que
+/// alguien incluye con `\input`. Se busca en el archivo tal cual, sin resolver
+/// `\input`s: para decidir si mandarlo al motor alcanza y sobra.
+///
+/// Si el archivo no se puede leer, no se decide nada: que falle el motor con su propio
+/// error, que para eso está.
+fn es_fragmento(tex_path: &Path) -> bool {
+    match std::fs::read_to_string(tex_path) {
+        Ok(texto) => !texto.contains("\\begin{document}"),
+        Err(_) => false,
+    }
 }
 
 pub fn cmd_run(a: RunArgs, project: &Option<PathBuf>) -> Result<()> {
@@ -1226,6 +1256,31 @@ fn open_file(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Un cuerpo de sección no se manda al motor: no compila y deja un `.log` de
+    /// error adentro de `secciones/`, que es una carpeta que el usuario edita.
+    #[test]
+    fn fragmento_vs_documento() {
+        let dir = std::env::temp_dir().join("xtal-test-fragmento");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let parte = dir.join("01-objetivo.tex");
+        std::fs::write(&parte, "Se caracteriza un filtro pasabajos.\n").unwrap();
+        assert!(es_fragmento(&parte));
+
+        let entero = dir.join("main.tex");
+        std::fs::write(
+            &entero,
+            "\\documentclass{article}\n\\begin{document}\nHola\n\\end{document}\n",
+        )
+        .unwrap();
+        assert!(!es_fragmento(&entero));
+
+        // Un archivo que no está no se juzga acá: que falle el motor con su error.
+        assert!(!es_fragmento(&dir.join("no-existe.tex")));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn slugify_basic() {
