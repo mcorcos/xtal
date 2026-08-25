@@ -32,6 +32,19 @@ public struct Workspace: View {
     /// Con esto no hay ambigüedad posible: lo que se guarda es lo que dice `abierto`.
     @State private var abierto: Abierto = .nada
 
+    /// **Está cargando texto en el editor, no lo está escribiendo el usuario.**
+    ///
+    /// `onChange(of: texto)` no puede distinguir las dos cosas por su cuenta, y esa
+    /// confusión es una pérdida de datos: si abrir algo devuelve vacío —el archivo no
+    /// está todavía, la CLI falló, la sección aún no cargó— el guardado automático
+    /// escribe ese vacío arriba de lo que había. Pasó: las cuatro secciones del
+    /// ejemplo quedaron en un salto de línea.
+    ///
+    /// La regla es una sola: **al disco solo va lo que alguien tecleó.** Todo lo que
+    /// pone texto desde el código pasa por `mostrar(_:como:)`, que levanta esta
+    /// bandera; el `onChange` la baja y no guarda esa vez.
+    @State private var cargandoTexto = false
+
     enum Abierto: Equatable {
         case nada
         case archivo(URL)
@@ -177,6 +190,12 @@ public struct Workspace: View {
         }
         .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
+            // El texto lo acaba de poner la app, no el usuario: se muestra y no se
+            // guarda. Ver `cargandoTexto`.
+            if cargandoTexto {
+                cargandoTexto = false
+                return
+            }
             // Guardado directo, sin ⌘S. El proyecto es una carpeta de archivos planos y
             // la fuente de verdad es el disco: un buffer sucio adentro de la app sería
             // una segunda verdad, y ahí empiezan los problemas.
@@ -404,9 +423,11 @@ public struct Workspace: View {
                             ItemNav(titulo: a.etiqueta, icono: icono(a),
                                     detalle: a.nombre,
                                     activo: proyecto.seleccionado?.id == a.id) {
-                                if let sec = secciones.seleccionada {
-                                    secciones.guardar(sec.titulo, cuerpo: texto)
-                                }
+                                // Guardar por `abierto` y no por la sección
+                                // seleccionada: si lo que está en el editor es un
+                                // archivo, `texto` no es el cuerpo de ninguna sección
+                                // y escribirlo ahí pisa el texto del informe.
+                                guardarLoAbierto()
                                 secciones.seleccionada = nil
                                 proyecto.seleccionado = a
                             }
@@ -656,12 +677,16 @@ public struct Workspace: View {
 
         // Qué se compila, en orden:
         //
-        //   1. el `.tex` que estás editando — si estás escribiendo LaTeX, es ese;
+        //   1. el `.tex` que estás editando — si estás escribiendo LaTeX, es ese.
+        //      **Salvo que sea un pedazo del informe**: los `.tex` de `secciones/` no
+        //      tienen `\begin{document}`, no compilan solos y el motor deja un `.log`
+        //      de error al lado del archivo. Editar una sección compila el informe;
         //   2. un `main.tex` tuyo en la raíz del proyecto, si existe. Es la señal de
         //      «acá el LaTeX lo escribo yo»: Xtal no lo genera y no lo pisa;
         //   3. si no hay ninguno, `xtal run`, que arma el `.tex` desde el `xtal.toml`.
         let propio = proyecto.carpeta.appendingPathComponent("main.tex")
-        if let url = arbol.seleccionado, url.pathExtension.lowercased() == "tex" {
+        if let url = arbol.seleccionado, url.pathExtension.lowercased() == "tex",
+           !esFragmento(url) {
             await proyecto.compilarTex(url)
         } else if FileManager.default.fileExists(atPath: propio.path) {
             await proyecto.compilarTex(propio)
@@ -687,6 +712,15 @@ public struct Workspace: View {
         }
     }
 
+    /// ¿Este `.tex` es un pedazo de otro documento y no uno entero?
+    ///
+    /// La prueba es `\begin{document}`, igual que en `xtal compile`. Un fragmento se
+    /// edita pero no se compila solo: lo compila el informe que lo incluye.
+    private func esFragmento(_ url: URL) -> Bool {
+        guard let texto = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        return !texto.contains("\\begin{document}")
+    }
+
     /// Si el archivo lo genera Xtal y no tiene sentido editarlo.
     private func generado(_ url: URL) -> Bool {
         url.pathComponents.contains("salida")
@@ -708,8 +742,7 @@ public struct Workspace: View {
         }
         // Primero se declara qué está abierto y después se carga el texto: al revés,
         // el `onChange` del texto dispararía apuntando a lo anterior.
-        abierto = .archivo(url)
-        texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        mostrar((try? String(contentsOf: url, encoding: .utf8)) ?? "", como: .archivo(url))
     }
 
     /// Escribe al disco lo que hay en el editor, si corresponde.
@@ -818,20 +851,30 @@ public struct Workspace: View {
         proyecto.seleccionado = nil
         arbol.seleccionado = nil
         secciones.seleccionada = sec
-        abierto = .seccion(sec.titulo)
-        texto = sec.cuerpo
+        mostrar(sec.cuerpo, como: .seccion(sec.titulo))
     }
 
     private func cargarSeleccionado() {
         if let url = arbol.seleccionado {
-            abierto = .archivo(url)
-            texto = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            mostrar((try? String(contentsOf: url, encoding: .utf8)) ?? "", como: .archivo(url))
         } else if let sec = secciones.seleccionada {
-            abierto = .seccion(sec.titulo)
-            texto = sec.cuerpo
+            mostrar(sec.cuerpo, como: .seccion(sec.titulo))
         } else {
-            abierto = .nada
-            texto = ""
+            mostrar("", como: .nada)
         }
+    }
+
+    /// Pone texto en el editor **sin guardarlo**.
+    ///
+    /// Es la única forma en que el código escribe en `texto`. Levanta `cargandoTexto`
+    /// para que el guardado automático deje pasar este cambio: lo que se acaba de leer
+    /// del disco ya está en el disco, y volver a escribirlo solo puede empeorarlo.
+    ///
+    /// Si el texto nuevo es igual al que había, `onChange` no dispara y nadie bajaría
+    /// la bandera: por eso se baja acá.
+    private func mostrar(_ nuevo: String, como: Abierto) {
+        abierto = como
+        cargandoTexto = texto != nuevo
+        texto = nuevo
     }
 }
