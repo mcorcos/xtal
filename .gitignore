@@ -19,6 +19,9 @@
 # Snapshots pendientes de revisión (insta)
 **/*.snap.new
 
+# Perfiles de cobertura que dejan `cargo test` y `swift test` donde los corras.
+*.profraw
+
 # Cosas del sistema
 .DS_Store
 .env.tokens

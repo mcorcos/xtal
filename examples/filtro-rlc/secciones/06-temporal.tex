@@ -1,0 +1,27 @@
+El mismo circuito, excitado con un escalón de \SI{1}{\volt}. La
+Figura~\ref{fig:escalon} lleva cuatro curvas y usa la convención de color de
+Xtal en los dos ejes que tiene: \textbf{el color dice qué señal es} (ámbar la
+entrada, verde la salida) y \textbf{el trazo dice de dónde salió el dato}
+(sólida la teórica, con marcadores la simulada, punteada la medida). Por eso las
+dos salidas comparten el verde sin confundirse.
+
+Se leen tres cosas de un vistazo:
+
+\begin{itemize}[itemsep=2pt, topsep=4pt]
+  \item \textbf{Sobrepico.} La salida llega a \SI{1.41}{\volt} contra un escalón
+        de \SI{1}{\volt}: \SI{41}{\percent}, contra el \SI{45}{\percent} que
+        predice el modelo ideal. La diferencia es, otra vez, $R_L$.
+  \item \textbf{Oscilación amortiguada.} El período entre máximos es de
+        \SI{0.96}{\milli\second}, o sea \SI{1.04}{\kilo\hertz}: es $\omega_d$,
+        apenas por debajo de $\fnat$, como manda
+        $\omega_d = \sqrt{\omega_0^2 - \alpha^2}$.
+  \item \textbf{Tiempo de establecimiento.} La envolvente cae como
+        $e^{-\alpha t}$ con $\alpha = \SI{1650}{\per\second}$, así que entrar en
+        la banda del \SI{2}{\percent} lleva $4/\alpha \approx
+        \SI{2.4}{\milli\second}$. Coincide con lo medido.
+  \end{itemize}
+
+\noindent
+La curva medida arranca antes de $t = 0$: son las muestras de \emph{pretrigger}
+del osciloscopio. El disparo está en el flanco de CH1, que es lo que fija el
+origen de tiempos común a las tres fuentes.

@@ -1,0 +1,14 @@
+Antes de mirar el circuito armado conviene ver qué manda sobre la forma de la
+curva. La frecuencia natural fija \emph{dónde} está el codo; el factor de mérito
+fija \emph{qué tan alto} es el pico. La Figura~\ref{fig:familia} evalúa la
+Ecuación~\eqref{eq:modulo-fase} para cuatro valores de $Q$ con el mismo $\fnat$.
+
+Por debajo de $Q = \tfrac{1}{\sqrt{2}} \approx 0{,}71$ no hay pico: la curva de
+Butterworth es justo la más plana que se puede tener sin resonar. Este filtro
+trabaja bastante por encima, en $Q = 2{,}04$, así que resuena a propósito.
+
+La curva de $Q = 4{,}89$ no sale de la fórmula: es una corrida aparte del mismo
+circuito con $R_1 = \SI{100}{\ohm}$, guardada como \emph{rawfile} y traída al
+informe con \texttt{xtal raw import}. Mezclar en un mismo gráfico curvas
+calculadas y resultados de simulaciones externas es exactamente lo que Xtal
+existe para hacer.

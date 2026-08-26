@@ -1,0 +1,17 @@
+* Filtro pasabajos RC de primer orden -- referencia para comparar
+*
+* Es el mismo ensayo con una sola reactancia. Se elige R*C para que caiga en la
+* misma frecuencia de corte que el RLC, y asi la comparacion sea de orden y no
+* de frecuencia:
+*
+*   fc = 1/(2*pi*R*C) = 1/(2*pi*1.5k*100n) = 1061.0 Hz
+*
+* Misma fuente que el de segundo orden: AC para el barrido, PULSE para el
+* escalon.
+
+Vin in 0 AC 1 PULSE(0 1 0 1u 1u 20m 40m)
+
+R1 in  out 1.5k
+C1 out 0   100n
+
+.end

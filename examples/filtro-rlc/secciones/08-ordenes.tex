@@ -1,0 +1,16 @@
+Para que la comparación sea de \emph{orden} y no de frecuencia, se ensayó
+también un pasabajos RC de primer orden
+($R = \SI{1.5}{\kilo\ohm}$, $C = \SI{100}{\nano\farad}$), elegido para caer
+prácticamente en la misma frecuencia de corte, \SI{1061}{\hertz}.
+
+En frecuencia (Figura~\ref{fig:ordenes}) la diferencia es de pendiente: el de
+primer orden cae \SI{20}{\decibel} por década y el de segundo,
+\SI{40}{\decibel}. A \SI{10}{\kilo\hertz} eso son \SI{20}{\decibel} de
+atenuación extra --- un factor de diez en tensión --- por haber agregado un solo
+componente reactivo.
+
+En el tiempo (Figura~\ref{fig:escalones}) el precio queda a la vista: el de
+primer orden llega al valor final sin pasarse nunca, mientras que el de segundo
+sobrepasa un \SI{41}{\percent} y tarda más en asentarse. Filtrar mejor y
+responder mejor son objetivos opuestos, y $Q$ es la perilla que decide cuánto de
+cada uno.

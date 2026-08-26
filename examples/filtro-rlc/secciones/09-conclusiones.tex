@@ -1,0 +1,23 @@
+\begin{enumerate}[itemsep=3pt, topsep=4pt]
+  \item \textbf{El modelo describe bien el circuito.} Fuera de la resonancia, la
+        medición sigue a la teoría dentro de $\pm\SI{0.2}{\decibel}$, que es el
+        ruido del instrumento. La pendiente asintótica medida,
+        \SI{-40}{\decibel} por década, confirma el orden del sistema.
+  \item \textbf{Lo que no coincide tiene una sola causa.} El pico medido queda
+        \SI{1.24}{\decibel} por debajo del teórico ideal, y la resistencia del
+        bobinado del inductor explica \SI{0.88}{\decibel} de esa diferencia. El
+        resto entra en la tolerancia declarada de $L$ y $C$.
+  \item \textbf{Frecuencia y amortiguamiento son independientes.} $\fnat$ solo
+        depende de $LC$ y se midió con \SI{0.4}{\percent} de error; $Q$ depende
+        además de toda la resistencia del lazo y se desvió un
+        \SI{14}{\percent}. Es el parámetro sensible del diseño.
+  \item \textbf{Los dos dominios dicen lo mismo.} El pico del Bode y el
+        sobrepico del escalón son la misma información leída de dos maneras:
+        \SI{5.2}{\decibel} de un lado, \SI{41}{\percent} del otro, y las dos
+        salen del mismo par de polos a \SI{73.4}{\degree}.
+\end{enumerate}
+
+\noindent
+Para un diseño donde importe la respuesta transitoria, este $Q$ es demasiado
+alto: convendría subir $R_1$ hasta llevar el filtro cerca de
+$Q = \tfrac{1}{\sqrt{2}}$, que es lo más plano que se consigue sin resonar.

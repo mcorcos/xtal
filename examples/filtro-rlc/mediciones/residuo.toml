@@ -1,0 +1,12 @@
+id = "residuo"
+kind = "measured"
+source = "csv"
+label = "Medida menos teórica"
+x_unit = "Hz"
+y_unit = "dB"
+
+[csv]
+file = "fuentes/medicion_residuos.csv"
+skip_rows = 3
+x_col = "0"
+y_col = "1"

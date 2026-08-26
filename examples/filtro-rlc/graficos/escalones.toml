@@ -1,0 +1,19 @@
+id = "escalones"
+kind = "time"
+title = "El mismo escalón en los dos filtros"
+
+[axes]
+x_label = "Tiempo"
+y_label = "Tension"
+
+[[series]]
+measurement = "paso_out"
+role = "output"
+panel = "magnitude"
+label = "Segundo orden"
+
+[[series]]
+measurement = "paso_rc"
+role = "third"
+panel = "magnitude"
+label = "Primer orden"

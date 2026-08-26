@@ -1,0 +1,75 @@
+Los polos son las raíces del denominador de la Ecuación~\eqref{eq:canonica}:
+%
+\begin{equation}
+  s_{1,2} \;=\; -\alpha \pm j\omega_d
+          \;=\; -\frac{\omega_0}{2Q} \pm j\,\omega_0\sqrt{1 - \frac{1}{4Q^{2}}} .
+  \label{eq:polos}
+\end{equation}
+%
+\textsc{ngspice} los calcula directo con un análisis de polos y ceros, sin pasar
+por la fórmula. La Tabla~\ref{tab:polos} compara lo que da con lo que predice
+la Ecuación~\eqref{eq:polos}.
+
+\begin{table}[H]
+\centering
+\caption{Polos del sistema. La parte real es el amortiguamiento; la imaginaria,
+la frecuencia de oscilación.}
+\label{tab:polos}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Escenario} & $\alpha$ [\si{\per\second}] & $\omega_d$ [\si{\radian\per\second}]
+                   & $|s|$ [\si{\radian\per\second}] & $\theta$ \\
+\midrule
+Teórico ideal            & 1650 & 6537 & 6742 & \SI{75.9}{\degree} \\
+Simulado (\textsc{ngspice}) & 1840 & 6486 & 6742 & \SI{74.2}{\degree} \\
+Medido                   & 1935 & 6489 & 6772 & \SI{73.4}{\degree} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Los tres pares caen sobre una circunferencia de radio $\omega_0$, porque
+$|s_{1,2}| = \omega_0$ sin importar cuánta resistencia haya: la resistencia
+mueve el polo \emph{sobre} el círculo, no lo saca. Lo que cambia es el ángulo,
+y con él el amortiguamiento
+$\cos\theta = 1/(2Q)$ (Figura~\ref{fig:planos}).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\small, scale=2.7]
+  % Plano s normalizado por w0: la circunferencia unitaria es |s| = w0.
+  \draw[->, black!55] (-1.30,0) -- (0.32,0) node[right, font=\footnotesize] {$\Re\{s\}/\omega_0$};
+  \draw[->, black!55] (0,-1.22) -- (0,1.30) node[above, font=\footnotesize] {$\Im\{s\}/\omega_0$};
+  \draw[black!25, dashed] (0,0) circle (1);
+  \node[black!45, font=\scriptsize, anchor=north east] at (-0.70,-0.71) {$|s| = \omega_0$};
+
+  % Region de estabilidad: todo el semiplano izquierdo.
+  \fill[xtalOutput, opacity=0.05] (-1.30,-1.22) rectangle (0,1.30);
+  \node[xtalOutput, font=\scriptsize, anchor=south west] at (-1.28,-1.18) {semiplano estable};
+
+  % Los dos pares de polos: teorico ideal (Q = 2,043) y medido (Q = 1,750).
+  \foreach \re/\im/\col in {-0.2447/0.9696/xtalThird, -0.2857/0.9583/xtalOutput} {
+    \draw[\col, densely dotted] (0,0) -- (\re,\im);
+    \foreach \sg in {1,-1} {
+      \draw[\col, thick] (\re-0.05,\sg*\im-\sg*0.05) -- (\re+0.05,\sg*\im+\sg*0.05);
+      \draw[\col, thick] (\re-0.05,\sg*\im+\sg*0.05) -- (\re+0.05,\sg*\im-\sg*0.05);
+    }
+  }
+  \node[xtalThird,  font=\scriptsize, anchor=west] at (-0.19,1.05) {$Q = 2{,}04$ (ideal)};
+  \node[xtalOutput, font=\scriptsize, anchor=east] at (-0.36,0.88) {$Q = 1{,}75$ (medido)};
+
+  % El angulo theta, medido desde el eje imaginario.
+  \draw[black!60] (0,0.45) arc (90:104.2:0.45);
+  \node[black!60, font=\scriptsize] at (-0.11,0.53) {$\theta$};
+  \node[font=\scriptsize, anchor=west] at (0.06,-0.75) {$\cos\theta = \dfrac{1}{2Q}$};
+\end{tikzpicture}
+\caption{Los dos pares de polos en el plano $s$, normalizados por $\omega_0$.
+Bajar el $Q$ los corre hacia la izquierda \emph{sobre} la circunferencia: más
+amortiguamiento, misma frecuencia natural.}
+\label{fig:planos}
+\end{figure}
+
+Los cuatro polos tienen parte real negativa, así que el circuito es estable:
+cualquier transitorio se apaga. Era esperable en una red pasiva --- no hay de
+dónde sacar la energía para sostener una oscilación --- pero el análisis lo
+confirma sin pedirlo.

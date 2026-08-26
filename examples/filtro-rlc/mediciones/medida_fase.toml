@@ -1,0 +1,12 @@
+id = "medida_fase"
+kind = "measured"
+source = "csv"
+label = "Medida"
+x_unit = "Hz"
+y_unit = "deg"
+
+[csv]
+file = "fuentes/medicion_bode.csv"
+skip_rows = 6
+x_col = "0"
+y_col = "2"

@@ -1,0 +1,19 @@
+* Variante del filtro con R1 = 100 ohm -- corrida aparte, no es el circuito del TP
+*
+* Sirve para mostrar como cambia el pico de resonancia cuando se baja el
+* amortiguamiento: con R1 = 100 y el mismo L-C, Q = 4.885.
+*
+* Esta corrida NO la hace Xtal: se corrio a mano y quedo su rawfile en
+* `variante-q-alto.raw`, que es lo que el ejemplo importa con `xtal raw import`.
+* Es el flujo de quien ya tiene resultados de LTspice y quiere meterlos en el
+* informe sin volver a simular.
+
+Vin in 0 AC 1
+
+R1 in a   100
+L1 a  b   100m
+RL b  out 38
+C1 out 0  220n
+
+.ac dec 40 100 10000
+.end

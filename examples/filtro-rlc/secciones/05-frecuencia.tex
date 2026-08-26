@@ -1,0 +1,43 @@
+La Figura~\ref{fig:bode} superpone las tres fuentes en magnitud y fase. Los
+estilos no se eligieron a mano: cada curva los hereda de cómo se obtuvo el dato
+--- teórica sólida, simulada con marcadores, medida punteada --- y el eje
+logarítmico viene de que el gráfico se declaró como Bode.
+
+Las tres describen el mismo filtro, pero no son la misma curva, y ahí está lo
+interesante:
+
+\begin{itemize}[itemsep=2pt, topsep=4pt]
+  \item \textbf{Lejos de la resonancia coinciden.} Por debajo de
+        \SI{300}{\hertz} las tres pasan por \SI{0}{\decibel}, y por encima de
+        \SI{5}{\kilo\hertz} las tres caen a \SI{-40}{\decibel} por década, que
+        es la pendiente que corresponde a dos polos.
+  \item \textbf{En el pico se separan.} La teórica llega a
+        \SI{6.5}{\decibel}, la simulada a \SI{5.6}{\decibel} y la medida a
+        \SI{5.2}{\decibel}. La diferencia entre la primera y la segunda es
+        exactamente $R_L$; el resto lo explica la tolerancia de los componentes.
+  \item \textbf{La fase no discute.} Cruza $-90^\circ$ en $\fnat$ en los tres
+        casos y tiende a $-180^\circ$: el amortiguamiento cambia qué tan abrupto
+        es el cruce, no dónde ocurre.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Frecuencia de resonancia y pico, leídos de cada fuente.}
+\label{tab:resultados}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Fuente} & $\bm{f_{\text{pico}}}$ & $\bm{|H|_{\max}}$ & \textbf{error en $\bm{f}$} \\
+\midrule
+Teórica  & \SI{1002}{\hertz} & \SI{6.47}{\decibel} & --- \\
+Simulada & \SI{1000}{\hertz} & \SI{5.59}{\decibel} & \SI{-0.2}{\percent} \\
+Medida   & \SI{1005}{\hertz} & \SI{5.23}{\decibel} & \SI{+0.3}{\percent} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent
+El pico no cae en $\fnat = \SI{1073}{\hertz}$ sino un poco por debajo: para un
+segundo orden, el máximo está en
+$f_{\text{pico}} = \fnat\sqrt{1 - 1/(2Q^{2})}$, que con $Q = 2{,}04$ da
+\SI{1002}{\hertz}. Confundir los dos valores es el error clásico de este ensayo.

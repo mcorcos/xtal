@@ -1,0 +1,21 @@
+El circuito entra a la simulación como netlist de SPICE. La fuente lleva las
+dos excitaciones al mismo tiempo: \texttt{AC 1} para el barrido de frecuencia y
+\texttt{PULSE} para el escalón. \textsc{ngspice} usa la que corresponde a cada
+análisis e ignora la otra, así que un solo archivo alcanza para los dos ensayos.
+
+\begin{lstlisting}[language=spice, caption={\texttt{fuentes/filtro-rlc.cir}}, captionpos=b]
+* Filtro pasabajos RLC de segundo orden
+Vin in 0 AC 1 PULSE(0 1 0 1u 1u 5m 10m)
+
+R1 in a   330
+L1 a  b   100m
+RL b  out 38
+C1 out 0  220n
+
+.end
+\end{lstlisting}
+
+\noindent
+Xtal no escribe el análisis adentro del netlist: lo pasa por línea de comandos,
+así que el mismo circuito se barre en frecuencia o en el tiempo sin editar el
+archivo.

@@ -1,0 +1,26 @@
+Este trabajo caracteriza un \textbf{filtro pasabajos RLC de segundo orden} de
+frecuencia natural nominal \SI{1073}{\hertz}, y contrasta las tres fuentes con
+las que se puede describir un circuito:
+
+\begin{enumerate}[itemsep=2pt, topsep=4pt]
+  \item el \textbf{modelo teórico}, evaluado a partir de la transferencia
+        analítica;
+  \item la \textbf{simulación} en \textsc{ngspice} del netlist, que incorpora la
+        resistencia real del bobinado del inductor;
+  \item la \textbf{medición} de laboratorio: barrido de respuesta en frecuencia
+        y captura del transitorio en el osciloscopio.
+\end{enumerate}
+
+El objetivo no es solo verificar que las tres coinciden --- coinciden --- sino
+\emph{medir en cuánto no lo hacen} y explicar por qué. La resistencia serie del
+inductor y la tolerancia de los componentes bajan el factor de mérito real por
+debajo del ideal, y eso se ve tanto en el pico del Bode como en el sobrepico de
+la respuesta al escalón.
+
+\begin{quote}\small
+\textbf{Sobre los datos.} Las curvas rotuladas como \emph{medidas} son
+sintéticas: las genera \texttt{fuentes/generar\_mediciones.py} a partir del
+modelo del circuito real, con tolerancias y ruido de instrumento. Este informe
+es el ejemplo de referencia de Xtal, y existe para que se pueda reproducir
+entero sin tener el circuito armado en un banco.
+\end{quote}

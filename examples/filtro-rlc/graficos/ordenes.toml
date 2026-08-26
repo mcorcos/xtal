@@ -1,0 +1,30 @@
+id = "ordenes"
+kind = "bode"
+title = "Primer orden contra segundo orden"
+
+[axes]
+x_label = "Frecuencia"
+y_label = "Ganancia"
+
+[[series]]
+measurement = "teorica_mag"
+role = "none"
+panel = "magnitude"
+label = "Segundo orden (RLC)"
+
+[[series]]
+measurement = "teorica_rc"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "sim"
+role = "none"
+panel = "magnitude"
+label = "Segundo orden (simulado)"
+
+[[series]]
+measurement = "sim_rc"
+role = "none"
+panel = "magnitude"
+label = "Primer orden (simulado)"

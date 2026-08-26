@@ -1,0 +1,12 @@
+id = "medida_paso"
+kind = "measured"
+source = "csv"
+label = "Medida (CH2)"
+x_unit = "s"
+y_unit = "V"
+
+[csv]
+file = "fuentes/medicion_escalon.csv"
+skip_rows = 6
+x_col = "0"
+y_col = "2"

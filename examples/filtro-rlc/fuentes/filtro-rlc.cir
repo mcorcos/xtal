@@ -1,0 +1,32 @@
+* Filtro pasabajos RLC de segundo orden -- circuito bajo ensayo
+*
+* Serie R-L con la salida tomada sobre el capacitor:
+*
+*            R1        L1        RL
+*   in o---/\/\/\---mmmmm----/\/\/\---o out
+*                                     |
+*                                   ----- C1
+*                                   -----
+*                                     |
+*                                    GND
+*
+* RL no es un componente que se suelde: es la resistencia del bobinado del
+* inductor real, medida con el LCR. Va en el netlist porque es la que explica
+* por que el Q simulado queda por debajo del teorico ideal.
+*
+*   w0 = 1/sqrt(L*C)                  -> f0 = 1073.0 Hz
+*   Q  = (1/(R1+RL))*sqrt(L/C)        -> Q  = 1.832  (2.043 si RL = 0)
+*
+* La fuente lleva las dos excitaciones a la vez:
+*   AC 1     amplitud unitaria para el barrido de frecuencia (.ac)
+*   PULSE    escalon de 0 a 1 V para el transitorio (.tran)
+* ngspice usa la que corresponde a cada analisis y ignora la otra.
+
+Vin in 0 AC 1 PULSE(0 1 0 1u 1u 20m 40m)
+
+R1 in a   330
+L1 a  b   100m
+RL b  out 38
+C1 out 0  220n
+
+.end

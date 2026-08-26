@@ -1,0 +1,12 @@
+id = "q_alto"
+kind = "simulated"
+source = "raw"
+label = "Q = 4,89 (de un .raw)"
+x_unit = "Hz"
+y_unit = "dB"
+
+[raw]
+file = "fuentes/variante-q-alto.raw"
+plotname = "AC Analysis"
+vector = "v(out)"
+quantity = "magnitude"

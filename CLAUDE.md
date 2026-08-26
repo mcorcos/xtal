@@ -119,7 +119,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
     confirmación; en modo no interactivo solo reporta.
   - `xtal doctor [--fix]` — dependencias con su propósito, config, proyecto actual y un
     resumen accionable. Con `--json` expone `can_build` (lo que mira el MCP).
-  - `xtal example [nombre] [--run|--open]` — materializa `examples/rc-lowpass`, **embebido
+  - `xtal example [nombre] [--run|--open]` — materializa `examples/filtro-rlc`, **embebido
     en el binario** con rust-embed (excluyendo `salida/`). Resuelve el primer minuto.
   - `xtal watch` — recompila al cambiar algo. **Polling de mtime**, no inotify/FSEvents:
     no justifica la dependencia. Ignora `salida/` (si no, se recompila a sí mismo en loop).
@@ -251,6 +251,56 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
 - Cuándo sirve, en concreto: después de compilar, `xtal app ver pdf` deja el resultado a
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
+
+### Un solo ejemplo, y que muestre todo — HECHO (2026-08-26), pedido de Manu
+Había dos proyectos en el repo (`examples/rc-lowpass` y `vacio/`) y el ejemplo era
+un pasabajos RC de dos páginas: alcanzaba para el primer minuto, no para mostrar de
+qué es capaz la herramienta. **Ahora hay uno solo**: `examples/filtro-rlc`, un
+informe de **13 páginas** sobre un RLC de segundo orden.
+- **El circuito lleva `RL`, la resistencia del bobinado del inductor**, y ese es el
+  motor del informe entero: el Q ideal (2,043), el simulado (1,832) y el medido
+  (1,750) son distintos, y explicar en cuánto y por qué es lo que el TP discute. Un
+  ejemplo donde las tres curvas dan igual no enseña nada.
+- **Las cuatro maneras de conseguir una curva**, cada una ejercitada de verdad:
+  `meas formula`, `sim ac`/`sim tran`, `meas import` de un CSV y **`raw import`** de
+  un `.raw` que ya existía (la variante con Q = 4,89, corrida aparte).
+- **Seis gráficos**: Bode de dos paneles con las tres fuentes, residuos sin línea
+  (`--line none`), el escalón con cuatro curvas (color por señal, trazo por fuente),
+  1.º contra 2.º orden en frecuencia y en el tiempo, y la familia de Q con la paleta
+  automática.
+- **Lo que NO es un gráfico de Xtal**, que es la otra mitad del pedido: esquemáticos
+  con `circuitikz`, diagrama de bloques del banco con TikZ, tablas con `booktabs` +
+  `siunitx`, netlists y comandos con `listings`, el plano complejo de los polos
+  dibujado a mano, y ecuaciones numeradas y referenciadas. **Todo sale de
+  `[document] packages` y `[document] preamble`**: el motor no se tocó.
+- **La captura del osciloscopio es un PNG anotado con TikZ encima.** El PNG lo
+  escribe `fuentes/generar_mediciones.py` a mano (paleta de 8 colores, `zlib` y
+  `struct`, **4 KB**, sin ninguna dependencia de Python) y **no lleva texto adentro
+  a propósito**: las flechas, las cotas y los rótulos se dibujan con TikZ sobre la
+  imagen, así quedan con la tipografía del informe y se corrigen sin rehacer la
+  captura.
+- **El `xtal.toml` trae `[[plan]]`**, así el ejemplo también muestra `xtal status`
+  cruzando el plan contra el disco (dice «Está todo»).
+- **Salió un bug de probarlo**: `xtal scan` marcaba la imagen como sin usar. La
+  función `referencias()` de `inventory.rs` leía el `xtal.toml` y el `main.tex` de
+  la raíz, pero no `secciones/*.tex` — y desde que el cuerpo de cada sección vive en
+  su propio archivo, **ahí** es donde está el `\includegraphics`. Arreglado, con test.
+- **Trampas que costaron una vuelta cada una**, anotadas donde corresponde:
+  - En un `.sh`, `$-` **es una variable de bash** (los flags activos). Un
+    `--label "Medida $-$ teórica"` terminó en la leyenda del PDF como
+    `Medida ehuB$ teórica`.
+  - El `PULSE` del netlist tiene que durar **más** que la ventana del `.tran`: con
+    ancho de 5 ms y una ventana de 5,5 ms, el flanco de bajada entraba al gráfico.
+  - `math::atan2` (dos argumentos) y no `math::atan`: con el de uno, la fase se
+    queda entre ±90° y aparece un salto falso justo en la resonancia.
+  - Las figuras grandes van con `[htbp]`, no con `[H]`: clavadas dejaban media
+    página en blanco.
+- **`sim noise` quedó afuera del ejemplo, y por una razón**: `write_xy_csv` en
+  `xtal-data/src/store.rs` formatea con `{:.10}` (diez **decimales**, no cifras
+  significativas), así que una densidad espectral de 2,5 nV/√Hz se guarda con dos
+  dígitos y por debajo de 1e-10 se guarda como `0`. Arreglarlo cambia el CSV de todas
+  las mediciones de todos los proyectos, así que **es una decisión de Manu, no un
+  arreglo al pasar**.
 
 ### El modo agente, segunda vuelta — HECHO (2026-08-25), pedido de Manu
 Xtal **no abre el agente por vos**: la terminal está para que abras el que uses. Lo que

@@ -1,0 +1,14 @@
+id = "residuos"
+kind = "generic"
+title = "Residuo de la magnitud medida contra el modelo teórico"
+
+[axes]
+x_scale = "log"
+x_label = "Frecuencia"
+y_label = "Diferencia"
+
+[[series]]
+measurement = "residuo"
+role = "none"
+panel = "magnitude"
+line = "none"

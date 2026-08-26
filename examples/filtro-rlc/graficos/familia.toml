@@ -1,0 +1,27 @@
+id = "familia"
+kind = "bode"
+title = "Efecto del factor de mérito sobre el pico de resonancia"
+
+[axes]
+x_label = "Frecuencia"
+y_label = "Ganancia"
+
+[[series]]
+measurement = "q_050"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "q_071"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "q_204"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "q_alto"
+role = "none"
+panel = "magnitude"

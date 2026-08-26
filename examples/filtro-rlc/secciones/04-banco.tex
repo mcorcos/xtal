@@ -1,0 +1,44 @@
+El ensayo se hace con el filtro cargado únicamente por la punta del
+osciloscopio (\SI{10}{\mega\ohm} en paralelo con \SI{12}{\pico\farad}), que a
+estas frecuencias no carga nada. La Figura~\ref{fig:banco} muestra la cadena.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    caja/.style={draw=black!45, rounded corners=3pt, minimum height=1.5cm,
+                 minimum width=2.9cm, align=center, fill=black!3},
+    dut/.style={caja, draw=xtalPrimary, line width=1pt, fill=xtalPrimary!6},
+    flecha/.style={-{Stealth[length=5pt]}, thick},
+  ]
+  \node[caja]              (gen)  {Generador\\\footnotesize \SI{1}{\volt} p.\,a p.};
+  \node[dut,  right=1.5cm of gen] (dut)  {Filtro RLC\\\footnotesize bajo ensayo};
+  \node[caja, right=1.5cm of dut] (osc)  {Osciloscopio\\\footnotesize 2 canales};
+  \node[caja, below=0.9cm of dut] (arf)  {Analizador de respuesta\\\footnotesize en frecuencia};
+
+  \draw[flecha, xtalInput]  (gen) -- node[above, font=\footnotesize] {$v_i$} (dut);
+  \draw[flecha, xtalOutput] (dut) -- node[above, font=\footnotesize] {$v_o$} (osc);
+  \draw[flecha, xtalInput]  (arf.west) -| ([xshift=-0.75cm]dut.west);
+  \draw[flecha, xtalOutput] ([xshift=0.75cm]dut.east) |- (arf.east);
+  \node[font=\footnotesize\itshape, below=0.1cm of arf] {barrido de \SI{20}{\hertz} a \SI{100}{\kilo\hertz}};
+\end{tikzpicture}
+\caption{Cadena de medición. El mismo circuito se ensaya de dos maneras: barrido
+de frecuencia con el analizador, y escalón con el generador y el osciloscopio.}
+\label{fig:banco}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Instrumental y condiciones del ensayo.}
+\label{tab:instrumental}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Ensayo} & \textbf{Instrumento} & \textbf{Condiciones} \\
+\midrule
+Respuesta en frecuencia & Analizador de barrido & 10 puntos/década, \SI{20}{\hertz}--\SI{100}{\kilo\hertz} \\
+Respuesta al escalón    & Generador + osciloscopio & \SI{100}{\hertz}, 500 muestras, \SI{500}{\micro\second} por división \\
+Valor de componentes    & Puente LCR & \SI{1}{\kilo\hertz}, cuatro hilos \\
+\bottomrule
+\end{tabular}
+\end{table}

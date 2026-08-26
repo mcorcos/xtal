@@ -276,8 +276,13 @@ fn comando(clase: Clase, path: &str) -> Option<String> {
 }
 
 /// Todo el texto donde Xtal deja constancia de qué archivo usó: los `.toml` de las
-/// mediciones (que guardan el archivo de origen), el `xtal.toml` (cuerpos en LaTeX que
-/// pueden citar una imagen) y cualquier `.tex` escrito a mano en la raíz.
+/// mediciones (que guardan el archivo de origen), el `xtal.toml`, el texto de cada
+/// sección y cualquier `.tex` escrito a mano en la raíz.
+///
+/// `secciones/` no está de más: desde que el cuerpo de cada sección vive en su propio
+/// `.tex` y no adentro del manifiesto, es ahí donde aparece el `\includegraphics` que
+/// cita una imagen. Sin leerlo, una foto usada en el informe se reportaba como si
+/// nadie la hubiera tocado.
 ///
 /// Devuelve el conjunto de **nombres de archivo** mencionados. Comparar nombres y no
 /// rutas es a propósito: la misma foto se cita como `banco.jpg` desde el LaTeX aunque
@@ -292,6 +297,16 @@ fn referencias(root: &Path) -> std::collections::HashSet<String> {
                         texto.push_str(&t);
                         texto.push('\n');
                     }
+                }
+            }
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(root.join("secciones")) {
+        for e in entries.flatten() {
+            if e.path().extension().is_some_and(|x| x == "tex") {
+                if let Ok(t) = std::fs::read_to_string(e.path()) {
+                    texto.push_str(&t);
+                    texto.push('\n');
                 }
             }
         }
@@ -666,6 +681,40 @@ mod tests {
         let inv = escanear(&root).unwrap();
         let usadas: Vec<_> = inv.archivos.iter().filter(|a| a.usado).collect();
         assert_eq!(usadas.len(), 1);
+        assert_eq!(usadas[0].path, "imagenes/banco.jpg");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn una_imagen_citada_desde_una_seccion_cuenta_como_usada() {
+        // El caso de todos los proyectos de hoy: el cuerpo de la sección no está en
+        // el manifiesto, está en `secciones/<algo>.tex`, y ahí es donde aparece el
+        // `\\includegraphics`.
+        let root = temp("imagen-seccion");
+        std::fs::write(
+            root.join("xtal.toml"),
+            "sections = [{ title = \"X\", body_file = \"secciones/01.tex\" }]\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("secciones")).unwrap();
+        std::fs::write(
+            root.join("secciones/01.tex"),
+            "\\includegraphics[width=0.8\\linewidth]{banco.jpg}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("imagenes")).unwrap();
+        std::fs::write(root.join("imagenes/banco.jpg"), b"\xff\xd8").unwrap();
+        std::fs::write(root.join("imagenes/mesa.jpg"), b"\xff\xd8").unwrap();
+
+        let inv = escanear(&root).unwrap();
+        let imagenes: Vec<_> = inv
+            .archivos
+            .iter()
+            .filter(|a| a.clase == Clase::Imagen)
+            .collect();
+        let usadas: Vec<_> = imagenes.iter().filter(|a| a.usado).collect();
+        assert_eq!(usadas.len(), 1, "{:?}", imagenes);
         assert_eq!(usadas[0].path, "imagenes/banco.jpg");
 
         let _ = std::fs::remove_dir_all(&root);
