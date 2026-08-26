@@ -43,18 +43,22 @@ public struct EstadoInforme: Decodable, Sendable {
     public let complete: Bool
 }
 
-/// La configuración efectiva del proyecto y las opciones que se pueden elegir.
+/// La configuración efectiva del proyecto: **para leer, no para tocar**.
 ///
-/// Cambiar el theme es, en la práctica, **cambiar de facultad**: la carátula, los colores
-/// y el preámbulo salen de ahí. Que sea un desplegable y no una línea en un TOML es la
-/// mitad de lo que hace que esto se sienta una app.
+/// El theme y el formato se eligen al crear el informe (ver `ProyectoNuevo`) y desde ahí
+/// no se cambian desde la app. No es una limitación técnica —la CLI los cambia con un
+/// `config set`— sino una decisión: el formato decide la clase de LaTeX, los márgenes,
+/// la tipografía y los paquetes, y la institución decide la carátula y el color.
+/// Cambiar cualquiera de las dos con el informe ya escrito es rehacer el documento, y
+/// las figuras ya ubicadas se reacomodan solas sin que nadie haya avisado.
+///
+/// Se quedó con la mitad que sirve: saber con qué molde estás trabajando.
 @MainActor
 @Observable
 public final class Ajuste {
     public private(set) var theme = "itba"
     public private(set) var formato = "facultad"
     public private(set) var themes: [String] = []
-    public private(set) var aplicando = false
 
     private let carpeta: URL
 
@@ -92,13 +96,4 @@ public final class Ajuste {
         return Array(Set(embebidos + propios)).sorted()
     }
 
-    public func cambiarTheme(_ nuevo: String) async { await aplicar(["config", "set", "theme", nuevo]) }
-    public func cambiarFormato(_ nuevo: String) async { await aplicar(["config", "set", "format", nuevo]) }
-
-    private func aplicar(_ args: [String]) async {
-        aplicando = true
-        defer { aplicando = false }
-        _ = try? await XtalCLI.correr(args, en: carpeta)
-        await refrescar()
-    }
 }

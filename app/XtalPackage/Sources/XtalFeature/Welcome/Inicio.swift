@@ -12,6 +12,7 @@ struct Inicio: View {
     @State private var recientes = Recientes.listar()
     @State private var doctor: Doctor?
     @State private var creandoEjemplo = false
+    @State private var creandoProyecto = false
     @State private var error: String?
 
     var body: some View {
@@ -23,6 +24,13 @@ struct Inicio: View {
         .frame(minWidth: 760, minHeight: 480)
         .background(Tok.bgBase)
         .task { doctor = try? await XtalCLI.json(Doctor.self, ["doctor"]) }
+        .sheet(isPresented: $creandoProyecto) {
+            ProyectoNuevo(crear: { url in
+                creandoProyecto = false
+                Recientes.agregar(url)
+                abrir(url)
+            }, cancelar: { creandoProyecto = false })
+        }
     }
 
     // MARK: - Izquierda: quién sos y qué podés hacer
@@ -45,9 +53,13 @@ struct Inicio: View {
             .padding(.bottom, Tok.S.xxl + Tok.S.md)
 
             VStack(alignment: .leading, spacing: Tok.S.md) {
+                BotonInicio(icono: "plus.rectangle.on.folder", titulo: "Informe nuevo",
+                            detalle: "Elegís institución y formato, y arrancás",
+                            destacado: true) { creandoProyecto = true }
+
                 BotonInicio(icono: "folder", titulo: "Abrir una carpeta",
                             detalle: "La que tenga el xtal.toml adentro",
-                            destacado: true, accion: elegirCarpeta)
+                            accion: elegirCarpeta)
 
                 BotonInicio(icono: "sparkles", titulo: "Probar con un ejemplo",
                             detalle: "Un informe completo, listo para compilar",

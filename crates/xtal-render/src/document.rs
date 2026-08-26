@@ -13,18 +13,105 @@ use crate::escape::latex_escape;
 use crate::pgfplots;
 use crate::theme::Theme;
 
+/// Lo que cada formato agrega al preámbulo base.
+///
+/// **El formato `paper` viene cargado a propósito.** Un TP de facultad a una columna
+/// perdona casi todo; un paper a dos columnas no: la línea mide la mitad, así que cada
+/// palabra larga abre un agujero en el justificado y cada tabla con líneas verticales se
+/// va del ancho. Lo que está acá es lo que se necesita para que salga bien sin que nadie
+/// tenga que averiguarlo:
+///
+/// - **`microtype`** — es lo que más se nota. Achica y estira los glifos un pelo y deja
+///   que la puntuación salga apenas del margen, y con eso el justificado de una columna
+///   angosta deja de tener ríos de espacio en blanco.
+/// - **`newtxtext` / `newtxmath`** — Times, la tipografía de los papers. También la del
+///   texto matemático, que si no queda de otra familia y se nota.
+/// - **`flushend`** — empareja las dos columnas de la última página. Sin esto, la última
+///   página termina con una columna larga y otra a la mitad.
+/// - **`booktabs`** — tablas con reglas horizontales y nada de líneas verticales, que es
+///   la convención de cualquier publicación.
+/// - **`caption` / `subcaption`** — captions un punto más chicos que el texto, y
+///   subfiguras (`(a)`, `(b)`) que en dos columnas se usan todo el tiempo.
+/// - **`cleveref`** — `\cref{fig:x}` escribe «Figura 3» solo, y en plural y en orden si
+///   le pasás varias. Se carga después de `hyperref` (ver abajo).
+/// - **`xurl`** — deja cortar una URL larga en cualquier lado. En una columna angosta,
+///   una URL sin cortar se sale de la caja.
+/// - **`authblk`** — autores con su afiliación debajo, que es como se firma un paper.
+/// - **`enumitem`, `multirow`, `adjustbox`** — listas compactas, celdas que abarcan
+///   varias filas, y una figura que se achica sola si no entra en la columna.
+///
+/// Las fuentes van antes de `hyperref` y `cleveref` después: es el orden que piden esos
+/// paquetes y romperlo da errores que no dicen que el problema es el orden.
+fn format_preamble(format: DocFormat) -> String {
+    match format {
+        // El informe de facultad se queda con la base. Es a propósito: lo que se
+        // entrega en una materia no gana nada con Times ni con columnas balanceadas, y
+        // cada paquete de más es una cosa más que puede chocar con lo que el alumno
+        // agregue en `[document] packages`.
+        DocFormat::Facultad => String::new(),
+        DocFormat::Paper => {
+            let mut p = String::new();
+            p.push('\n');
+            p.push_str("% --- Formato paper: dos columnas ---\n");
+            p.push_str("\\usepackage{newtxtext,newtxmath}\n");
+            p.push_str("\\usepackage{microtype}\n");
+            p.push_str("\\usepackage{booktabs}\n");
+            p.push_str("\\usepackage{multirow}\n");
+            p.push_str("\\usepackage{adjustbox}\n");
+            p.push_str("\\usepackage{enumitem}\n");
+            p.push_str("\\usepackage{caption}\n");
+            p.push_str("\\usepackage{subcaption}\n");
+            p.push_str("\\usepackage{flushend}\n");
+            p.push_str("\\usepackage{authblk}\n");
+            p.push_str("\\usepackage{xurl}\n");
+            // `titling` es lo que deja mover el título hacia arriba (`\\droptitle`) sin
+            // reescribir `\\maketitle` entero.
+            p.push_str("\\usepackage{titling}\n");
+            p.push('\n');
+            p.push_str("% Captions y espaciado, en la escala de una columna angosta.\n");
+            p.push_str(
+                "\\captionsetup{font=small, labelfont=bf, skip=6pt, justification=raggedright, singlelinecheck=false}\n",
+            );
+            p.push_str("\\captionsetup[sub]{font=footnotesize}\n");
+            p.push_str("\\setlength{\\parindent}{1em}\n");
+            // `raggedbottom` en vez de estirar el espacio vertical: en dos columnas,
+            // estirar deja huecos enormes entre párrafos con tal de llegar abajo.
+            p.push_str("\\raggedbottom\n");
+            // Los autores, sin la línea horizontal ni el tamaño grande de `authblk`.
+            p.push_str("\\renewcommand{\\Authfont}{\\normalsize}\n");
+            p.push_str("\\renewcommand{\\Affilfont}{\\small\\itshape}\n");
+            p.push_str("\\setlength{\\affilsep}{0.4em}\n");
+            // `authblk` une los autores con «and», en inglés y sin preguntar. El
+            // documento está en castellano.
+            p.push_str("\\renewcommand{\\Authand}{ y }\n");
+            p.push_str("\\renewcommand{\\Authands}{ y }\n");
+            // El encabezado, más apretado. Los valores de fábrica de `article` están
+            // pensados para un título a una columna en el medio de una página vacía.
+            p.push_str("\\setlength{\\droptitle}{-2em}\n");
+            p
+        }
+    }
+}
+
 /// Construye el preámbulo: paquetes base, colores de Xtal, color institucional del
 /// theme, el preámbulo del theme, y lo que pida el informe.
 ///
 /// El orden importa y es este a propósito: **lo más general primero, lo más específico
 /// último**, para que cada capa pueda pisar a la anterior. Xtal pone la base, el theme
 /// pone lo de la institución, y el informe tiene la última palabra.
-pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta) -> String {
+pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta, format: DocFormat) -> String {
     let mut p = String::new();
     p.push_str("% --- Preámbulo base de Xtal ---\n");
-    p.push_str("\\usepackage[margin=2.5cm]{geometry}\n");
+    // La caja de texto la decide el formato: un informe de facultad quiere márgenes
+    // cómodos, y un paper a dos columnas quiere aprovechar el ancho y separar bien las
+    // columnas —si se tocan, el ojo salta de una a otra en el medio de una oración.
+    p.push_str(match format {
+        DocFormat::Facultad => "\\usepackage[margin=2.5cm]{geometry}\n",
+        DocFormat::Paper => "\\usepackage[margin=2cm, columnsep=6mm]{geometry}\n",
+    });
     p.push_str("\\usepackage[spanish,es-noquoting]{babel}\n");
     p.push_str("\\usepackage{amsmath}\n");
+    p.push_str("\\usepackage{amssymb}\n");
     p.push_str("\\usepackage{graphicx}\n");
     // `float` es lo que habilita `[H]` en una figura — «acá y no donde vos quieras».
     // En un informe es lo que uno quiere el 90% de las veces, y sin el paquete el
@@ -39,6 +126,7 @@ pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta) -> String {
     p.push_str("\\graphicspath{{./}{../}{../imagenes/}{../figuras/}}\n");
     p.push_str("\\usepackage{xcolor}\n");
     p.push_str("\\usepackage{siunitx}\n");
+    p.push_str(&format_preamble(format));
     p.push_str("\\usepackage{pgfplots}\n");
     p.push_str("\\pgfplotsset{compat=1.18}\n");
     p.push_str("\\usepgfplotslibrary{groupplots}\n"); // Bode magnitud+fase apilados
@@ -46,6 +134,11 @@ pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta) -> String {
                                                       // pero sin el recuadro rojo que hyperref dibuja por default (se ve impreso y queda
                                                       // horrible en un informe).
     p.push_str("\\usepackage[hidelinks]{hyperref}\n");
+    // `cleveref` tiene que cargarse después de `hyperref`, siempre: al revés, los
+    // `\\cref` salen sin link y el paquete avisa con un error que no explica por qué.
+    if matches!(format, DocFormat::Paper) {
+        p.push_str("\\usepackage[spanish]{cleveref}\n");
+    }
     p.push('\n');
     p.push_str("% Paleta de colores de Xtal (roles de señal + paleta extendida)\n");
     p.push_str(&pgfplots::color_preamble());
@@ -146,30 +239,72 @@ pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> Strin
             c
         }
         DocFormat::Paper => {
-            // Título a todo el ancho sobre las dos columnas. Dentro del argumento
-            // opcional de \twocolumn[...] NO se puede usar `\\` (rompe con "Argument
-            // of \@icentercr has an extra }"): separamos con \par + \vspace. Por eso
-            // los autores van separados por coma, no por salto de línea.
-            let authors_inline = project.project.authors.join(", ");
+            // Se usa `authblk` de verdad —`\title`, `\author`, `\affil`, `\maketitle`—
+            // en vez de dibujar el encabezado a mano. Es lo que le da a un paper los
+            // autores con su afiliación abajo, en cursiva y chiquita, sin que haya que
+            // acertarle a los espaciados uno por uno.
+            //
+            // `\maketitle` va adentro del argumento de `\twocolumn[...]` para que el
+            // encabezado cruce las dos columnas; ahí adentro **no se puede usar `\\`**
+            // (rompe con «Argument of \@icentercr has an extra }»), así que todo lo que
+            // sigue separa con `\par`.
             let mut c = String::new();
-            c.push_str("\\twocolumn[%\n\\begin{center}\n");
-            c.push_str(&format!(
-                "{{\\LARGE\\bfseries\\color{{xtalPrimary}} {}}}\\par\\vspace{{0.3cm}}\n",
-                latex_escape(&title)
-            ));
-            if !authors_inline.is_empty() {
-                c.push_str(&format!(
-                    "{{\\normalsize {}}}\\par\\vspace{{0.2cm}}\n",
-                    latex_escape(&authors_inline)
-                ));
+            // El subtítulo va pegado al título, un cuerpo más chico. El `\\` de acá
+            // adentro se expande dentro de `\maketitle` —que va en el entorno
+            // `@twocolumnfalse`— y no en el argumento de `\twocolumn[...]`, que es
+            // donde estaría prohibido.
+            let encabezado = match &doc.subtitle {
+                Some(sub) => format!(
+                    "{}\\\\[0.2em]{{\\large\\mdseries {}}}",
+                    latex_escape(&title),
+                    latex_escape(sub)
+                ),
+                None => latex_escape(&title),
+            };
+            c.push_str(&format!("\\title{{\\color{{xtalPrimary}} {encabezado}}}\n"));
+            if project.project.authors.is_empty() {
+                c.push_str("\\author{}\n");
+            } else {
+                for a in &project.project.authors {
+                    c.push_str(&format!("\\author{{{}}}\n", latex_escape(a)));
+                }
             }
-            if !theme.institution_sigla.is_empty() {
-                c.push_str(&format!(
-                    "{{\\small {}}}\n",
-                    latex_escape(&theme.institution_sigla)
-                ));
+            // La afiliación sale del theme: es exactamente lo que un theme aporta.
+            let institucion = if !theme.institution_name.is_empty() {
+                theme.institution_name.clone()
+            } else {
+                theme.institution_sigla.clone()
+            };
+            if !institucion.is_empty() {
+                c.push_str(&format!("\\affil{{{}}}\n", latex_escape(&institucion)));
             }
-            c.push_str("\\end{center}\n\\vspace{0.4cm}\n]\n");
+            let date = doc.date.clone().unwrap_or_else(|| "\\today".to_string());
+            let date_tex = if date == "\\today" {
+                date
+            } else {
+                latex_escape(&date)
+            };
+            c.push_str(&format!("\\date{{\\small {date_tex}}}\n"));
+
+            c.push_str("\\twocolumn[%\n\\begin{@twocolumnfalse}\n\\maketitle\n");
+            // El resumen, en una caja más angosta que la caja de texto. Es la
+            // convención y no es capricho: a todo el ancho de la página, un párrafo de
+            // cuerpo chico da una línea larguísima que cuesta seguir.
+            if let Some(resumen) = &doc.abstract_text {
+                c.push_str("\\begin{center}\\begin{minipage}{0.86\\textwidth}\n\\small\n");
+                c.push_str(&format!(
+                    "\\noindent\\textbf{{Resumen}}\\quad {}\n",
+                    latex_escape(resumen)
+                ));
+                if let Some(keywords) = &doc.keywords {
+                    c.push_str(&format!(
+                        "\\par\\vspace{{0.5em}}\\noindent\\textbf{{Palabras clave}}\\quad \\emph{{{}}}\n",
+                        latex_escape(keywords)
+                    ));
+                }
+                c.push_str("\\end{minipage}\\end{center}\n\\vspace{1em}\n");
+            }
+            c.push_str("\\end{@twocolumnfalse}\n]\n");
             c
         }
     }
@@ -379,7 +514,7 @@ pub fn assemble_parts(
     let format = resolved.format;
     let rendered = render_used_plots(project, plots, measurements, resolved.monochrome, format)?;
     Ok(DocumentParts {
-        preamble: build_preamble(theme, &project.document),
+        preamble: build_preamble(theme, &project.document, format),
         cover: build_cover(project, theme, format),
         body: build_body(&project.sections, &rendered),
         show_toc: show_toc(format, &project.sections),
@@ -460,7 +595,7 @@ pub fn assemble_split(
         render_section(&mut body, section, 0, &rendered, FigureMode::Call);
     }
 
-    let mut preamble = build_preamble(theme, &project.document);
+    let mut preamble = build_preamble(theme, &project.document, format);
     preamble.push_str(&plot_macro());
 
     Ok(SplitDocument {

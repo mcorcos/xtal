@@ -114,6 +114,45 @@ nada.
 
 ---
 
+## Los dos formatos: informe y paper
+
+El `[document] format` no es una preferencia de estética: **decide el molde entero**. La
+clase de LaTeX, el ancho de la caja de texto, la tipografía y qué paquetes se cargan.
+
+| | `facultad` (default) | `paper` |
+|---|---|---|
+| Columnas | una | dos |
+| Encabezado | carátula completa, en su página | a todo el ancho, arriba de las columnas |
+| Índice | sí | no |
+| Márgenes | 2,5 cm | 2 cm, con 6 mm entre columnas |
+| Tipografía | la de LaTeX (Computer Modern) | Times (`newtx`) |
+| Resumen | — | `[document] abstract` y `keywords` |
+
+**El formato `paper` viene cargado a propósito.** Una columna a la mitad del ancho no
+perdona lo que una columna entera sí, así que trae:
+
+- **`microtype`** — es lo que más se nota. Achica y estira los glifos un pelo y deja que
+  la puntuación salga apenas del margen; con eso el justificado de una columna angosta
+  deja de tener ríos de espacio en blanco.
+- **`flushend`** — empareja las dos columnas de la última página, que si no queda una
+  larga y otra a la mitad.
+- **`xurl`** — deja cortar una URL larga en cualquier lado. Sin esto, una URL sin cortar
+  se sale de la caja y LaTeX avisa con un `Overfull \hbox` que nadie lee.
+- **`cleveref`** — `\cref{fig:bode}` escribe «Figura 3» solo, y en plural y en orden si
+  le pasás varias.
+- **`booktabs`, `caption`, `subcaption`, `multirow`, `adjustbox`, `enumitem`, `authblk`**
+  — tablas sin líneas verticales, captions más chicos, subfiguras, y autores con su
+  afiliación debajo.
+
+El de facultad se queda con la base a propósito: lo que se entrega en una materia no gana
+nada con Times ni con columnas balanceadas, y cada paquete de más es uno que puede chocar
+con lo que el informe pida en `[document] packages`.
+
+**El formato se elige al crear el proyecto** (`xtal new --format paper`, o el desplegable
+de la app). Se puede cambiar después con `xtal config set format paper`, pero cambia el
+ancho de la caja de texto: las figuras se reacomodan y los saltos de página se corren.
+Por eso la app no lo ofrece — ver `docs/APP.md`.
+
 ## Los dos motores: Tectonic y pdflatex
 
 «Compilar LaTeX» no es una cosa sola. Hace falta un **motor** que lea el `.tex`, vaya a

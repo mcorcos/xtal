@@ -27,8 +27,9 @@ public enum Desarrollo {
         return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
     }
 
-    /// `XTAL_SHOW=ajustes` — muestra esa pantalla sola, sin tener que abrirla a mano.
-    /// Sirve para retratar una pantalla que vive en otra ventana.
+    /// `XTAL_SHOW=ajustes|pdf|nuevo` — muestra esa pantalla sola, sin tener que abrirla
+    /// a mano. Sirve para retratar una pantalla que vive en otra ventana o detrás de un
+    /// botón (`nuevo` es la tarjeta de proyecto nuevo, que normalmente sale en un sheet).
     public static var pantallaForzada: String? {
         let v = ProcessInfo.processInfo.environment["XTAL_SHOW"] ?? ""
         return v.isEmpty ? nil : v
