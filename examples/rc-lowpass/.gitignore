@@ -1,4 +1,0 @@
-# Todo lo de salida/ es generado, salvo el PDF: lo dejamos commiteado para que
-# se pueda ver el resultado del ejemplo sin instalar nada.
-salida/*
-!salida/main.pdf

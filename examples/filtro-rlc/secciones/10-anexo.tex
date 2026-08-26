@@ -1,0 +1,65 @@
+Este informe no se escribió a mano: se generó con Xtal a partir de la carpeta
+del proyecto. Las cuatro fuentes de datos entran cada una por su comando y todas
+terminan siendo lo mismo --- una \emph{medición}: pares $(x,y)$ con su unidad y
+su procedencia --- que después se consolidan en gráficos.
+
+\begin{lstlisting}[language=consola, caption={Las cuatro maneras de conseguir una curva.}, captionpos=b]
+# 1. Teorica: se evalua la formula, no hay archivo de entrada.
+xtal meas formula --id teorica_mag \
+     --expr "-10*math::log10((1-(f/f0)^2)^2 + (f/(q*f0))^2)" \
+     --from 20 --to 100000 --points 400 --scale log \
+     --const f0=1073.02 --const q=2.0430 --x-unit Hz --y-unit dB
+
+# 2. Simulada: ngspice corre el netlist. Deja magnitud y fase.
+xtal circuit import fuentes/filtro-rlc.cir --as filtro-rlc
+xtal sim ac filtro-rlc --as sim --node "v(out)" \
+     --from 20 --to 100000 --sweep dec --points 30
+
+# 3. Medida: el CSV del instrumento, salteando su metadata.
+xtal meas import fuentes/medicion_bode.csv --id medida_mag \
+     --skip-rows 6 --x-col 0 --y-col 1 --kind measured --x-unit Hz --y-unit dB
+
+# 4. Importada: un rawfile que ya existia (LTspice o ngspice).
+xtal raw import fuentes/variante-q-alto.raw --as q_alto --node "v(out)"
+\end{lstlisting}
+
+Un gráfico es una \emph{receta} sobre esas mediciones: las referencia por su
+identificador y les aplica una vista. No guarda datos adentro, así que la misma
+medición puede aparecer en varios gráficos y cada gráfico puede juntar todas las
+que haga falta.
+
+\begin{lstlisting}[language=consola, caption={El Bode de la Figura~\ref{fig:bode}, completo.}, captionpos=b]
+xtal plot new bode --kind bode \
+     --title "Respuesta en frecuencia del filtro RLC" \
+     --x-label "Frecuencia" --y-label "Ganancia"
+
+xtal plot add-series bode --measurement teorica_mag  --panel magnitude
+xtal plot add-series bode --measurement sim          --panel magnitude
+xtal plot add-series bode --measurement medida_mag   --panel magnitude
+xtal plot add-series bode --measurement teorica_fase --panel phase
+xtal plot add-series bode --measurement sim_fase     --panel phase
+xtal plot add-series bode --measurement medida_fase  --panel phase
+
+xtal run --open
+\end{lstlisting}
+
+\noindent
+En ningún lado se pidió un color, un tipo de línea ni una escala. El eje
+logarítmico sale de haber declarado el gráfico como Bode; el trazo de cada curva
+sale de cómo se obtuvo el dato; el color, del rol de la señal. Lo que se declara
+es lo que se quiere ver, no cómo dibujarlo.
+
+\vspace{0.6em}
+\noindent
+El proyecto entero se reconstruye desde cero con un solo comando:
+
+\begin{lstlisting}[language=consola]
+./reproducir.sh
+\end{lstlisting}
+
+\noindent
+que borra todo lo derivado (\texttt{mediciones/}, \texttt{graficos/},
+\texttt{esquematicos/}, \texttt{salida/}), lo vuelve a generar desde
+\texttt{fuentes/} y compila el PDF. Las únicas entradas son los netlists, los
+CSV del instrumento, la imagen, el texto de las secciones y el
+\texttt{xtal.toml} que las indexa.

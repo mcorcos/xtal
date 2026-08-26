@@ -57,6 +57,11 @@ public struct Workspace: View {
         case seccion(String)
     }
     @State private var insercion: EditorCodigo.Insercion?
+
+    /// La ida y vuelta entre el editor y el PDF. Ver `Sincronia`.
+    @State private var sincronia = Sincronia()
+    /// El pedido que va del PDF al editor: mostrame este rango.
+    @State private var revelar: EditorCodigo.Revelar?
     @Environment(\.colorScheme) private var esquema
 
     /// El diálogo de crear o renombrar una sección.
@@ -177,6 +182,9 @@ public struct Workspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .xtalGuardarYCompilar)) { _ in
             Task { await guardarYCompilar() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .xtalSincronizar)) { _ in
+            sincronizar()
+        }
         // Las dos órdenes de afuera que necesitan tocar el estado de esta pantalla.
         .onReceive(NotificationCenter.default.publisher(for: .xtalVerSolapa)) { aviso in
             solapa = (aviso.object as? String) == "errores" ? .errores : .pdf
@@ -225,6 +233,43 @@ public struct Workspace: View {
                 await proyecto.compilar()
                 if let e = proyecto.error {
                     proyecto.error = e.ubicar(en: secciones.lista)
+                }
+            }
+
+            // Disparar la sincronía sola, para poder mirarla. Ver `Desarrollo`.
+            if let texto = Desarrollo.textoASincronizar {
+                // El PDFView carga su documento en el ciclo siguiente al que le llega
+                // la URL: sin esperar, la sincronía busca en un documento vacío.
+                try? await Task.sleep(for: .milliseconds(800))
+                if texto.hasPrefix("pdf:") {
+                    sincronia.simularSeleccionEnPdf(String(texto.dropFirst(4)))
+                } else if texto.hasPrefix("lineas:") {
+                    // `lineas:secciones/03-modelo.tex:1-12` — la selección que hace
+                    // falta para probar SyncTeX, que trabaja con archivo y línea.
+                    let partes = texto.dropFirst(7).split(separator: ":")
+                    let rango = partes.count > 1 ? partes[1].split(separator: "-") : []
+                    if partes.count > 1, rango.count == 2,
+                       let desde = Int(rango[0]), let hasta = Int(rango[1]) {
+                        let url = proyecto.carpeta.appendingPathComponent(String(partes[0]))
+                        alEditor { abrirArchivo(url) }
+                        sincronia.archivoEditor = url.standardizedFileURL.path
+                        sincronia.lineasEditor = desde...hasta
+                        sincronia.seleccionEditor = "(líneas \(desde)–\(hasta))"
+                    }
+                } else {
+                    sincronia.seleccionEditor = texto
+                }
+                sincronizar()
+                if let png = Desarrollo.rutaRetratoSync {
+                    sincronia.retratar(a: png)
+                    // El aviso llega en el ciclo siguiente al de la búsqueda.
+                    try? await Task.sleep(for: .milliseconds(200))
+                    let rastro = sincronia.rastro()
+                        + "\naviso: " + (sincronia.aviso?.texto ?? "—")
+                        + "\nabierto: " + (arbol.seleccionado?.lastPathComponent ?? "—")
+                    try? rastro.write(
+                        to: png.deletingPathExtension().appendingPathExtension("txt"),
+                        atomically: true, encoding: .utf8)
                 }
             }
         }
@@ -594,7 +639,8 @@ public struct Workspace: View {
                 cabecera(url.lastPathComponent,
                          icono: Arbol.icono(de: url, esCarpeta: false, abierta: false),
                          sufijo: generado(url) ? "generado" : nil)
-                VisorArchivo(url: url, texto: $texto, insercion: $insercion)
+                VisorArchivo(url: url, texto: $texto, insercion: $insercion,
+                             sincronia: sincronia, revelar: $revelar)
             } else {
                 Spacer(minLength: 0)
             }
@@ -605,6 +651,164 @@ public struct Workspace: View {
         // pudiendo arrastrar.
         .frame(minWidth: 320, idealWidth: 560, maxWidth: 900, maxHeight: .infinity)
         .background(Tok.bgBase)
+    }
+
+    // MARK: - Ida y vuelta con el PDF
+
+    /// El cartelito de resultado de la sincronía. Se va solo a los tres segundos.
+    @ViewBuilder
+    private var avisoSincronia: some View {
+        if let aviso = sincronia.aviso {
+            HStack(spacing: Tok.S.sm) {
+                Image(systemName: aviso.bien ? "highlighter" : "questionmark.circle")
+                    .font(.system(size: 11))
+                Text(aviso.texto).font(Tok.F.label)
+            }
+            .foregroundStyle(aviso.bien ? Tok.ambar.deep : Tok.textSecondary)
+            .padding(.horizontal, Tok.S.lg)
+            .frame(height: Tok.H.boton)
+            .background(aviso.bien ? Tok.ambar.bg : Tok.bgActive,
+                        in: Capsule())
+            .overlay(Capsule().stroke(Tok.borderSubtle, lineWidth: 1))
+            .padding(.bottom, Tok.S.lg)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .id(aviso.id)
+        }
+    }
+
+    /// El botón que une los dos paneles. **Uno solo, y va para los dos lados.**
+    ///
+    /// Overleaf pone dos flechas, una por sentido, y te hace elegir cuál. Acá no hace
+    /// falta: si hay algo seleccionado en el editor la única pregunta razonable es
+    /// «¿dónde quedó esto en el PDF?», y si no hay nada seleccionado ahí pero sí en el
+    /// PDF, la pregunta es la inversa. El programa ya sabe la respuesta.
+    ///
+    /// Va en el borde entre los dos paneles porque es de los dos, no de ninguno.
+    private var botonSincronizar: some View {
+        Button(action: sincronizar) {
+            HStack(spacing: Tok.S.xs) {
+                Image(systemName: "arrow.left.arrow.right").font(.system(size: 11))
+                Text("Sincronizar").font(Tok.F.label).lineLimit(1)
+            }
+            .foregroundStyle(Tok.textSecondary)
+            .padding(.horizontal, Tok.S.md)
+            .frame(height: 22)
+            .background(Tok.bgActive,
+                        in: RoundedRectangle(cornerRadius: Tok.R.chip, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("j", modifiers: [.command, .shift])
+        .help("Seleccioná texto de un lado y apretá acá: lo resalta del otro (⇧⌘J)")
+    }
+
+    /// Decide para dónde va la sincronía y la hace.
+    ///
+    /// El orden importa: **gana el editor**. Cuando alguien selecciona en el editor, el
+    /// PDF suele conservar una selección vieja de hace diez minutos, y arrancar de ahí
+    /// sería ir para el lado contrario al que se acaba de pedir.
+    private func sincronizar() {
+        let delEditor = sincronia.seleccionEditor.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !delEditor.isEmpty {
+            solapa = .pdf
+            sincronia.alPdf(desde: delEditor)
+            return
+        }
+        // La vuelta exacta primero: el mapa de SyncTeX dice archivo y línea sin
+        // adivinar. Buscar el texto en los fuentes queda para cuando no hay mapa.
+        if let destino = sincronia.fuenteDeLaSeleccion() {
+            alFuente(destino.archivo, linea: destino.linea, como: "sincronía")
+            return
+        }
+        guard let delPdf = sincronia.seleccionDelPdf() else {
+            sincronia.avisar("Seleccioná texto de un lado y volvé a apretar", bien: false)
+            return
+        }
+        alEditorDesde(delPdf)
+    }
+
+    /// Abre ese archivo en el editor y deja el cursor en esa línea.
+    ///
+    /// Es donde termina todo lo que viene del PDF, venga del botón o de un doble click.
+    /// Los `.tex` de `salida/` se ignoran a propósito: SyncTeX también mapea el
+    /// `main.tex` generado y los gráficos, y mandar a alguien a editar ahí es mandarlo
+    /// a perder el trabajo en la próxima compilación.
+    private func alFuente(_ ruta: String, linea: Int, como: String) {
+        let url = URL(fileURLWithPath: ruta).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path), !generado(url) else {
+            sincronia.avisar("Eso sale de un archivo que genera Xtal", bien: false)
+            return
+        }
+        let yaAbierto = arbol.seleccionado?.standardizedFileURL == url
+        if !yaAbierto { alEditor { abrirArchivo(url) } } else { alEditor {} }
+
+        let fuente = yaAbierto ? texto : ((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+        guard let rango = Self.rangoDeLinea(linea, en: fuente) else { return }
+        if yaAbierto {
+            revelar = EditorCodigo.Revelar(rango: rango)
+        } else {
+            // El editor recién va a tener este archivo adentro en el próximo ciclo.
+            DispatchQueue.main.async { revelar = EditorCodigo.Revelar(rango: rango) }
+        }
+        sincronia.avisar("\(url.lastPathComponent), línea \(linea)", bien: true)
+        _ = como
+    }
+
+    /// El rango de caracteres de una línea (contando desde 1).
+    static func rangoDeLinea(_ linea: Int, en texto: String) -> NSRange? {
+        guard linea >= 1 else { return nil }
+        let s = texto as NSString
+        var actual = 1, inicio = 0, i = 0
+        while i < s.length {
+            if actual == linea { break }
+            if s.character(at: i) == 10 { actual += 1; inicio = i + 1 }
+            i += 1
+        }
+        guard actual == linea else { return nil }
+        var fin = inicio
+        while fin < s.length, s.character(at: fin) != 10 { fin += 1 }
+        return NSRange(location: inicio, length: max(0, fin - inicio))
+    }
+
+    /// Del PDF al fuente: encuentra de qué archivo salió ese texto, lo abre y lo marca.
+    ///
+    /// Se prueba primero en lo que ya está abierto. Es el caso normal —uno mira el PDF
+    /// de lo que está editando— y ahorra abrir un archivo que ya estaba abierto, que
+    /// haría perder la posición del cursor.
+    private func alEditorDesde(_ delPdf: String) {
+        if let r = Sincronia.rango(de: delPdf, en: texto) {
+            alEditor {}
+            revelar = EditorCodigo.Revelar(rango: r)
+            sincronia.avisar("Marcado en el editor", bien: true)
+            return
+        }
+        for url in fuentesDondeBuscar() {
+            guard let fuente = try? String(contentsOf: url, encoding: .utf8),
+                  let r = Sincronia.rango(de: delPdf, en: fuente) else { continue }
+            alEditor { abrirArchivo(url) }
+            // El editor recién va a tener este texto adentro en el próximo ciclo de
+            // SwiftUI: pedirle el rango ahora sería pedírselo al archivo anterior.
+            DispatchQueue.main.async { revelar = EditorCodigo.Revelar(rango: r) }
+            sincronia.avisar("Está en \(url.lastPathComponent)", bien: true)
+            return
+        }
+        sincronia.avisar("No encontré ese texto en el fuente", bien: false)
+    }
+
+    /// Los archivos donde puede estar ese texto, en orden de probabilidad.
+    ///
+    /// Las secciones primero: es donde vive la prosa del informe. Lo generado queda
+    /// afuera —`salida/main.tex` tiene el mismo texto pero se pisa en cada compilación,
+    /// y mandar a alguien a editar ahí es mandarlo a perder el trabajo.
+    private func fuentesDondeBuscar() -> [URL] {
+        let tex = proyecto.archivos
+            .map(\.url)
+            .filter { $0.pathExtension.lowercased() == "tex" && !generado($0) }
+        return tex.sorted { a, b in
+            let sa = a.pathComponents.contains("secciones")
+            let sb = b.pathComponents.contains("secciones")
+            return sa != sb ? sa : a.path < b.path
+        }
     }
 
     /// «¿Dónde está el LaTeX?»
@@ -782,7 +986,12 @@ public struct Workspace: View {
             switch solapa {
             case .pdf:
                 if proyecto.pdf != nil {
-                    VisorPDF(url: proyecto.pdf)
+                    VisorPDF(url: proyecto.pdf, sincronia: sincronia,
+                             alDobleClick: { pagina, punto in
+                                 guard let d = sincronia.fuenteDe(pagina: pagina, punto: punto)
+                                 else { return }
+                                 alFuente(d.archivo, linea: d.linea, como: "doble click")
+                             })
                 } else {
                     Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
                           detalle: "Apretá ⌘S y el PDF aparece acá")
@@ -802,6 +1011,9 @@ public struct Workspace: View {
         }
         .frame(minWidth: 280, idealWidth: 520)
         .background(Tok.bgApp)
+        // El resultado de la última sincronía, abajo y por un rato. Sin esto, apretar
+        // el botón y que no pase nada se lee como que el botón está roto.
+        .overlay(alignment: .bottom) { avisoSincronia }
         // El PDF vuelve al frente solo cuando el error se arregla: te quedaste mirando
         // el error, lo corregiste, y lo que querés ver es el resultado.
         .onChange(of: proyecto.error?.mensaje) { _, nuevo in
@@ -817,6 +1029,9 @@ public struct Workspace: View {
     private var barraSalida: some View {
         VStack(spacing: 0) {
             HStack(spacing: Tok.S.xs) {
+                botonSincronizar
+                Rectangle().fill(Tok.borderSubtle).frame(width: 1, height: 16)
+                    .padding(.horizontal, Tok.S.xs)
                 Solapa(titulo: "main.pdf", icono: "doc.richtext",
                        activa: solapa == .pdf) { solapa = .pdf }
                 Solapa(titulo: "Errores", icono: "exclamationmark.triangle",

@@ -1,0 +1,43 @@
+Con la salida sobre el capacitor, la transferencia del divisor serie es
+%
+\begin{equation}
+  H(s) \;=\; \frac{\dfrac{1}{sC}}{R_t + sL + \dfrac{1}{sC}}
+        \;=\; \frac{1}{1 + sR_tC + s^{2}LC},
+  \qquad R_t = R_1 + R_L .
+  \label{eq:transferencia}
+\end{equation}
+%
+Llevada a la forma canónica de segundo orden,
+%
+\begin{align}
+  H(s)   &= \frac{\omega_0^{2}}{s^{2} + \dfrac{\omega_0}{Q}\,s + \omega_0^{2}}, &
+  \omega_0 &= \frac{1}{\sqrt{LC}}, &
+  Q &= \frac{1}{R_t}\sqrt{\frac{L}{C}} .
+  \label{eq:canonica}
+\end{align}
+%
+Evaluada en $s = j\omega$ y con $x = f/\fnat$, la respuesta que se grafica es
+%
+\begin{align}
+  |H|_{\mathrm{dB}} &= -10\log_{10}\!\Big[\big(1-x^{2}\big)^{2} + \big(x/Q\big)^{2}\Big], &
+  \varphi &= -\arctan_2\!\Big(\frac{x}{Q},\; 1-x^{2}\Big).
+  \label{eq:modulo-fase}
+\end{align}
+%
+El $\arctan_2$ de dos argumentos no es un capricho: con el arcotangente de uno
+solo, la fase se queda entre $-90^\circ$ y $+90^\circ$ y aparece un salto falso
+al cruzar la resonancia, justo donde interesa mirar.
+
+En el dominio del tiempo, y para $Q > \tfrac{1}{2}$ (caso subamortiguado, que es
+el de este circuito), la respuesta al escalón unitario vale
+%
+\begin{equation}
+  v_o(t) \;=\; 1 - e^{-\alpha t}\!\left[\cos(\omega_d t) + \frac{\alpha}{\omega_d}\sin(\omega_d t)\right],
+  \qquad
+  \alpha = \frac{R_t}{2L}, \quad
+  \omega_d = \sqrt{\omega_0^{2}-\alpha^{2}} .
+  \label{eq:escalon}
+\end{equation}
+%
+El sobrepico depende solo del amortiguamiento:
+$M_p = \exp\!\big(-\pi\alpha/\omega_d\big)$.

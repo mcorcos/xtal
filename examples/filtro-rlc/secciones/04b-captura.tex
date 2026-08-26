@@ -1,0 +1,39 @@
+La Figura~\ref{fig:captura} es la pantalla tal como quedó, con las anotaciones
+puestas encima en \LaTeX. El PNG es la imagen cruda; las flechas, las cotas y
+los rótulos se dibujan con TikZ sobre ella, así que quedan con la misma
+tipografía que el resto del informe y no hay que rehacer la captura para
+corregir una etiqueta.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\footnotesize]
+  \node[inner sep=0, anchor=south west] (foto)
+    {\includegraphics[width=0.92\linewidth]{captura-osciloscopio.png}};
+  % Sistema de coordenadas normalizado sobre la imagen: (0,0) abajo a la
+  % izquierda, (1,1) arriba a la derecha. Asi las anotaciones no dependen del
+  % tamano al que se escale la foto.
+  \begin{scope}[x={(foto.south east)}, y={(foto.north west)}]
+    \draw[-{Stealth[length=5pt]}, xtalOutput, thick]
+      (0.30,0.78) node[above, align=center, text=xtalOutput]
+      {sobrepico $\approx \SI{41}{\percent}$} -- (0.195,0.63);
+    \draw[-{Stealth[length=5pt]}, xtalInput, thick]
+      (0.42,0.30) node[below, align=center, text=xtalInput]
+      {CH1: escalón de entrada} -- (0.30,0.43);
+    \draw[|<->|, white, thin]
+      (0.195,0.55) -- node[above, text=white, fill=black, inner sep=1pt]
+      {$T_d \approx \SI{0.96}{\milli\second}$} (0.385,0.55);
+    \draw[-{Stealth[length=5pt]}, white, thick]
+      (0.72,0.20) node[below, align=center, text=white]
+      {régimen permanente: $v_o \to v_i$} -- (0.80,0.44);
+  \end{scope}
+\end{tikzpicture}
+\caption{Captura del osciloscopio: escalón de entrada (CH1, ámbar) y salida
+sobre el capacitor (CH2, verde). Base de tiempo \SI{500}{\micro\second} por
+división; \SI{500}{\milli\volt} por división en los dos canales.}
+\label{fig:captura}
+\end{figure}
+
+El período de la oscilación amortiguada se lee directo de la pantalla: entre el
+primer y el segundo máximo hay poco menos de dos divisiones, o sea
+$T_d \approx \SI{0.96}{\milli\second}$, que da $f_d = \SI{1.04}{\kilo\hertz}$.
+Es el valor que predice la Ecuación~\eqref{eq:escalon}.

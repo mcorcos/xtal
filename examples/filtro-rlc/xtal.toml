@@ -1,0 +1,200 @@
+[project]
+name = "filtro-rlc"
+authors = ["Manuel Corcos"]
+theme = "itba"
+
+[document]
+format = "facultad"
+title = "Filtro pasabajos RLC de segundo orden"
+subtitle = "Teoría, simulación y medición de una red resonante"
+course = "Laboratorio de Electrónica — ejemplo completo de Xtal"
+packages = [
+    "booktabs",
+    "[siunitx, RPvoltages]{circuitikz}",
+    "listings",
+    "enumitem",
+    "bm",
+    "caption",
+]
+preamble = '''
+\usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds}
+
+% Captions un poco mas chicos que el texto, con el numero en negrita.
+\captionsetup{font=small, labelfont=bf, width=0.92\linewidth}
+
+% Estilo de los bloques de codigo: netlists de SPICE y comandos de la terminal.
+\definecolor{codeFondo}{HTML}{F6F7F9}
+\definecolor{codeComent}{HTML}{6A737D}
+\definecolor{codeClave}{HTML}{1565C0}
+\lstdefinestyle{xtal}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codeFondo},
+  commentstyle=\color{codeComent}\itshape,
+  keywordstyle=\color{codeClave}\bfseries,
+  frame=leftline, framerule=1.2pt, rulecolor=\color{xtalPrimary},
+  framexleftmargin=6pt, xleftmargin=8pt,
+  breaklines=true, showstringspaces=false,
+  columns=fullflexible, keepspaces=true,
+  aboveskip=1em, belowskip=1em,
+}
+\lstdefinelanguage{spice}{
+  morecomment=[l]{*}, morecomment=[l]{;},
+  morekeywords={AC, DC, PULSE, SIN, TRAN, ac, dec, tran, end, model, param},
+  sensitive=false,
+}
+\lstdefinelanguage{consola}{
+  morecomment=[l]{\#},
+  morekeywords={xtal, meas, plot, sim, run, circuit, raw, import, formula, new, add-series},
+  sensitive=true,
+}
+\lstset{style=xtal}
+
+% Un atajo para nombrar las magnitudes del circuito siempre igual.
+\newcommand{\fnat}{f_{0}}
+\newcommand{\Qmerito}{Q}
+'''
+
+[[plan]]
+id = "bode"
+title = "Respuesta en frecuencia del filtro RLC"
+kind = "bode"
+sources = [
+    "theoretical",
+    "simulated",
+    "measured",
+]
+note = "El plato fuerte: las tres fuentes en magnitud y fase."
+
+[[plan]]
+id = "residuos"
+title = "Residuo de la magnitud medida contra el modelo"
+kind = "generic"
+sources = ["measured"]
+note = "Medida menos teorica, punto a punto y sin linea."
+
+[[plan]]
+id = "escalon"
+title = "Respuesta al escalon"
+kind = "time"
+sources = [
+    "theoretical",
+    "simulated",
+    "measured",
+]
+note = "Entrada mas las tres salidas. Color por senal, trazo por fuente."
+
+[[plan]]
+id = "ordenes"
+title = "Primer orden contra segundo orden"
+kind = "bode"
+sources = [
+    "theoretical",
+    "simulated",
+]
+note = "Las dos pendientes asintoticas, -20 y -40 dB/decada."
+
+[[plan]]
+id = "escalones"
+title = "El mismo escalon en los dos filtros"
+kind = "time"
+sources = ["simulated"]
+note = "El precio de filtrar mejor: sobrepico."
+
+[[plan]]
+id = "familia"
+title = "Efecto del factor de merito sobre el pico"
+kind = "bode"
+sources = [
+    "theoretical",
+    "simulated",
+]
+note = "Cuatro valores de Q. El de Q alto viene de un .raw importado."
+
+[[sections]]
+title = "Objetivo y alcance"
+body_file = "secciones/01-objetivo.tex"
+subsections = []
+figures = []
+
+[[sections]]
+title = "Circuito bajo ensayo"
+body_file = "secciones/02-circuito.tex"
+figures = []
+
+[[sections.subsections]]
+title = "Netlist"
+body_file = "secciones/02b-netlist.tex"
+subsections = []
+figures = []
+
+[[sections]]
+title = "Modelo teórico"
+body_file = "secciones/03-modelo.tex"
+figures = []
+
+[[sections.subsections]]
+title = "Parámetros nominales"
+body_file = "secciones/03b-parametros.tex"
+subsections = []
+figures = []
+
+[[sections.subsections]]
+title = "El factor de mérito manda el pico"
+body_file = "secciones/03c-familia.tex"
+subsections = []
+figures = ["familia"]
+
+[[sections]]
+title = "Banco de medición"
+body_file = "secciones/04-banco.tex"
+figures = []
+
+[[sections.subsections]]
+title = "La captura del osciloscopio"
+body_file = "secciones/04b-captura.tex"
+subsections = []
+figures = []
+
+[[sections]]
+title = "Respuesta en frecuencia"
+body_file = "secciones/05-frecuencia.tex"
+figures = ["bode"]
+
+[[sections.subsections]]
+title = "Cuánto se separa la medición del modelo"
+body_file = "secciones/05b-residuos.tex"
+subsections = []
+figures = ["residuos"]
+
+[[sections]]
+title = "Respuesta temporal"
+body_file = "secciones/06-temporal.tex"
+subsections = []
+figures = ["escalon"]
+
+[[sections]]
+title = "Polos, amortiguamiento y estabilidad"
+body_file = "secciones/07-polos.tex"
+subsections = []
+figures = []
+
+[[sections]]
+title = "Primer orden contra segundo orden"
+body_file = "secciones/08-ordenes.tex"
+subsections = []
+figures = [
+    "ordenes",
+    "escalones",
+]
+
+[[sections]]
+title = "Conclusiones"
+body_file = "secciones/09-conclusiones.tex"
+subsections = []
+figures = []
+
+[[sections]]
+title = "Anexo: cómo se armó este informe"
+body_file = "secciones/10-anexo.tex"
+subsections = []
+figures = []

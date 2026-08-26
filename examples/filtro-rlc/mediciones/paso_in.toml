@@ -1,0 +1,14 @@
+id = "paso_in"
+kind = "simulated"
+source = "simulation"
+x_unit = "s"
+y_unit = "V"
+
+[sim]
+circuit = "filtro-rlc"
+vector = "v(in)"
+quantity = "value"
+
+[sim.analysis.Tran]
+step = 0.000005
+stop = 0.0035

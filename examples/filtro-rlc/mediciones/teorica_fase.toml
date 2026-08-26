@@ -1,0 +1,18 @@
+id = "teorica_fase"
+kind = "theoretical"
+source = "formula"
+label = "Teórica"
+x_unit = "Hz"
+y_unit = "deg"
+
+[formula]
+expr = "-math::atan2(f/(q*f0), 1-(f/f0)^2)*57.29577951308232"
+variable = "f"
+from = 20.0
+to = 100000.0
+points = 400
+scale = "log"
+
+[formula.constants]
+f0 = 1073.02
+q = 2.043

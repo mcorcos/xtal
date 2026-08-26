@@ -154,10 +154,11 @@ xtal man --out ~/.local/share/man/man1
 xtal example --open
 ```
 
-Crea un proyecto de ejemplo completo en tu disco, lo compila y te abre el PDF. Es un filtro
-pasabajos RC caracterizado con las tres fuentes —teórica, simulada con ngspice y medida desde
-un CSV— consolidadas en un Bode de dos paneles, con carátula. El ejemplo viene adentro del
-binario: no hace falta clonar nada.
+Crea un proyecto de ejemplo completo en tu disco, lo compila y te abre el PDF. Es un informe
+de 13 páginas sobre un filtro RLC de segundo orden, con las cuatro maneras de conseguir una
+curva —fórmula, ngspice, CSV de instrumento y rawfile de LTspice— consolidadas en seis
+gráficos, más esquemáticos dibujados en LaTeX, una captura de osciloscopio anotada, tablas y
+anexo. El ejemplo viene adentro del binario: no hace falta clonar nada.
 
 Si algo no compila:
 
@@ -166,7 +167,7 @@ xtal doctor        # qué falta y para qué sirve
 xtal doctor --fix  # te ofrece instalarlo, preguntando una por una
 ```
 
-El mismo ejemplo está en [`examples/rc-lowpass/`](examples/rc-lowpass/), con un
+El mismo ejemplo está en [`examples/filtro-rlc/`](examples/filtro-rlc/), con un
 `reproducir.sh` comentado paso a paso que lo arma desde cero.
 
 ## Mientras trabajás

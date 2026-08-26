@@ -1,0 +1,37 @@
+id = "bode"
+kind = "bode"
+title = "Respuesta en frecuencia del filtro RLC"
+
+[axes]
+x_label = "Frecuencia"
+y_label = "Ganancia"
+
+[[series]]
+measurement = "teorica_mag"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "sim"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "medida_mag"
+role = "none"
+panel = "magnitude"
+
+[[series]]
+measurement = "teorica_fase"
+role = "none"
+panel = "phase"
+
+[[series]]
+measurement = "sim_fase"
+role = "none"
+panel = "phase"
+
+[[series]]
+measurement = "medida_fase"
+role = "none"
+panel = "phase"

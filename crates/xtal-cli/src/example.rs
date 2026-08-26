@@ -6,8 +6,10 @@
 //! documentación para averiguarlo es el camino largo.
 //!
 //! Esto le da lo mismo que muestra el README, pero en su disco y modificable: el
-//! filtro pasabajos RC con sus tres fuentes (teórica, simulada y medida) consolidadas
-//! en un Bode, más el informe con carátula. Con `--run` sale el PDF de una.
+//! filtro pasabajos RLC de segundo orden con sus cuatro fuentes de datos (teórica,
+//! simulada, medida e importada de un `.raw`) consolidadas en seis gráficos, más el
+//! informe entero con carátula, esquemáticos, tablas y anexo. Con `--run` sale el PDF
+//! de una.
 //!
 //! El ejemplo va **embebido en el binario** (igual que los themes), así que funciona
 //! sin red y sin haber clonado el repositorio.
@@ -20,13 +22,13 @@ use console::style;
 use crate::cli::{ExampleArgs, RunArgs};
 use crate::commands;
 
-/// El proyecto de ejemplo, embebido desde `examples/rc-lowpass` del repositorio.
+/// El proyecto de ejemplo, embebido desde `examples/filtro-rlc` del repositorio.
 ///
 /// `salida/` queda afuera: es el PDF ya compilado, y meterlo adentro del binario sería
 /// pesado y además engañoso (queremos que el usuario lo compile él).
 // La ruta es relativa al directorio del crate (donde está su Cargo.toml).
 #[derive(rust_embed::Embed)]
-#[folder = "../../examples/rc-lowpass"]
+#[folder = "../../examples/filtro-rlc"]
 #[exclude = "salida/*"]
 #[exclude = ".gitignore"]
 struct EmbeddedExample;
@@ -55,7 +57,8 @@ pub fn cmd_example(args: ExampleArgs) -> Result<()> {
     );
     println!(
         "  {}",
-        style("Filtro pasabajos RC: teórica + simulada + medida en un mismo Bode.").dim()
+        style("Filtro RLC de segundo orden: teórica, simulada y medida en un informe completo.")
+            .dim()
     );
 
     // `--open` implica compilar: no hay nada que abrir si no compilaste.

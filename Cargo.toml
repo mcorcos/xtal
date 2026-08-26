@@ -63,7 +63,7 @@ evalexpr = "12"
 minijinja = { version = "2", features = ["custom_syntax"] }
 
 # --- recursos embebidos (themes dentro del binario) ---
-# include-exclude: `xtal example` embebe examples/rc-lowpass menos el PDF ya compilado.
+# include-exclude: `xtal example` embebe examples/filtro-rlc menos el PDF ya compilado.
 rust-embed = { version = "8", features = ["include-exclude"] }
 
 # --- errores ---

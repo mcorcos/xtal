@@ -119,7 +119,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
     confirmación; en modo no interactivo solo reporta.
   - `xtal doctor [--fix]` — dependencias con su propósito, config, proyecto actual y un
     resumen accionable. Con `--json` expone `can_build` (lo que mira el MCP).
-  - `xtal example [nombre] [--run|--open]` — materializa `examples/rc-lowpass`, **embebido
+  - `xtal example [nombre] [--run|--open]` — materializa `examples/filtro-rlc`, **embebido
     en el binario** con rust-embed (excluyendo `salida/`). Resuelve el primer minuto.
   - `xtal watch` — recompila al cambiar algo. **Polling de mtime**, no inotify/FSEvents:
     no justifica la dependencia. Ignora `salida/` (si no, se recompila a sí mismo en loop).
@@ -251,6 +251,138 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
 - Cuándo sirve, en concreto: después de compilar, `xtal app ver pdf` deja el resultado a
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
+
+### SyncTeX: que se resalte todo, no solo la prosa — HECHO (2026-08-26), pedido de Manu
+Manu seleccionó un bloque con dos `align` adentro y en el PDF se resaltó **una sola
+línea**: la de prosa. Las ecuaciones no imprimen texto que se pueda buscar. Eso es
+exactamente el agujero que tapa SyncTeX, y ahora está.
+- **El motor lo genera siempre**: `--synctex` a Tectonic y `-synctex=1` a pdflatex, en
+  `xtal-compile`. Cuesta un archivo al lado del PDF y nada de tiempo; que esté o no esté
+  no puede depender de un flag que nadie se acuerda de pasar.
+- **`Editor/SyncTeX.swift`** es el parser, escrito de cero. Tres cosas del formato que
+  costaron y están anotadas:
+  1. **Los `Input:` NO están todos en el encabezado.** Aparecen intercalados en el
+     contenido, a medida que el motor abre cada archivo. Parseando solo el encabezado, el
+     mapa sale con un archivo (el `main.tex`) y ninguna sección.
+  2. **El eje Y crece hacia abajo** y la `y` de una caja es su línea base, así que el
+     rectángulo va de `y - alto` a `y + profundidad`, y hay que darlo vuelta con el alto
+     de la página para PDFKit.
+  3. Todo en *scaled points*: 65536 por punto.
+- **Foundation no trae gunzip.** `Compression` sí sabe inflar, pero **raw deflate**, sin
+  el envoltorio de gzip: hay que saltear su encabezado a mano (10 bytes fijos más los
+  campos opcionales que anuncian los flags). Está en `descomprimir`.
+- **Se pintan solo las cajas maximales.** Una línea de LaTeX produce un árbol de cajas
+  anidadas —la ecuación entera, cada fracción, cada subíndice—: sin filtrar, se pinta la
+  misma zona quince veces. Descartando lo que está adentro de otra ya elegida queda un
+  rectángulo por línea impresa. Y se tira lo que ocupa más del 45% de la página, que es
+  la vbox del cuerpo del documento.
+- **El resaltado va por `PDFAnnotation(.highlight)` y no por `PDFSelection`**: una
+  selección solo sabe envolver texto, y acá hay que pintar el rectángulo de una ecuación.
+  Se guardan para poder sacarlas.
+- **Doble click en el PDF lleva al fuente** (`VistaPDF` en `VisorPDF.swift`), llamando a
+  `super` igual para no romper el doble click que selecciona la palabra. Lo que sale del
+  `main.tex` generado no lleva a ningún lado a propósito.
+- La búsqueda por texto **no se tiró**: quedó de respaldo para cuando no hay mapa (un
+  proyecto compilado con una versión anterior, un `.tex` externo).
+- **`main.synctex.gz` del ejemplo va commiteado**, con el mismo criterio que el PDF: sin
+  él, los tres tests de SyncTeX se saltean solos en cualquier máquina que no haya
+  compilado el ejemplo, que es justo la de otro.
+- Gancho nuevo: `XTAL_SYNC="lineas:<archivo>:<desde>-<hasta>"`, porque SyncTeX trabaja
+  con archivo y línea y una ecuación no tiene texto que pasarle.
+
+### La flecha entre el editor y el PDF — HECHO (2026-08-26), pedido de Manu
+Overleaf pone dos flechas entre el editor y el compilado, una por sentido. Manu pidió
+**una sola, bidireccional**: seleccionás texto de un lado, apretás, y se resalta del otro.
+Ver `docs/APP.md` («Una flecha sola, que va para los dos lados»).
+- **`Editor/Sincronia.swift`** es todo el motor. El botón vive en la barra del panel de
+  salida —el borde entre los dos paneles, que es de los dos y de ninguno— y también en
+  el menú *Ver*. **⇧⌘J** (⌘J ya era la terminal).
+- **La dirección no se elige: la decide el programa.** Gana el editor, porque el PDF
+  suele conservar una selección vieja de hace diez minutos y arrancar de ahí sería ir
+  para el lado contrario al que se acaba de pedir.
+- **Se hace por texto, NO con SyncTeX**, y está argumentado en el docstring de
+  `Sincronia`: lo que se pidió es resaltar *el texto*, y SyncTeX da el rectángulo de una
+  caja. Además habría que pasarle `--synctex` al motor y mantener un parser de un formato
+  propio comprimido. El precio: una selección de pura matemática no tiene qué buscar, y
+  ahí el botón lo dice en vez de quedarse mudo.
+- **La búsqueda es «el pedazo más largo que exista, y seguir desde ahí»**, no partir por
+  la mitad. Partiendo a ciegas, los cortes caían en el medio de las negritas y el párrafo
+  quedaba resaltado con huecos: el PDF arranca otra corrida donde el fuente dice
+  `\textbf{...}`, y una búsqueda que la cruce falla aunque las palabras estén todas.
+  Con esto los cortes caen solos donde el PDF cambia de fuente. **Verificado con el PNG.**
+- Desde el segundo pedazo se busca solo en la página del primero (y la siguiente, que un
+  párrafo puede cruzar): sin eso, «de la señal» matchea en diez páginas y se pinta todo.
+- **El resaltado va por `PDFView.highlightedSelections`**, no por anotaciones: es la API
+  que existe justo para esto (es lo que usa cualquier visor para los resultados de
+  búsqueda) y no toca el documento.
+- **Tres ganchos nuevos de desarrollo**, porque sin manos no se puede ni seleccionar ni
+  apretar: `XTAL_SYNC="texto"` simula la selección del editor y dispara el botón;
+  `XTAL_SYNC="pdf:texto"` la simula del otro lado; `XTAL_SYNC_PNG=/ruta.png` deja la
+  página del PDF **con los resaltados dibujados**. El último hizo falta porque el retrato
+  normal de la ventana no sirve para esto: un `PDFView` sale en blanco en el PNG (ya
+  estaba anotado en `Desarrollo`). `Sincronia.retratar` dibuja la página a mano y encima
+  las selecciones.
+- **Dos bugs salieron de probarlo de verdad**, los dos del ciclo de vida de SwiftUI:
+  1. En `updateNSView` del editor, cargar un archivo estaba encadenado con `else if` al
+     pedido de marcar un rango. Cuando la sincronía viene del PDF las dos cosas pasan en
+     el mismo ciclo, y el pedido se perdía. Ahora la carga no corta la cadena.
+  2. `scrollRangeToVisible` justo después de cargar el texto **no hace nada**: el layout
+     todavía no midió las líneas, así que el rango no tiene posición en pantalla. Va un
+     turno después del run loop. Costó encontrarlo porque la selección SÍ se aplicaba;
+     lo único que no pasaba era el scroll.
+- **Lo que NO se hizo**, por si vuelve: una orden `xtal app resaltar "texto"` para que el
+  agente pueda señalar un párrafo en el PDF desde la terminal. Sale casi gratis ahora que
+  `Sincronia.alPdf` existe, pero es scope aparte.
+
+### Un solo ejemplo, y que muestre todo — HECHO (2026-08-26), pedido de Manu
+Había dos proyectos en el repo (`examples/rc-lowpass` y `vacio/`) y el ejemplo era
+un pasabajos RC de dos páginas: alcanzaba para el primer minuto, no para mostrar de
+qué es capaz la herramienta. **Ahora hay uno solo**: `examples/filtro-rlc`, un
+informe de **13 páginas** sobre un RLC de segundo orden.
+- **El circuito lleva `RL`, la resistencia del bobinado del inductor**, y ese es el
+  motor del informe entero: el Q ideal (2,043), el simulado (1,832) y el medido
+  (1,750) son distintos, y explicar en cuánto y por qué es lo que el TP discute. Un
+  ejemplo donde las tres curvas dan igual no enseña nada.
+- **Las cuatro maneras de conseguir una curva**, cada una ejercitada de verdad:
+  `meas formula`, `sim ac`/`sim tran`, `meas import` de un CSV y **`raw import`** de
+  un `.raw` que ya existía (la variante con Q = 4,89, corrida aparte).
+- **Seis gráficos**: Bode de dos paneles con las tres fuentes, residuos sin línea
+  (`--line none`), el escalón con cuatro curvas (color por señal, trazo por fuente),
+  1.º contra 2.º orden en frecuencia y en el tiempo, y la familia de Q con la paleta
+  automática.
+- **Lo que NO es un gráfico de Xtal**, que es la otra mitad del pedido: esquemáticos
+  con `circuitikz`, diagrama de bloques del banco con TikZ, tablas con `booktabs` +
+  `siunitx`, netlists y comandos con `listings`, el plano complejo de los polos
+  dibujado a mano, y ecuaciones numeradas y referenciadas. **Todo sale de
+  `[document] packages` y `[document] preamble`**: el motor no se tocó.
+- **La captura del osciloscopio es un PNG anotado con TikZ encima.** El PNG lo
+  escribe `fuentes/generar_mediciones.py` a mano (paleta de 8 colores, `zlib` y
+  `struct`, **4 KB**, sin ninguna dependencia de Python) y **no lleva texto adentro
+  a propósito**: las flechas, las cotas y los rótulos se dibujan con TikZ sobre la
+  imagen, así quedan con la tipografía del informe y se corrigen sin rehacer la
+  captura.
+- **El `xtal.toml` trae `[[plan]]`**, así el ejemplo también muestra `xtal status`
+  cruzando el plan contra el disco (dice «Está todo»).
+- **Salió un bug de probarlo**: `xtal scan` marcaba la imagen como sin usar. La
+  función `referencias()` de `inventory.rs` leía el `xtal.toml` y el `main.tex` de
+  la raíz, pero no `secciones/*.tex` — y desde que el cuerpo de cada sección vive en
+  su propio archivo, **ahí** es donde está el `\includegraphics`. Arreglado, con test.
+- **Trampas que costaron una vuelta cada una**, anotadas donde corresponde:
+  - En un `.sh`, `$-` **es una variable de bash** (los flags activos). Un
+    `--label "Medida $-$ teórica"` terminó en la leyenda del PDF como
+    `Medida ehuB$ teórica`.
+  - El `PULSE` del netlist tiene que durar **más** que la ventana del `.tran`: con
+    ancho de 5 ms y una ventana de 5,5 ms, el flanco de bajada entraba al gráfico.
+  - `math::atan2` (dos argumentos) y no `math::atan`: con el de uno, la fase se
+    queda entre ±90° y aparece un salto falso justo en la resonancia.
+  - Las figuras grandes van con `[htbp]`, no con `[H]`: clavadas dejaban media
+    página en blanco.
+- **`sim noise` quedó afuera del ejemplo, y por una razón**: `write_xy_csv` en
+  `xtal-data/src/store.rs` formatea con `{:.10}` (diez **decimales**, no cifras
+  significativas), así que una densidad espectral de 2,5 nV/√Hz se guarda con dos
+  dígitos y por debajo de 1e-10 se guarda como `0`. Arreglarlo cambia el CSV de todas
+  las mediciones de todos los proyectos, así que **es una decisión de Manu, no un
+  arreglo al pasar**.
 
 ### El modo agente, segunda vuelta — HECHO (2026-08-25), pedido de Manu
 Xtal **no abre el agente por vos**: la terminal está para que abras el que uses. Lo que

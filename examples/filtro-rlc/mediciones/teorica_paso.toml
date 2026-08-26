@@ -1,0 +1,18 @@
+id = "teorica_paso"
+kind = "theoretical"
+source = "formula"
+label = "Teórica"
+x_unit = "s"
+y_unit = "V"
+
+[formula]
+expr = "1 - math::exp(-a*t)*(math::cos(wd*t) + (a/wd)*math::sin(wd*t))"
+variable = "t"
+from = 0.0
+to = 0.0035
+points = 600
+scale = "linear"
+
+[formula.constants]
+a = 1650.0
+wd = 6537.08

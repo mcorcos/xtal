@@ -104,6 +104,17 @@ fn compile_tectonic(tex_path: &Path, outdir: &Path) -> Result<PathBuf> {
         .arg("--outdir")
         .arg(&outdir_abs)
         .arg("--keep-logs")
+        // El mapa de SyncTeX: en qué línea del fuente nació cada caja del PDF.
+        //
+        // Es lo que le permite a la app saltar del editor al PDF y volver, **incluso
+        // donde no hay texto que buscar**: una ecuación, una tabla, un esquemático
+        // dibujado con TikZ. Sin esto, la única pista es el texto impreso, y una
+        // fórmula no imprime texto.
+        //
+        // Cuesta un archivo al lado del PDF (`main.synctex.gz`, decenas de KB) y nada
+        // de tiempo, así que se genera siempre: que esté o no esté no puede depender
+        // de un flag que nadie se acuerda de pasar.
+        .arg("--synctex")
         .output()
         .map_err(|e| CompileError::Spawn(e.to_string()))?;
 
@@ -126,6 +137,7 @@ fn compile_pdflatex(tex_path: &Path, outdir: &Path) -> Result<PathBuf> {
             .current_dir(tex_dir(tex_path))
             .arg("-interaction=nonstopmode")
             .arg("-halt-on-error")
+            .arg("-synctex=1") // el mapa fuente <-> PDF; ver `compile_tectonic`
             .arg("-output-directory")
             .arg(&outdir_abs)
             .arg(tex_file(tex_path))

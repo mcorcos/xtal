@@ -1,0 +1,18 @@
+id = "q_071"
+kind = "theoretical"
+source = "formula"
+label = "Q = 0,71 (Butterworth)"
+x_unit = "Hz"
+y_unit = "dB"
+
+[formula]
+expr = "-10*math::log10((1-(f/f0)^2)^2 + (f/(q*f0))^2)"
+variable = "f"
+from = 100.0
+to = 10000.0
+points = 300
+scale = "log"
+
+[formula.constants]
+f0 = 1073.02
+q = 0.7071

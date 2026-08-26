@@ -1,0 +1,17 @@
+id = "sim_rc_fase"
+kind = "simulated"
+source = "simulation"
+label = "Primer orden (RC)"
+x_unit = "Hz"
+y_unit = "deg"
+
+[sim]
+circuit = "filtro-rc"
+vector = "v(out)"
+quantity = "phase"
+
+[sim.analysis.Ac]
+sweep = "dec"
+points = 30
+fstart = 20.0
+fstop = 100000.0

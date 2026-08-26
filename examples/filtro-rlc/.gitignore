@@ -1,0 +1,9 @@
+# Todo lo de salida/ es generado, salvo dos cosas que se dejan commiteadas:
+#
+#   main.pdf         para poder ver el resultado del ejemplo sin instalar nada;
+#   main.synctex.gz  porque los tests de la app leen de acá el mapa fuente <-> PDF,
+#                    y sin él se saltean solos en cualquier máquina que no haya
+#                    compilado el ejemplo — que es justo la de otro.
+salida/*
+!salida/main.pdf
+!salida/main.synctex.gz

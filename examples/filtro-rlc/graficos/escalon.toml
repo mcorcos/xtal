@@ -1,0 +1,31 @@
+id = "escalon"
+kind = "time"
+title = "Respuesta al escalón"
+
+[axes]
+x_label = "Tiempo"
+y_label = "Tension"
+
+[[series]]
+measurement = "paso_in"
+role = "input"
+panel = "magnitude"
+label = "Entrada"
+
+[[series]]
+measurement = "teorica_paso"
+role = "third"
+panel = "magnitude"
+label = "Salida teórica"
+
+[[series]]
+measurement = "paso_out"
+role = "output"
+panel = "magnitude"
+label = "Salida simulada"
+
+[[series]]
+measurement = "medida_paso"
+role = "output"
+panel = "magnitude"
+label = "Salida medida"

@@ -1,0 +1,56 @@
+El circuito es una rama serie $R_1$--$L_1$ con la salida tomada sobre el
+capacitor $C_1$ (Figura~\ref{fig:esquematico}). Es la topología mínima que
+produce un par de polos complejos conjugados: dos elementos reactivos que
+intercambian energía y una resistencia que se la lleva.
+
+\begin{figure}[H]
+\centering
+\begin{circuitikz}[american, scale=0.95, transform shape]
+  % Rama serie: fuente, R1, L1 y -- en gris -- la resistencia del bobinado.
+  \draw (0,0) to[sV, l=$v_i(t)$] (0,3.2);
+  \draw (0,3.2) to[R, l=$R_1$, a={\SI{330}{\ohm}}] (2.6,3.2)
+                to[L, l=$L_1$, a={\SI{100}{\milli\henry}}] (5.2,3.2);
+  \draw[codeComent] (5.2,3.2) to[R, l=$R_L$, a={\SI{38}{\ohm}}] (7.4,3.2);
+  \coordinate (out) at (7.4,3.2);
+
+  % El capacitor, con el valor puesto a mano: apilado debajo del nombre y del
+  % lado de adentro, porque por la derecha entra la tension de salida.
+  \draw (out) to[C, l_=$C_1$] (7.4,0);
+  \node[font=\footnotesize, anchor=east] at (7.2,1.12) {\SI{220}{\nano\farad}};
+
+  \draw (0,0) -- (7.4,0);
+  \draw (3.7,0) node[ground]{};
+
+  % La salida, en circuito abierto: es lo que ve la punta del osciloscopio.
+  \draw (out) -- (9.9,3.2) to[open, v^>=$v_o(t)$] (9.9,0) -- (7.4,0);
+  \node[circle, fill=black, inner sep=1.1pt] at (out) {};
+
+  % Los nombres de los nodos son los que usa el netlist.
+  \node[font=\footnotesize\ttfamily, above=2pt] at (0,3.2) {in};
+  \node[font=\footnotesize\ttfamily, above=2pt] at (out) {out};
+\end{circuitikz}
+\caption{Filtro pasabajos RLC de segundo orden. $R_L$ (en gris) no es un
+componente que se suelde: es la resistencia del bobinado del inductor real,
+medida con el puente LCR.}
+\label{fig:esquematico}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Componentes: valor nominal, tolerancia y valor medido con el puente LCR.}
+\label{tab:componentes}
+\small
+\begin{tabular}{llrrr}
+\toprule
+\textbf{Ref.} & \textbf{Componente} & \textbf{Nominal} & \textbf{Tol.} & \textbf{Medido} \\
+\midrule
+$R_1$ & Resistencia de película metálica & \SI{330}{\ohm}    & \SI{1}{\percent}  & \SI{332.4}{\ohm} \\
+$L_1$ & Inductor con núcleo de ferrita   & \SI{100}{\milli\henry} & \SI{10}{\percent} & \SI{96.5}{\milli\henry} \\
+$R_L$ & --- resistencia de su bobinado   & ---               & ---               & \SI{41.0}{\ohm} \\
+$C_1$ & Capacitor de poliéster           & \SI{220}{\nano\farad}  & \SI{5}{\percent}  & \SI{226}{\nano\farad} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La diferencia entre las dos últimas columnas es la que después aparece, en el
+Bode, como un corrimiento de la frecuencia de resonancia y un pico más bajo.

@@ -1,0 +1,17 @@
+id = "teorica_rc"
+kind = "theoretical"
+source = "formula"
+label = "Primer orden (RC)"
+x_unit = "Hz"
+y_unit = "dB"
+
+[formula]
+expr = "-10*math::log10(1 + (f/fc)^2)"
+variable = "f"
+from = 20.0
+to = 100000.0
+points = 400
+scale = "log"
+
+[formula.constants]
+fc = 1061.03

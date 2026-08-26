@@ -1,0 +1,11 @@
+Superponer curvas dice si se parecen; restarlas dice cuánto. La
+Figura~\ref{fig:residuos} muestra punto a punto la diferencia entre la magnitud
+medida y el modelo teórico nominal. Va sin línea a propósito: no es una función
+continua, son 37 diferencias, una por punto de barrido.
+
+El residuo se queda dentro de $\pm\SI{0.2}{\decibel}$ en casi todo el rango
+--- que es el ruido del instrumento --- y se dispara a más de
+\SI{1}{\decibel} en un solo lugar: alrededor de \SI{1}{\kilo\hertz}. Ahí no
+falla la medición, falla el modelo: es donde la curva es más empinada, y un
+corrimiento de \SI{0.4}{\percent} en $\fnat$ se traduce en varias décimas de
+decibel. Es la firma típica de un error de frecuencia, no de amplitud.
