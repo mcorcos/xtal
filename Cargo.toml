@@ -21,7 +21,7 @@ members = [
 
 # Metadata compartida por todos los crates del workspace.
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Manuel Corcos <manucorcos@gmail.com>"]
 license = "MIT"
