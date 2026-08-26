@@ -294,7 +294,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ needs.check.outputs.version }}"
-          OUT=src-tauri/target/release/bundle
+          OUT=app-win/src-tauri/target/release/bundle
           mkdir -p dist
           # Tauri los nombra `Xtal_0.3.1_x64-setup.exe` y `Xtal_0.3.1_x64_en-US.msi`.
           # Se renombran al esquema del resto de los assets para que `install.ps1` y la
