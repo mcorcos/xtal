@@ -53,7 +53,10 @@ jobs:
       # Que un SO falle no cancela al otro: queremos ver los dos resultados.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Windows entró cuando entró la app: hay código con `#[cfg(windows)]` —el
+        # `cmd /c start` de `xtal app` y de `open_file`, las rutas del registro del
+        # MCP— y la única forma de saber que no se pudrió es compilarlo ahí.
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
 
@@ -239,3 +242,176 @@ jobs:
           path: ci-demo/salida/
           if-no-files-found: warn
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # El instalador de Windows, al menos, parsea
+  # ---------------------------------------------------------------------------
+  #
+  # `install.ps1` no lo corre nadie hasta que alguien instala Xtal en Windows, y para
+  # entonces un error de sintaxis ya arruinó la primera impresión. Esto es lo mínimo:
+  # que PowerShell lo pueda leer. No prueba que la instalación funcione — eso necesita
+  # una máquina de verdad y un release publicado.
+  instalador:
+    name: install.ps1 parsea
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Parsear con PowerShell
+        shell: pwsh
+        run: |
+          $errores = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./install.ps1), [ref]$tokens, [ref]$errores) | Out-Null
+          if ($errores.Count -gt 0) {
+            $errores | ForEach-Object { Write-Host "::error::$($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host "install.ps1 parsea sin errores ($($tokens.Count) tokens)"
+
+      - name: Y el .sh sigue siendo POSIX
+        shell: bash
+        # El instalador de Unix está escrito en sh POSIX a propósito (macOS trae bash 3.2
+        # en modo POSIX, y muchos Linux usan dash). `sh -n` lo verifica sin ejecutarlo.
+        run: sh -n install.sh && echo "install.sh parsea"
+
+  # ---------------------------------------------------------------------------
+  # La app de escritorio
+  # ---------------------------------------------------------------------------
+  #
+  # Es su propio workspace de Cargo y su propio proyecto de npm, así que el `cargo test
+  # --workspace` de arriba no la toca. Se compila en Windows porque es su plataforma: el
+  # webview es WebView2 y el instalador lo arma NSIS, y ninguna de las dos cosas existe
+  # en Linux.
+  #
+  # **No se arma el instalador acá**: eso tarda varios minutos y es trabajo del release.
+  # Lo que sí se hace es todo lo que puede romperse sin que nadie se entere — que el
+  # TypeScript tipe, que el bundle se arme, que el Rust compile y que sus tests pasen.
+  app:
+    name: app de escritorio
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app-win/src-tauri
+          key: app-ci
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-win/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: app-win
+        run: npm ci
+
+      # `npm run build` corre `tsc --noEmit` primero: si un tipo no cierra, no llega a
+      # empaquetar. Es lo que atrapa el 90% de lo que se rompe tocando el frontend.
+      - name: Tipos y bundle
+        working-directory: app-win
+        run: npm run build
+
+      - name: fmt + clippy del backend
+        working-directory: app-win/src-tauri
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: tests del backend
+        working-directory: app-win/src-tauri
+        run: cargo test
+
+  # ---------------------------------------------------------------------------
+  # El instalador de Windows se arma de verdad
+  # ---------------------------------------------------------------------------
+  #
+  # Es el mismo argumento que el job `pdf`: **era el único agujero que podía romper el
+  # producto sin que nadie se entere.** El job `app` compila el Rust y el TypeScript,
+  # pero armar el `.exe` de NSIS es otro paso —baja el plugin de NSIS, arma el MSI con
+  # WiX, empaqueta los recursos— y cualquiera de esas cosas puede fallar con todo lo
+  # demás en verde.
+  #
+  # Tarda unos minutos y corre en cada push. Vale la pena: hoy **nadie lo instaló nunca**,
+  # y un instalador que no se arma es un producto que no existe.
+  #
+  # Sube el resultado como artifact, así se puede bajar y probar en una máquina con
+  # Windows sin tener que publicar una Release.
+  instalable:
+    name: el instalador se arma
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app-win/src-tauri
+          key: instalador
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-win/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: app-win
+        run: npm ci
+
+      # La CLI viaja adentro del instalador: es lo que hace que bajar el `.exe` alcance.
+      # Ver app-win/src-tauri/resources/LEEME.md.
+      - name: Compilar la CLI y meterla adentro
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --bin xtal
+          cp target/release/xtal.exe app-win/src-tauri/resources/xtal.exe
+
+      - name: Armar el instalador
+        working-directory: app-win
+        run: npm run tauri build
+
+      # Que los archivos existan no alcanza: un instalador truncado también existe.
+      - name: Verificar que salieron los dos y que pesan
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=app-win/src-tauri/target/release/bundle
+          for patron in "$OUT/nsis/*-setup.exe" "$OUT/msi/*.msi"; do
+            archivo=$(ls $patron 2>/dev/null | head -1)
+            if [ -z "$archivo" ]; then
+              echo "::error::no se armó $patron"
+              exit 1
+            fi
+            tam=$(stat -c%s "$archivo" 2>/dev/null || stat -f%z "$archivo")
+            echo "$archivo — $((tam/1024)) KB"
+            # Menos de 2 MB es imposible: adentro va el webview, el frontend y la CLI.
+            if [ "$tam" -lt 2000000 ]; then
+              echo "::error::$archivo pesa $((tam/1024)) KB, quedó cortado"
+              exit 1
+            fi
+          done
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: instalador-windows
+          path: |
+            app-win/src-tauri/target/release/bundle/nsis/*-setup.exe
+            app-win/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
+          if-no-files-found: error

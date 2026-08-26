@@ -1,0 +1,929 @@
+/* El piso de la app: reset, tipografía y las piezas del sistema de diseño.
+   Todo lo de acá usa variables de `tokens.css`. Un color escrito a mano es un bug. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #raiz {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--fuente);
+  font-size: var(--t-valor);
+  font-weight: 500;               /* medium, no regular: ver APP-DISENO.md */
+  letter-spacing: var(--tracking);
+  color: var(--texto-1);
+  background: var(--bg-app);
+  /* La app no es una página web: no se selecciona el texto de la interfaz ni se
+     arrastra una imagen fuera de la ventana. Donde sí hace falta —el editor, la
+     terminal, el visor— se vuelve a prender. */
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+/* Sin el resaltado azul de tap ni el rebote del scroll: son gestos de navegador. */
+* { -webkit-tap-highlight-color: transparent; }
+
+button {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: default;               /* una app, no una web: nada de manito */
+}
+
+input, textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+::selection { background: var(--acento-suave); }
+
+/* La barra de scroll, con la forma de la app y no la del navegador. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--borde-fuerte);
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--texto-off); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ------------------------------------------------------------------ */
+/* Piezas                                                              */
+/* ------------------------------------------------------------------ */
+
+/* El foco se ve. Siempre. Es el mismo azul del acento y el mismo grosor en todos
+   lados: no hay una pieza que lo muestre distinto. */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 1px;
+}
+
+.label {
+  font-size: var(--t-label);
+  color: var(--texto-2);
+}
+
+.titulo {
+  font-size: var(--t-titulo);
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Chip — la etiqueta de un estado.
+   **Escribe el nombre del estado, no lo dice solo con color.** Un color solo no le
+   comunica nada a quien no distingue esos dos. */
+.chip {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 3px;
+  height: var(--h-chip);
+  padding: 0 5px;
+  border-radius: var(--r-chip);
+  /* 11, no 12: es el tamaño del `Chip` de Mac. Un punto de más y el chip deja de
+     leerse como etiqueta y empieza a competir con el texto de al lado. */
+  font-size: 11px;
+  white-space: nowrap;
+  background: var(--gris-bg);
+  border: 1px solid var(--gris-tint);
+  color: var(--gris-deep);
+}
+.chip.verde { background: var(--verde-bg); border-color: var(--verde-tint); color: var(--verde-deep); }
+.chip.ambar { background: var(--ambar-bg); border-color: var(--ambar-tint); color: var(--ambar-deep); }
+.chip.rojo  { background: var(--rojo-bg);  border-color: var(--rojo-tint);  color: var(--rojo-deep); }
+.chip.azul  { background: var(--azul-bg);  border-color: var(--azul-tint);  color: var(--azul-deep); }
+
+/* Botón. El primario es el único con color; el resto son neutros. */
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-sm);
+  height: var(--h-boton);
+  padding: 0 var(--s-lg);
+  border-radius: var(--r-boton);
+  font-size: var(--t-label);
+  color: var(--texto-1);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  white-space: nowrap;
+}
+.boton:hover:not(:disabled) { background: var(--bg-hover); }
+.boton:active:not(:disabled) { background: var(--bg-activo); }
+.boton:disabled { color: var(--texto-off); }
+
+.boton.primario {
+  background: var(--acento);
+  border-color: transparent;
+  color: #fff;
+}
+.boton.primario:hover:not(:disabled) { filter: brightness(1.08); background: var(--acento); }
+.boton.primario:active:not(:disabled) { filter: brightness(0.94); background: var(--acento); }
+.boton.primario:disabled { background: var(--borde-fuerte); color: var(--texto-off); }
+
+/* Botón de solo ícono, cuadrado. */
+.boton.icono { width: var(--h-boton); padding: 0; }
+/* Sin caja: los de una barra de herramientas, donde una fila de recuadros hace ruido. */
+.boton.plano { background: none; border-color: transparent; }
+.boton.plano:hover:not(:disabled) { background: var(--bg-hover); }
+
+/* Campo de texto. */
+.campo {
+  height: var(--h-boton);
+  padding: 0 var(--s-md);
+  border-radius: var(--r-boton);
+  background: var(--bg-base);
+  border: 1px solid var(--borde);
+  color: var(--texto-1);
+  font-size: var(--t-label);
+  width: 100%;
+}
+.campo:focus { outline: 2px solid var(--acento); outline-offset: -1px; border-color: transparent; }
+.campo::placeholder { color: var(--texto-off); }
+
+/* Desplegable. Se usa el `<select>` nativo a propósito: es el control que el sistema
+   dibuja y el que la gente ya sabe usar. */
+.select {
+  height: var(--h-boton);
+  padding: 0 var(--s-md);
+  border-radius: var(--r-boton);
+  background: var(--bg-base);
+  border: 1px solid var(--borde);
+  color: var(--texto-1);
+  font: inherit;
+  font-size: var(--t-label);
+  letter-spacing: var(--tracking);
+  width: 100%;
+}
+
+/* Fila — el ítem de cualquier lista de navegación.
+   **Los ítems que no están seleccionados NO se apagan.** Lo único que distingue al
+   activo es el fondo: los nombres de las secciones son todos igual de reales. */
+.fila {
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  height: var(--h-fila);
+  padding: 0 var(--s-md);
+  border-radius: var(--r-boton);
+  width: 100%;
+  text-align: left;
+  color: var(--texto-1);
+  font-size: var(--t-label);
+}
+.fila:hover { background: var(--bg-hover); }
+.fila.activa { background: var(--bg-activo); }
+
+/* Panel — la caja del shell. Elevación por borde primero. */
+.panel {
+  background: var(--bg-base);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-panel);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* La cabecera de un panel: el mismo alto que un botón más su aire. */
+.panel-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  height: 38px;
+  flex: 0 0 38px;
+  padding: 0 var(--s-md);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--borde-sutil);
+}
+
+/* Tarjeta — lo que de verdad flota. */
+.tarjeta {
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-tarjeta);
+  padding: 10px var(--s-lg);
+}
+
+/* Pestaña. */
+.pestana {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: var(--h-boton);
+  padding: 0 var(--s-lg);
+  border-radius: var(--r-boton);
+  font-size: var(--t-label);
+  color: var(--texto-1);
+}
+.pestana:hover { background: var(--bg-hover); }
+.pestana.activa { background: var(--bg-activo); }
+
+/* El punto de aviso: hay algo para mirar en una solapa que no estás mirando. */
+.punto {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  flex: 0 0 6px;
+  background: var(--ambar-deep);
+}
+.punto.rojo { background: var(--rojo-deep); }
+
+/* Divisor arrastrable entre dos paneles. */
+.divisor {
+  flex: 0 0 var(--s-md);
+  cursor: col-resize;
+  position: relative;
+}
+.divisor::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  border-radius: 1px;
+}
+.divisor:hover::after, .divisor.arrastrando::after { background: var(--acento-suave); }
+
+/* Estado vacío: el cartel del medio cuando no hay nada que mostrar. */
+.vacio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-md);
+  padding: var(--s-xxl);
+  text-align: center;
+  color: var(--texto-3);
+  font-size: var(--t-label);
+}
+
+.scroll { overflow: auto; flex: 1; min-height: 0; }
+.crece { flex: 1; min-width: 0; min-height: 0; }
+.fila-h { display: flex; align-items: center; gap: var(--s-md); }
+.col { display: flex; flex-direction: column; min-height: 0; }
+.aire { flex: 1; }
+.truncar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* La animación de "está trabajando". Es un giro, no una barra de progreso: no
+   sabemos cuánto falta y una barra que miente es peor que un giro honesto. */
+@keyframes girar { to { transform: rotate(360deg); } }
+.girando { animation: girar 0.9s linear infinite; transform-origin: 50% 50%; }
+
+/* La x de cerrar una solapa: se ve al pasar por encima o si la solapa es la activa.
+   Siempre visible sería una fila de cruces; nunca visible sería una función escondida. */
+.cerrar-solapa { visibility: hidden; }
+.pestana:hover .cerrar-solapa, .pestana.activa .cerrar-solapa { visibility: visible; }
+.cerrar-solapa:hover { opacity: 1 !important; }
+
+/* La terminal de xterm dentro del panel. */
+.xterm { height: 100%; }
+.xterm-viewport { overflow-y: auto !important; }
+
+/* ------------------------------------------------------------------ */
+/* Visor de PDF                                                        */
+/* ------------------------------------------------------------------ */
+
+.visor-pdf {
+  background: var(--bg-app);
+  padding: var(--s-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-lg);
+}
+
+/* La hoja. Sombra suave: es de lo poco que de verdad flota — es una hoja de papel
+   apoyada sobre el fondo de la app. */
+.pagina-pdf {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%), 0 0 0 1px var(--borde-sutil);
+  flex: 0 0 auto;
+}
+.pagina-pdf canvas { display: block; }
+
+/* La capa de texto de pdf.js: invisible, pero seleccionable. */
+.capa-texto {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  user-select: text;
+  -webkit-user-select: text;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  text-size-adjust: none;
+}
+.capa-texto span, .capa-texto br {
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  color: transparent;
+}
+.capa-texto ::selection { background: rgb(38 109 240 / 30%); }
+/* pdf.js mete estos para el orden de lectura; no tienen que ocupar lugar. */
+.capa-texto .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: -1;
+  user-select: none;
+}
+
+/* El resaltado de la sincronía. Ámbar, como todo lo que pide atención. */
+.resaltado {
+  position: absolute;
+  background: rgb(255 229 158 / 55%);
+  border-radius: 2px;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* El zoom, flotando abajo a la derecha del panel del PDF. */
+.zoom-pdf {
+  position: absolute;
+  right: var(--s-lg);
+  bottom: var(--s-lg);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-boton);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Inicio                                                              */
+/* ------------------------------------------------------------------ */
+
+.inicio {
+  display: flex;
+  height: 100%;
+  background: var(--bg-base);
+}
+.inicio-izq {
+  width: 400px;
+  flex: 0 0 400px;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  border-right: 1px solid var(--borde-sutil);
+}
+.inicio-der {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-sidebar);
+}
+
+.boton-inicio {
+  display: flex;
+  align-items: center;
+  gap: var(--s-lg);
+  padding: var(--s-lg);
+  border-radius: var(--r-tarjeta);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  color: var(--texto-1);
+  width: 100%;
+  text-align: left;
+}
+.boton-inicio:hover:not(:disabled) { background: var(--bg-hover); }
+.boton-inicio.destacado {
+  background: var(--acento);
+  border-color: transparent;
+  color: #fff;
+}
+.boton-inicio.destacado:hover:not(:disabled) { filter: brightness(1.07); background: var(--acento); }
+
+.reciente { height: 44px; }
+
+/* ------------------------------------------------------------------ */
+/* Hoja modal                                                          */
+/* ------------------------------------------------------------------ */
+
+.telon {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+  background: rgb(0 0 0 / 28%);
+  backdrop-filter: blur(2px);
+}
+.hoja {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  max-height: 84vh;
+  overflow: auto;
+  background: var(--bg-base);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-tarjeta);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 22%);
+}
+.linea { height: 1px; background: var(--borde-sutil); flex: 0 0 1px; }
+
+/* ------------------------------------------------------------------ */
+/* Árbol de archivos y menú contextual                                 */
+/* ------------------------------------------------------------------ */
+
+
+
+.menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 190px;
+  padding: var(--s-xs);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-boton);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  width: 100%;
+  height: var(--h-boton);
+  padding: 0 var(--s-md);
+  border-radius: var(--r-chip);
+  font-size: var(--t-label);
+  text-align: left;
+  color: var(--texto-1);
+}
+.menu-item:hover { background: var(--bg-hover); }
+.menu-linea { height: 1px; margin: var(--s-xs) 0; background: var(--borde-sutil); }
+
+/* ------------------------------------------------------------------ */
+/* Barra de git                                                        */
+/* ------------------------------------------------------------------ */
+
+.barra-git {
+  display: flex;
+  align-items: center;
+  gap: var(--s-lg);
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0 var(--s-md);
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--borde-sutil);
+  font-size: var(--t-label);
+  color: var(--texto-2);
+}
+.g-verde { color: var(--verde-deep); }
+.g-azul  { color: var(--azul-deep); }
+.g-ambar { color: var(--ambar-deep); }
+.g-rojo  { color: var(--rojo-deep); }
+.barra-git .boton { height: 24px; padding: 0 var(--s-md); }
+
+/* ------------------------------------------------------------------ */
+/* El shell de la ventana                                              */
+/* ------------------------------------------------------------------ */
+
+.ventana {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-app);
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0 var(--s-md);
+  font-size: var(--t-label);
+}
+
+/* El selector de modo: dos pestañas adentro de una caja. */
+.selector {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-boton);
+  background: var(--bg-hover);
+}
+
+/* El aire del shell es 8, y los paneles se separan con el mismo número. */
+.cuerpo {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  padding: 0 var(--s-md) var(--s-md);
+}
+
+.divisor.vertical { flex: 0 0 var(--s-md); cursor: row-resize; width: 100%; }
+.divisor.vertical::after { inset: 3px 0; }
+
+.linea-v { width: 1px; height: 16px; background: var(--borde); flex: 0 0 1px; }
+
+/* Las dos flechas de la sincronía, paradas en el borde entre los dos paneles. */
+.flechas {
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-boton);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  z-index: 5;
+}
+.flechas .boton { border: 0; background: none; }
+
+/* La línea de arriba del editor que dice qué controla el archivo abierto. */
+.explicacion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-md);
+  padding: var(--s-md) var(--s-lg);
+  background: var(--azul-bg);
+  border-bottom: 1px solid var(--azul-tint);
+  color: var(--azul-deep);
+  font-size: var(--t-label);
+  line-height: 1.4;
+  flex: 0 0 auto;
+}
+
+/* El aviso de la sincronía cuando no encontró nada. Se va al tocarlo.
+   Dice el motivo en vez de quedarse mudo: un botón que no hace nada y no explica por
+   qué se lee como que está roto. */
+.aviso {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  max-width: 560px;
+  padding: var(--s-md) var(--s-lg);
+  border-radius: var(--r-panel);
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+  font-size: var(--t-label);
+  z-index: 70;
+}
+
+/* ------------------------------------------------------------------ */
+/* Laterales                                                           */
+/* ------------------------------------------------------------------ */
+
+/* **Mide 240 y no se arrastra**, igual que en Mac. Un lateral que se puede achicar
+   hasta que los nombres se truncan es un lateral que alguien va a dejar roto. */
+.lateral {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--borde-sutil);
+}
+
+/* La cabecera de un panel: alto de fila, fondo de barra y una línea abajo. */
+.cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: var(--h-fila);
+  flex: 0 0 var(--h-fila);
+  padding: 0 var(--s-md) 0 var(--s-lg);
+  color: var(--texto-2);
+  font-size: var(--t-label);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--borde-sutil);
+}
+
+.pie-lateral {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: var(--h-fila);
+  flex: 0 0 var(--h-fila);
+  padding: 0 var(--s-lg);
+  color: var(--texto-2);
+  width: 100%;
+  text-align: left;
+}
+.pie-lateral:hover { background: var(--bg-hover); }
+
+/* ------------------------------------------------------------------ */
+/* Árbol de archivos                                                   */
+/* ------------------------------------------------------------------ */
+
+.nodo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  height: 24px;
+  width: 100%;
+  padding-right: var(--s-sm);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--texto-1);
+  text-align: left;
+  border-radius: var(--r-chip);
+}
+.nodo:hover { background: var(--bg-hover); }
+.nodo.activo { background: var(--bg-activo); }
+/* Lo generado va apagado: se puede mirar, pero editarlo no sirve de nada porque se
+   pisa en la próxima compilación. */
+.nodo.generado { color: var(--texto-3); }
+.chevron { width: 10px; display: flex; color: var(--texto-3); flex: 0 0 10px; }
+.icono-carpeta { display: flex; width: 14px; flex: 0 0 14px; color: var(--acento); opacity: 0.8; }
+.icono-archivo { display: flex; width: 14px; flex: 0 0 14px; color: var(--texto-3); }
+
+/* ------------------------------------------------------------------ */
+/* Barra y panel de salida                                             */
+/* ------------------------------------------------------------------ */
+
+/* El sello del molde: para mirar, no para tocar. */
+.sello {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-xs);
+  font-size: var(--t-label);
+  color: var(--texto-3);
+  white-space: nowrap;
+}
+
+.editor-col { background: var(--bg-base); max-width: 900px; }
+
+.panel-salida {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-app);
+  border-left: 1px solid var(--borde-sutil);
+}
+
+.solapa {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-xs);
+  height: 22px;
+  padding: 0 var(--s-md);
+  border-radius: var(--r-chip);
+  font-size: var(--t-label);
+  color: var(--texto-3);
+}
+.solapa.activa { background: var(--bg-activo); color: var(--texto-1); }
+.solapa:hover { color: var(--texto-1); }
+
+/* Un link de texto. El único color de acción, sin caja. */
+.link {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--acento);
+}
+.link:hover { text-decoration: underline; }
+
+/* Las dos flechas de la sincronía, adentro del panel derecho y pegadas al borde. */
+.flechas {
+  position: absolute;
+  left: var(--s-sm);
+  top: calc(var(--h-fila) + var(--s-md));
+  display: flex;
+  flex-direction: column;
+  border-radius: 7px;
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 22%);
+  overflow: hidden;
+  z-index: 5;
+}
+.flecha {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  color: var(--texto-2);
+}
+.flecha:hover { background: var(--bg-hover); color: var(--texto-1); }
+.flechas-linea { height: 1px; background: var(--borde-sutil); }
+
+/* El resultado de la última sincronía. Se va solo a los tres segundos: sin esto,
+   apretar el botón y que no pase nada se lee como que el botón está roto. */
+.aviso-sync {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s-lg);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  max-width: calc(100% - 32px);
+  height: var(--h-boton);
+  padding: 0 var(--s-lg);
+  border-radius: 999px;
+  font-size: var(--t-label);
+  color: var(--texto-2);
+  background: var(--bg-activo);
+  border: 1px solid var(--borde-sutil);
+  animation: aparecer 0.18s ease-out;
+  z-index: 6;
+}
+.aviso-sync.bien {
+  color: var(--ambar-deep);
+  background: var(--ambar-bg);
+  border-color: var(--ambar-tint);
+}
+@keyframes aparecer {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.hoja.chica { width: 360px; }
+
+/* ------------------------------------------------------------------ */
+/* Ajustes                                                             */
+/* ------------------------------------------------------------------ */
+
+/* La forma de Ajustes del Sistema: lista a la izquierda, grupos de tarjetas a la
+   derecha, cada fila con su título, su explicación abajo y su control a la derecha.
+   **Cada ajuste explica qué hace**: un interruptor con un nombre de tres palabras y
+   nada más obliga a probarlo para entenderlo. */
+.ajustes { display: flex; width: 760px; height: 560px; }
+.ajustes-lista {
+  width: 200px;
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--s-md);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--borde-sutil);
+}
+.ajustes-cont { flex: 1; overflow: auto; padding: 32px; background: var(--bg-app); }
+.grupo {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevado);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--r-tarjeta);
+}
+.fila-ajuste {
+  display: flex;
+  align-items: center;
+  gap: var(--s-lg);
+  padding: 10px var(--s-lg);
+}
+.fila-ajuste + .fila-ajuste { border-top: 1px solid var(--borde-sutil); }
+
+/* Las tres maquetas de apariencia. Tres dibujos en vez de tres palabras: es lo que hace
+   Ajustes del Sistema, y por una razón — «Auto» no dice nada hasta que lo probás, y
+   media ventana clara y media oscura sí. */
+.maqueta { display: flex; flex-direction: column; align-items: center; gap: var(--s-sm); }
+.maqueta-dibujo {
+  width: 72px;
+  height: 46px;
+  border-radius: var(--r-boton);
+  overflow: hidden;
+  display: flex;
+  border: 1px solid var(--borde);
+}
+.maqueta.activa .maqueta-dibujo { border: 2px solid var(--acento); }
+.maqueta-mitad { flex: 1; display: flex; padding: 4px; gap: 3px; }
+.maqueta-barra { width: 18px; display: flex; flex-direction: column; gap: 3px; }
+.maqueta-raya { height: 2px; border-radius: 1px; }
+.maqueta-panel { flex: 1; border-radius: 2px; }
+
+/* El interruptor. `appearance: none` sobre un checkbox y se dibuja a mano: el nativo de
+   Windows es un cuadradito, y en una app de documentos eso se lee como una casilla de
+   formulario, no como un interruptor. */
+.interruptor {
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--borde-fuerte);
+  position: relative;
+  flex: 0 0 38px;
+  transition: background 0.15s ease;
+}
+.interruptor::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: transform 0.15s ease;
+}
+.interruptor:checked { background: var(--acento); }
+.interruptor:checked::after { transform: translateX(16px); }
+
+.volcado {
+  white-space: pre-wrap;
+  user-select: text;
+  color: var(--texto-2);
+  background: var(--bg-sidebar);
+  padding: var(--s-lg);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--r-panel);
+  max-height: 220px;
+  overflow: auto;
+}
+
+/* La barra de bloques: su propia fila, debajo de la cabecera del editor.
+   Adentro de la cabecera le comía el ancho al nombre del archivo. */
+.barra-bloques {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0 var(--s-sm);
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--borde-sutil);
+  overflow-x: auto;
+}
+.barra-bloques::-webkit-scrollbar { height: 0; }
+/* El nombre del archivo no se achica hasta desaparecer cuando algo lo empuja. */
+.cabecera > .label { flex: 0 1 auto; min-width: 60px; }
+
+/* ------------------------------------------------------------------ */
+/* La barra de la ventana                                              */
+/* ------------------------------------------------------------------ */
+
+/* **Liviana.** En Mac esto es la barra de herramientas del sistema: íconos chicos y el
+   título de la ventana. Acá hay que dibujarla —Windows no tiene barra de aplicación—
+   pero el peso visual tiene que ser el mismo: el protagonista es el informe. */
+.titulo-ventana { gap: 0; line-height: 1.15; }
+.titulo-ventana > span:first-child { font-size: 13px; }
+
+/* El selector de modo: un segmentado de texto, como el `.pickerStyle(.segmented)`. */
+.segmento {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: 22px;
+  padding: 0 var(--s-lg);
+  border-radius: 6px;
+  font-size: var(--t-label);
+  color: var(--texto-2);
+}
+.segmento.activo {
+  background: var(--bg-base);
+  color: var(--texto-1);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+.selector { padding: 2px; border-radius: var(--r-boton); background: var(--bg-activo); }
+
+/* El ítem de una lista lateral.
+   🛑 **El texto NO se apaga cuando el ítem no está seleccionado.** Todos van en texto
+   principal y lo único que distingue al activo es el fondo. Los nombres de las secciones
+   son todos igual de reales, ninguno vale menos porque no estés parado ahí. */
+.item-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  height: var(--h-boton);
+  width: 100%;
+  padding-right: var(--s-xs);
+  border-radius: var(--r-valor);
+  text-align: left;
+  /* 14 y principal: son el protagonista del lateral. */
+  font-size: var(--t-valor);
+  color: var(--texto-1);
+}
+.item-nav > svg { color: var(--texto-2); }
+.item-nav:hover { background: var(--bg-hover); }
+.item-nav.activo { background: var(--bg-activo); }

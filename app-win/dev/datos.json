@@ -1,0 +1,1455 @@
+{
+  "proyecto": "/Users/manu/dev/personal/xtal/examples/filtro-rlc",
+  "git": {
+    "es_repo": true,
+    "rama": "main",
+    "adelante": 0,
+    "atras": 0,
+    "modificados": 14,
+    "nuevos": 5,
+    "borrados": 0,
+    "conflictos": 0
+  },
+  "agents": {
+    "agents": [
+      {
+        "id": "claude-code",
+        "label": "Claude Code",
+        "touches": "skill en ~/.claude/skills/xtal/ y el server MCP en ~/.claude.json",
+        "installed": true,
+        "skill": "al_dia",
+        "skill_path": "/Users/manu/.claude/skills/xtal/SKILL.md",
+        "mcp": "ok",
+        "custom": false,
+        "ready": true,
+        "missing": null
+      },
+      {
+        "id": "claude-desktop",
+        "label": "Claude Desktop",
+        "touches": "el server MCP en claude_desktop_config.json",
+        "installed": false,
+        "skill": "no_aplica",
+        "skill_path": null,
+        "mcp": "no_registrado",
+        "custom": false,
+        "ready": true,
+        "missing": null
+      },
+      {
+        "id": "codex",
+        "label": "Codex",
+        "touches": "skill en ~/.codex/skills/xtal/ y el server MCP en ~/.codex/config.toml",
+        "installed": true,
+        "skill": "al_dia",
+        "skill_path": "/Users/manu/.codex/skills/xtal/SKILL.md",
+        "mcp": "ok",
+        "custom": false,
+        "ready": true,
+        "missing": null
+      },
+      {
+        "id": "copilot",
+        "label": "GitHub Copilot CLI",
+        "touches": "skill en ~/.copilot/skills/xtal/",
+        "installed": false,
+        "skill": "sin_agente",
+        "skill_path": "/Users/manu/.copilot/skills/xtal/SKILL.md",
+        "mcp": "no_aplica",
+        "custom": false,
+        "ready": true,
+        "missing": null
+      },
+      {
+        "id": "opencode",
+        "label": "opencode",
+        "touches": "skill en ~/.config/opencode/skills/xtal/",
+        "installed": false,
+        "skill": "sin_agente",
+        "skill_path": "/Users/manu/.config/opencode/skills/xtal/SKILL.md",
+        "mcp": "no_aplica",
+        "custom": false,
+        "ready": true,
+        "missing": null
+      }
+    ],
+    "version": "0.3.1"
+  },
+  "themes": [
+    {
+      "id": "itba",
+      "nombre": "ITBA"
+    },
+    {
+      "id": "generico",
+      "nombre": "Sin institución"
+    }
+  ],
+  "binario": "/Users/manu/.local/bin/xtal",
+  "config": "theme:      itba\nformat:     Facultad\nmonochrome: false\n",
+  "status": {
+    "project": "filtro-rlc",
+    "title": "Filtro pasabajos RLC de segundo orden",
+    "planned": [
+      {
+        "id": "bode",
+        "title": "Respuesta en frecuencia del filtro RLC",
+        "kind": "bode",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "theoretical",
+            "ready": true,
+            "measurements": [
+              "teorica_mag",
+              "teorica_fase"
+            ]
+          },
+          {
+            "kind": "simulated",
+            "ready": true,
+            "measurements": [
+              "sim",
+              "sim_fase"
+            ]
+          },
+          {
+            "kind": "measured",
+            "ready": true,
+            "measurements": [
+              "medida_mag",
+              "medida_fase"
+            ]
+          }
+        ],
+        "complete": true
+      },
+      {
+        "id": "residuos",
+        "title": "Residuo de la magnitud medida contra el modelo",
+        "kind": "generic",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "measured",
+            "ready": true,
+            "measurements": [
+              "residuo"
+            ]
+          }
+        ],
+        "complete": true
+      },
+      {
+        "id": "escalon",
+        "title": "Respuesta al escalon",
+        "kind": "time",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "theoretical",
+            "ready": true,
+            "measurements": [
+              "teorica_paso"
+            ]
+          },
+          {
+            "kind": "simulated",
+            "ready": true,
+            "measurements": [
+              "paso_in",
+              "paso_out"
+            ]
+          },
+          {
+            "kind": "measured",
+            "ready": true,
+            "measurements": [
+              "medida_paso"
+            ]
+          }
+        ],
+        "complete": true
+      },
+      {
+        "id": "ordenes",
+        "title": "Primer orden contra segundo orden",
+        "kind": "bode",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "theoretical",
+            "ready": true,
+            "measurements": [
+              "teorica_mag",
+              "teorica_rc"
+            ]
+          },
+          {
+            "kind": "simulated",
+            "ready": true,
+            "measurements": [
+              "sim",
+              "sim_rc"
+            ]
+          }
+        ],
+        "complete": true
+      },
+      {
+        "id": "escalones",
+        "title": "El mismo escalon en los dos filtros",
+        "kind": "time",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "simulated",
+            "ready": true,
+            "measurements": [
+              "paso_out",
+              "paso_rc"
+            ]
+          }
+        ],
+        "complete": true
+      },
+      {
+        "id": "familia",
+        "title": "Efecto del factor de merito sobre el pico",
+        "kind": "bode",
+        "plot_exists": true,
+        "in_report": true,
+        "sources": [
+          {
+            "kind": "theoretical",
+            "ready": true,
+            "measurements": [
+              "q_050",
+              "q_071",
+              "q_204"
+            ]
+          },
+          {
+            "kind": "simulated",
+            "ready": true,
+            "measurements": [
+              "q_alto"
+            ]
+          }
+        ],
+        "complete": true
+      }
+    ],
+    "measurements": 20,
+    "plots": 6,
+    "sections": 10,
+    "unused_files": [
+      {
+        "path": "imagenes/captura-osciloscopio.png",
+        "kind": "image",
+        "command": "citala en el cuerpo de una sección: \\includegraphics[width=0.8\\linewidth]{captura-osciloscopio.png}"
+      }
+    ],
+    "complete": true
+  },
+  "secciones": [
+    {
+      "titulo": "Objetivo y alcance",
+      "cuerpo": "Este trabajo caracteriza un \\textbf{filtro pasabajos RLC de segundo orden} de\nfrecuencia natural nominal \\SI{1073}{\\hertz}, y contrasta las tres fuentes con\nlas que se puede describir un circuito:\n\n\\begin{enumerate}[itemsep=2pt, topsep=4pt]\n  \\item el \\textbf{modelo teórico}, evaluado a partir de la transferencia\n        analítica;\n  \\item la \\textbf{simulación} en \\textsc{ngspice} del netlist, que incorpora la\n        resistencia real del bobinado del inductor;\n  \\item la \\textbf{medición} de laboratorio: barrido de respuesta en frecuencia\n        y captura del transitorio en el osciloscopio.\n\\end{enumerate}\n\nEl objetivo no es solo verificar que las tres coinciden --- coinciden --- sino\n\\emph{medir en cuánto no lo hacen} y explicar por qué. La resistencia serie del\ninductor y la tolerancia de los componentes bajan el factor de mérito real por\ndebajo del ideal, y eso se ve tanto en el pico del Bode como en el sobrepico de\nla respuesta al escalón.\n\n\\begin{quote}\\small\n\\textbf{Sobre los datos.} Las curvas rotuladas como \\emph{medidas} son\nsintéticas: las genera \\texttt{fuentes/generar\\_mediciones.py} a partir del\nmodelo del circuito real, con tolerancias y ruido de instrumento. Este informe\nes el ejemplo de referencia de Xtal, y existe para que se pueda reproducir\nentero sin tener el circuito armado en un banco.\n\\end{quote}\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "Circuito bajo ensayo",
+      "cuerpo": "El circuito es una rama serie $R_1$--$L_1$ con la salida tomada sobre el\ncapacitor $C_1$ (Figura~\\ref{fig:esquematico}). Es la topología mínima que\nproduce un par de polos complejos conjugados: dos elementos reactivos que\nintercambian energía y una resistencia que se la lleva.\n\n\\begin{figure}[H]\n\\centering\n\\begin{circuitikz}[american, scale=0.95, transform shape]\n  % Rama serie: fuente, R1, L1 y -- en gris -- la resistencia del bobinado.\n  \\draw (0,0) to[sV, l=$v_i(t)$] (0,3.2);\n  \\draw (0,3.2) to[R, l=$R_1$, a={\\SI{330}{\\ohm}}] (2.6,3.2)\n                to[L, l=$L_1$, a={\\SI{100}{\\milli\\henry}}] (5.2,3.2);\n  \\draw[codeComent] (5.2,3.2) to[R, l=$R_L$, a={\\SI{38}{\\ohm}}] (7.4,3.2);\n  \\coordinate (out) at (7.4,3.2);\n\n  % El capacitor, con el valor puesto a mano: apilado debajo del nombre y del\n  % lado de adentro, porque por la derecha entra la tension de salida.\n  \\draw (out) to[C, l_=$C_1$] (7.4,0);\n  \\node[font=\\footnotesize, anchor=east] at (7.2,1.12) {\\SI{220}{\\nano\\farad}};\n\n  \\draw (0,0) -- (7.4,0);\n  \\draw (3.7,0) node[ground]{};\n\n  % La salida, en circuito abierto: es lo que ve la punta del osciloscopio.\n  \\draw (out) -- (9.9,3.2) to[open, v^>=$v_o(t)$] (9.9,0) -- (7.4,0);\n  \\node[circle, fill=black, inner sep=1.1pt] at (out) {};\n\n  % Los nombres de los nodos son los que usa el netlist.\n  \\node[font=\\footnotesize\\ttfamily, above=2pt] at (0,3.2) {in};\n  \\node[font=\\footnotesize\\ttfamily, above=2pt] at (out) {out};\n\\end{circuitikz}\n\\caption{Filtro pasabajos RLC de segundo orden. $R_L$ (en gris) no es un\ncomponente que se suelde: es la resistencia del bobinado del inductor real,\nmedida con el puente LCR.}\n\\label{fig:esquematico}\n\\end{figure}\n\n\\begin{table}[H]\n\\centering\n\\caption{Componentes: valor nominal, tolerancia y valor medido con el puente LCR.}\n\\label{tab:componentes}\n\\small\n\\begin{tabular}{llrrr}\n\\toprule\n\\textbf{Ref.} & \\textbf{Componente} & \\textbf{Nominal} & \\textbf{Tol.} & \\textbf{Medido} \\\\\n\\midrule\n$R_1$ & Resistencia de película metálica & \\SI{330}{\\ohm}    & \\SI{1}{\\percent}  & \\SI{332.4}{\\ohm} \\\\\n$L_1$ & Inductor con núcleo de ferrita   & \\SI{100}{\\milli\\henry} & \\SI{10}{\\percent} & \\SI{96.5}{\\milli\\henry} \\\\\n$R_L$ & --- resistencia de su bobinado   & ---               & ---               & \\SI{41.0}{\\ohm} \\\\\n$C_1$ & Capacitor de poliéster           & \\SI{220}{\\nano\\farad}  & \\SI{5}{\\percent}  & \\SI{226}{\\nano\\farad} \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n\nLa diferencia entre las dos últimas columnas es la que después aparece, en el\nBode, como un corrimiento de la frecuencia de resonancia y un pico más bajo.\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "Netlist",
+      "cuerpo": "El circuito entra a la simulación como netlist de SPICE. La fuente lleva las\ndos excitaciones al mismo tiempo: \\texttt{AC 1} para el barrido de frecuencia y\n\\texttt{PULSE} para el escalón. \\textsc{ngspice} usa la que corresponde a cada\nanálisis e ignora la otra, así que un solo archivo alcanza para los dos ensayos.\n\n\\begin{lstlisting}[language=spice, caption={\\texttt{fuentes/filtro-rlc.cir}}, captionpos=b]\n* Filtro pasabajos RLC de segundo orden\nVin in 0 AC 1 PULSE(0 1 0 1u 1u 5m 10m)\n\nR1 in a   330\nL1 a  b   100m\nRL b  out 38\nC1 out 0  220n\n\n.end\n\\end{lstlisting}\n\n\\noindent\nXtal no escribe el análisis adentro del netlist: lo pasa por línea de comandos,\nasí que el mismo circuito se barre en frecuencia o en el tiempo sin editar el\narchivo.\n",
+      "figuras": [],
+      "nivel": 1
+    },
+    {
+      "titulo": "Modelo teórico",
+      "cuerpo": "Con la salida sobre el capacitor, la transferencia del divisor serie es\n%\n\\begin{equation}\n  H(s) \\;=\\; \\frac{\\dfrac{1}{sC}}{R_t + sL + \\dfrac{1}{sC}}\n        \\;=\\; \\frac{1}{1 + sR_tC + s^{2}LC},\n  \\qquad R_t = R_1 + R_L .\n  \\label{eq:transferencia}\n\\end{equation}\n%\nLlevada a la forma canónica de segundo orden,\n%\n\\begin{align}\n  H(s)   &= \\frac{\\omega_0^{2}}{s^{2} + \\dfrac{\\omega_0}{Q}\\,s + \\omega_0^{2}}, &\n  \\omega_0 &= \\frac{1}{\\sqrt{LC}}, &\n  Q &= \\frac{1}{R_t}\\sqrt{\\frac{L}{C}} .\n  \\label{eq:canonica}\n\\end{align}\n%\nEvaluada en $s = j\\omega$ y con $x = f/\\fnat$, la respuesta que se grafica es\n%\n\\begin{align}\n  |H|_{\\mathrm{dB}} &= -10\\log_{10}\\!\\Big[\\big(1-x^{2}\\big)^{2} + \\big(x/Q\\big)^{2}\\Big], &\n  \\varphi &= -\\arctan_2\\!\\Big(\\frac{x}{Q},\\; 1-x^{2}\\Big).\n  \\label{eq:modulo-fase}\n\\end{align}\n%\nEl $\\arctan_2$ de dos argumentos no es un capricho: con el arcotangente de uno\nsolo, la fase se queda entre $-90^\\circ$ y $+90^\\circ$ y aparece un salto falso\nal cruzar la resonancia, justo donde interesa mirar.\n\nEn el dominio del tiempo, y para $Q > \\tfrac{1}{2}$ (caso subamortiguado, que es\nel de este circuito), la respuesta al escalón unitario vale\n%\n\\begin{equation}\n  v_o(t) \\;=\\; 1 - e^{-\\alpha t}\\!\\left[\\cos(\\omega_d t) + \\frac{\\alpha}{\\omega_d}\\sin(\\omega_d t)\\right],\n  \\qquad\n  \\alpha = \\frac{R_t}{2L}, \\quad\n  \\omega_d = \\sqrt{\\omega_0^{2}-\\alpha^{2}} .\n  \\label{eq:escalon}\n\\end{equation}\n%\nEl sobrepico depende solo del amortiguamiento:\n$M_p = \\exp\\!\\big(-\\pi\\alpha/\\omega_d\\big)$.\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "Parámetros nominales",
+      "cuerpo": "La Tabla~\\ref{tab:parametros} separa tres escenarios que después van a ser tres\ncurvas distintas en el mismo gráfico. El único cambio entre el primero y el\nsegundo es $R_L$, la resistencia del bobinado: no mueve la frecuencia natural,\nporque $\\omega_0$ no depende de la resistencia, pero se lleva puesto un\n\\SI{10}{\\percent} del factor de mérito.\n\n\\begin{table}[H]\n\\centering\n\\caption{Parámetros del filtro en los tres escenarios que compara el informe.}\n\\label{tab:parametros}\n\\small\n\\begin{tabular}{lrrrr}\n\\toprule\n\\textbf{Escenario} & $R_t$ & $\\fnat$ & $Q$ & $|H|_{\\max}$ \\\\\n\\midrule\nTeórico ideal ($R_L = 0$)      & \\SI{330}{\\ohm}   & \\SI{1073.0}{\\hertz} & 2,043 & \\SI{6.47}{\\decibel} \\\\\nSimulado (con $R_L$ nominal)   & \\SI{368}{\\ohm}   & \\SI{1073.0}{\\hertz} & 1,832 & \\SI{5.59}{\\decibel} \\\\\nMedido (componentes reales)    & \\SI{373.4}{\\ohm} & \\SI{1077.7}{\\hertz} & 1,750 & \\SI{5.23}{\\decibel} \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n\n\\noindent\nCon $\\alpha = R_t/2L = \\SI{1650}{\\per\\second}$ y\n$\\omega_d = \\SI{6537}{\\radian\\per\\second}$ en el caso ideal, la\nEcuación~\\eqref{eq:escalon} anticipa un sobrepico de\n$M_p = e^{-\\pi\\alpha/\\omega_d} = \\SI{45}{\\percent}$ y una oscilación amortiguada\nde \\SI{1040}{\\hertz}, que es lo que se va a ver en el osciloscopio.\n",
+      "figuras": [],
+      "nivel": 1
+    },
+    {
+      "titulo": "El factor de mérito manda el pico",
+      "cuerpo": "Antes de mirar el circuito armado conviene ver qué manda sobre la forma de la\ncurva. La frecuencia natural fija \\emph{dónde} está el codo; el factor de mérito\nfija \\emph{qué tan alto} es el pico. La Figura~\\ref{fig:familia} evalúa la\nEcuación~\\eqref{eq:modulo-fase} para cuatro valores de $Q$ con el mismo $\\fnat$.\n\nPor debajo de $Q = \\tfrac{1}{\\sqrt{2}} \\approx 0{,}71$ no hay pico: la curva de\nButterworth es justo la más plana que se puede tener sin resonar. Este filtro\ntrabaja bastante por encima, en $Q = 2{,}04$, así que resuena a propósito.\n\nLa curva de $Q = 4{,}89$ no sale de la fórmula: es una corrida aparte del mismo\ncircuito con $R_1 = \\SI{100}{\\ohm}$, guardada como \\emph{rawfile} y traída al\ninforme con \\texttt{xtal raw import}. Mezclar en un mismo gráfico curvas\ncalculadas y resultados de simulaciones externas es exactamente lo que Xtal\nexiste para hacer.\n",
+      "figuras": [
+        "familia"
+      ],
+      "nivel": 1
+    },
+    {
+      "titulo": "Banco de medición",
+      "cuerpo": "El ensayo se hace con el filtro cargado únicamente por la punta del\nosciloscopio (\\SI{10}{\\mega\\ohm} en paralelo con \\SI{12}{\\pico\\farad}), que a\nestas frecuencias no carga nada. La Figura~\\ref{fig:banco} muestra la cadena.\n\n\\begin{figure}[H]\n\\centering\n\\begin{tikzpicture}[\n    font=\\small,\n    caja/.style={draw=black!45, rounded corners=3pt, minimum height=1.5cm,\n                 minimum width=2.9cm, align=center, fill=black!3},\n    dut/.style={caja, draw=xtalPrimary, line width=1pt, fill=xtalPrimary!6},\n    flecha/.style={-{Stealth[length=5pt]}, thick},\n  ]\n  \\node[caja]              (gen)  {Generador\\\\\\footnotesize \\SI{1}{\\volt} p.\\,a p.};\n  \\node[dut,  right=1.5cm of gen] (dut)  {Filtro RLC\\\\\\footnotesize bajo ensayo};\n  \\node[caja, right=1.5cm of dut] (osc)  {Osciloscopio\\\\\\footnotesize 2 canales};\n  \\node[caja, below=0.9cm of dut] (arf)  {Analizador de respuesta\\\\\\footnotesize en frecuencia};\n\n  \\draw[flecha, xtalInput]  (gen) -- node[above, font=\\footnotesize] {$v_i$} (dut);\n  \\draw[flecha, xtalOutput] (dut) -- node[above, font=\\footnotesize] {$v_o$} (osc);\n  \\draw[flecha, xtalInput]  (arf.west) -| ([xshift=-0.75cm]dut.west);\n  \\draw[flecha, xtalOutput] ([xshift=0.75cm]dut.east) |- (arf.east);\n  \\node[font=\\footnotesize\\itshape, below=0.1cm of arf] {barrido de \\SI{20}{\\hertz} a \\SI{100}{\\kilo\\hertz}};\n\\end{tikzpicture}\n\\caption{Cadena de medición. El mismo circuito se ensaya de dos maneras: barrido\nde frecuencia con el analizador, y escalón con el generador y el osciloscopio.}\n\\label{fig:banco}\n\\end{figure}\n\n\\begin{table}[H]\n\\centering\n\\caption{Instrumental y condiciones del ensayo.}\n\\label{tab:instrumental}\n\\small\n\\begin{tabular}{lll}\n\\toprule\n\\textbf{Ensayo} & \\textbf{Instrumento} & \\textbf{Condiciones} \\\\\n\\midrule\nRespuesta en frecuencia & Analizador de barrido & 10 puntos/década, \\SI{20}{\\hertz}--\\SI{100}{\\kilo\\hertz} \\\\\nRespuesta al escalón    & Generador + osciloscopio & \\SI{100}{\\hertz}, 500 muestras, \\SI{500}{\\micro\\second} por división \\\\\nValor de componentes    & Puente LCR & \\SI{1}{\\kilo\\hertz}, cuatro hilos \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "La captura del osciloscopio",
+      "cuerpo": "La Figura~\\ref{fig:captura} es la pantalla tal como quedó, con las anotaciones\npuestas encima en \\LaTeX. El PNG es la imagen cruda; las flechas, las cotas y\nlos rótulos se dibujan con TikZ sobre ella, así que quedan con la misma\ntipografía que el resto del informe y no hay que rehacer la captura para\ncorregir una etiqueta.\n\n\\begin{figure}[htbp]\n\\centering\n\\begin{tikzpicture}[font=\\footnotesize]\n  \\node[inner sep=0, anchor=south west] (foto)\n    {\\includegraphics[width=0.92\\linewidth]{captura-osciloscopio.png}};\n  % Sistema de coordenadas normalizado sobre la imagen: (0,0) abajo a la\n  % izquierda, (1,1) arriba a la derecha. Asi las anotaciones no dependen del\n  % tamano al que se escale la foto.\n  \\begin{scope}[x={(foto.south east)}, y={(foto.north west)}]\n    \\draw[-{Stealth[length=5pt]}, xtalOutput, thick]\n      (0.30,0.78) node[above, align=center, text=xtalOutput]\n      {sobrepico $\\approx \\SI{41}{\\percent}$} -- (0.195,0.63);\n    \\draw[-{Stealth[length=5pt]}, xtalInput, thick]\n      (0.42,0.30) node[below, align=center, text=xtalInput]\n      {CH1: escalón de entrada} -- (0.30,0.43);\n    \\draw[|<->|, white, thin]\n      (0.195,0.55) -- node[above, text=white, fill=black, inner sep=1pt]\n      {$T_d \\approx \\SI{0.96}{\\milli\\second}$} (0.385,0.55);\n    \\draw[-{Stealth[length=5pt]}, white, thick]\n      (0.72,0.20) node[below, align=center, text=white]\n      {régimen permanente: $v_o \\to v_i$} -- (0.80,0.44);\n  \\end{scope}\n\\end{tikzpicture}\n\\caption{Captura del osciloscopio: escalón de entrada (CH1, ámbar) y salida\nsobre el capacitor (CH2, verde). Base de tiempo \\SI{500}{\\micro\\second} por\ndivisión; \\SI{500}{\\milli\\volt} por división en los dos canales.}\n\\label{fig:captura}\n\\end{figure}\n\nEl período de la oscilación amortiguada se lee directo de la pantalla: entre el\nprimer y el segundo máximo hay poco menos de dos divisiones, o sea\n$T_d \\approx \\SI{0.96}{\\milli\\second}$, que da $f_d = \\SI{1.04}{\\kilo\\hertz}$.\nEs el valor que predice la Ecuación~\\eqref{eq:escalon}.\n",
+      "figuras": [],
+      "nivel": 1
+    },
+    {
+      "titulo": "Respuesta en frecuencia",
+      "cuerpo": "La Figura~\\ref{fig:bode} superpone las tres fuentes en magnitud y fase. Los\nestilos no se eligieron a mano: cada curva los hereda de cómo se obtuvo el dato\n--- teórica sólida, simulada con marcadores, medida punteada --- y el eje\nlogarítmico viene de que el gráfico se declaró como Bode.\n\nLas tres describen el mismo filtro, pero no son la misma curva, y ahí está lo\ninteresante:\n\n\\begin{itemize}[itemsep=2pt, topsep=4pt]\n  \\item \\textbf{Lejos de la resonancia coinciden.} Por debajo de\n        \\SI{300}{\\hertz} las tres pasan por \\SI{0}{\\decibel}, y por encima de\n        \\SI{5}{\\kilo\\hertz} las tres caen a \\SI{-40}{\\decibel} por década, que\n        es la pendiente que corresponde a dos polos.\n  \\item \\textbf{En el pico se separan.} La teórica llega a\n        \\SI{6.5}{\\decibel}, la simulada a \\SI{5.6}{\\decibel} y la medida a\n        \\SI{5.2}{\\decibel}. La diferencia entre la primera y la segunda es\n        exactamente $R_L$; el resto lo explica la tolerancia de los componentes.\n  \\item \\textbf{La fase no discute.} Cruza $-90^\\circ$ en $\\fnat$ en los tres\n        casos y tiende a $-180^\\circ$: el amortiguamiento cambia qué tan abrupto\n        es el cruce, no dónde ocurre.\n\\end{itemize}\n\n\\begin{table}[H]\n\\centering\n\\caption{Frecuencia de resonancia y pico, leídos de cada fuente.}\n\\label{tab:resultados}\n\\small\n\\begin{tabular}{lrrr}\n\\toprule\n\\textbf{Fuente} & $\\bm{f_{\\text{pico}}}$ & $\\bm{|H|_{\\max}}$ & \\textbf{error en $\\bm{f}$} \\\\\n\\midrule\nTeórica  & \\SI{1002}{\\hertz} & \\SI{6.47}{\\decibel} & --- \\\\\nSimulada & \\SI{1000}{\\hertz} & \\SI{5.59}{\\decibel} & \\SI{-0.2}{\\percent} \\\\\nMedida   & \\SI{1005}{\\hertz} & \\SI{5.23}{\\decibel} & \\SI{+0.3}{\\percent} \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n\n\\noindent\nEl pico no cae en $\\fnat = \\SI{1073}{\\hertz}$ sino un poco por debajo: para un\nsegundo orden, el máximo está en\n$f_{\\text{pico}} = \\fnat\\sqrt{1 - 1/(2Q^{2})}$, que con $Q = 2{,}04$ da\n\\SI{1002}{\\hertz}. Confundir los dos valores es el error clásico de este ensayo.\n",
+      "figuras": [
+        "bode"
+      ],
+      "nivel": 0
+    },
+    {
+      "titulo": "Cuánto se separa la medición del modelo",
+      "cuerpo": "Superponer curvas dice si se parecen; restarlas dice cuánto. La\nFigura~\\ref{fig:residuos} muestra punto a punto la diferencia entre la magnitud\nmedida y el modelo teórico nominal. Va sin línea a propósito: no es una función\ncontinua, son 37 diferencias, una por punto de barrido.\n\nEl residuo se queda dentro de $\\pm\\SI{0.2}{\\decibel}$ en casi todo el rango\n--- que es el ruido del instrumento --- y se dispara a más de\n\\SI{1}{\\decibel} en un solo lugar: alrededor de \\SI{1}{\\kilo\\hertz}. Ahí no\nfalla la medición, falla el modelo: es donde la curva es más empinada, y un\ncorrimiento de \\SI{0.4}{\\percent} en $\\fnat$ se traduce en varias décimas de\ndecibel. Es la firma típica de un error de frecuencia, no de amplitud.\n",
+      "figuras": [
+        "residuos"
+      ],
+      "nivel": 1
+    },
+    {
+      "titulo": "Respuesta temporal",
+      "cuerpo": "El mismo circuito, excitado con un escalón de \\SI{1}{\\volt}. La\nFigura~\\ref{fig:escalon} lleva cuatro curvas y usa la convención de color de\nXtal en los dos ejes que tiene: \\textbf{el color dice qué señal es} (ámbar la\nentrada, verde la salida) y \\textbf{el trazo dice de dónde salió el dato}\n(sólida la teórica, con marcadores la simulada, punteada la medida). Por eso las\ndos salidas comparten el verde sin confundirse.\n\nSe leen tres cosas de un vistazo:\n\n\\begin{itemize}[itemsep=2pt, topsep=4pt]\n  \\item \\textbf{Sobrepico.} La salida llega a \\SI{1.41}{\\volt} contra un escalón\n        de \\SI{1}{\\volt}: \\SI{41}{\\percent}, contra el \\SI{45}{\\percent} que\n        predice el modelo ideal. La diferencia es, otra vez, $R_L$.\n  \\item \\textbf{Oscilación amortiguada.} El período entre máximos es de\n        \\SI{0.96}{\\milli\\second}, o sea \\SI{1.04}{\\kilo\\hertz}: es $\\omega_d$,\n        apenas por debajo de $\\fnat$, como manda\n        $\\omega_d = \\sqrt{\\omega_0^2 - \\alpha^2}$.\n  \\item \\textbf{Tiempo de establecimiento.} La envolvente cae como\n        $e^{-\\alpha t}$ con $\\alpha = \\SI{1650}{\\per\\second}$, así que entrar en\n        la banda del \\SI{2}{\\percent} lleva $4/\\alpha \\approx\n        \\SI{2.4}{\\milli\\second}$. Coincide con lo medido.\n  \\end{itemize}\n\n\\noindent\nLa curva medida arranca antes de $t = 0$: son las muestras de \\emph{pretrigger}\ndel osciloscopio. El disparo está en el flanco de CH1, que es lo que fija el\norigen de tiempos común a las tres fuentes.\n",
+      "figuras": [
+        "escalon"
+      ],
+      "nivel": 0
+    },
+    {
+      "titulo": "Polos, amortiguamiento y estabilidad",
+      "cuerpo": "Los polos son las raíces del denominador de la Ecuación~\\eqref{eq:canonica}:\n%\n\\begin{equation}\n  s_{1,2} \\;=\\; -\\alpha \\pm j\\omega_d\n          \\;=\\; -\\frac{\\omega_0}{2Q} \\pm j\\,\\omega_0\\sqrt{1 - \\frac{1}{4Q^{2}}} .\n  \\label{eq:polos}\n\\end{equation}\n%\n\\textsc{ngspice} los calcula directo con un análisis de polos y ceros, sin pasar\npor la fórmula. La Tabla~\\ref{tab:polos} compara lo que da con lo que predice\nla Ecuación~\\eqref{eq:polos}.\n\n\\begin{table}[H]\n\\centering\n\\caption{Polos del sistema. La parte real es el amortiguamiento; la imaginaria,\nla frecuencia de oscilación.}\n\\label{tab:polos}\n\\small\n\\begin{tabular}{lrrrr}\n\\toprule\n\\textbf{Escenario} & $\\alpha$ [\\si{\\per\\second}] & $\\omega_d$ [\\si{\\radian\\per\\second}]\n                   & $|s|$ [\\si{\\radian\\per\\second}] & $\\theta$ \\\\\n\\midrule\nTeórico ideal            & 1650 & 6537 & 6742 & \\SI{75.9}{\\degree} \\\\\nSimulado (\\textsc{ngspice}) & 1840 & 6486 & 6742 & \\SI{74.2}{\\degree} \\\\\nMedido                   & 1935 & 6489 & 6772 & \\SI{73.4}{\\degree} \\\\\n\\bottomrule\n\\end{tabular}\n\\end{table}\n\nLos tres pares caen sobre una circunferencia de radio $\\omega_0$, porque\n$|s_{1,2}| = \\omega_0$ sin importar cuánta resistencia haya: la resistencia\nmueve el polo \\emph{sobre} el círculo, no lo saca. Lo que cambia es el ángulo,\ny con él el amortiguamiento\n$\\cos\\theta = 1/(2Q)$ (Figura~\\ref{fig:planos}).\n\n\\begin{figure}[htbp]\n\\centering\n\\begin{tikzpicture}[font=\\small, scale=2.7]\n  % Plano s normalizado por w0: la circunferencia unitaria es |s| = w0.\n  \\draw[->, black!55] (-1.30,0) -- (0.32,0) node[right, font=\\footnotesize] {$\\Re\\{s\\}/\\omega_0$};\n  \\draw[->, black!55] (0,-1.22) -- (0,1.30) node[above, font=\\footnotesize] {$\\Im\\{s\\}/\\omega_0$};\n  \\draw[black!25, dashed] (0,0) circle (1);\n  \\node[black!45, font=\\scriptsize, anchor=north east] at (-0.70,-0.71) {$|s| = \\omega_0$};\n\n  % Region de estabilidad: todo el semiplano izquierdo.\n  \\fill[xtalOutput, opacity=0.05] (-1.30,-1.22) rectangle (0,1.30);\n  \\node[xtalOutput, font=\\scriptsize, anchor=south west] at (-1.28,-1.18) {semiplano estable};\n\n  % Los dos pares de polos: teorico ideal (Q = 2,043) y medido (Q = 1,750).\n  \\foreach \\re/\\im/\\col in {-0.2447/0.9696/xtalThird, -0.2857/0.9583/xtalOutput} {\n    \\draw[\\col, densely dotted] (0,0) -- (\\re,\\im);\n    \\foreach \\sg in {1,-1} {\n      \\draw[\\col, thick] (\\re-0.05,\\sg*\\im-\\sg*0.05) -- (\\re+0.05,\\sg*\\im+\\sg*0.05);\n      \\draw[\\col, thick] (\\re-0.05,\\sg*\\im+\\sg*0.05) -- (\\re+0.05,\\sg*\\im-\\sg*0.05);\n    }\n  }\n  \\node[xtalThird,  font=\\scriptsize, anchor=west] at (-0.19,1.05) {$Q = 2{,}04$ (ideal)};\n  \\node[xtalOutput, font=\\scriptsize, anchor=east] at (-0.36,0.88) {$Q = 1{,}75$ (medido)};\n\n  % El angulo theta, medido desde el eje imaginario.\n  \\draw[black!60] (0,0.45) arc (90:104.2:0.45);\n  \\node[black!60, font=\\scriptsize] at (-0.11,0.53) {$\\theta$};\n  \\node[font=\\scriptsize, anchor=west] at (0.06,-0.75) {$\\cos\\theta = \\dfrac{1}{2Q}$};\n\\end{tikzpicture}\n\\caption{Los dos pares de polos en el plano $s$, normalizados por $\\omega_0$.\nBajar el $Q$ los corre hacia la izquierda \\emph{sobre} la circunferencia: más\namortiguamiento, misma frecuencia natural.}\n\\label{fig:planos}\n\\end{figure}\n\nLos cuatro polos tienen parte real negativa, así que el circuito es estable:\ncualquier transitorio se apaga. Era esperable en una red pasiva --- no hay de\ndónde sacar la energía para sostener una oscilación --- pero el análisis lo\nconfirma sin pedirlo.\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "Primer orden contra segundo orden",
+      "cuerpo": "Para que la comparación sea de \\emph{orden} y no de frecuencia, se ensayó\ntambién un pasabajos RC de primer orden\n($R = \\SI{1.5}{\\kilo\\ohm}$, $C = \\SI{100}{\\nano\\farad}$), elegido para caer\nprácticamente en la misma frecuencia de corte, \\SI{1061}{\\hertz}.\n\nEn frecuencia (Figura~\\ref{fig:ordenes}) la diferencia es de pendiente: el de\nprimer orden cae \\SI{20}{\\decibel} por década y el de segundo,\n\\SI{40}{\\decibel}. A \\SI{10}{\\kilo\\hertz} eso son \\SI{20}{\\decibel} de\natenuación extra --- un factor de diez en tensión --- por haber agregado un solo\ncomponente reactivo.\n\nEn el tiempo (Figura~\\ref{fig:escalones}) el precio queda a la vista: el de\nprimer orden llega al valor final sin pasarse nunca, mientras que el de segundo\nsobrepasa un \\SI{41}{\\percent} y tarda más en asentarse. Filtrar mejor y\nresponder mejor son objetivos opuestos, y $Q$ es la perilla que decide cuánto de\ncada uno.\n",
+      "figuras": [
+        "ordenes",
+        "escalones"
+      ],
+      "nivel": 0
+    },
+    {
+      "titulo": "Conclusiones",
+      "cuerpo": "\\begin{enumerate}[itemsep=3pt, topsep=4pt]\n  \\item \\textbf{El modelo describe bien el circuito.} Fuera de la resonancia, la\n        medición sigue a la teoría dentro de $\\pm\\SI{0.2}{\\decibel}$, que es el\n        ruido del instrumento. La pendiente asintótica medida,\n        \\SI{-40}{\\decibel} por década, confirma el orden del sistema.\n  \\item \\textbf{Lo que no coincide tiene una sola causa.} El pico medido queda\n        \\SI{1.24}{\\decibel} por debajo del teórico ideal, y la resistencia del\n        bobinado del inductor explica \\SI{0.88}{\\decibel} de esa diferencia. El\n        resto entra en la tolerancia declarada de $L$ y $C$.\n  \\item \\textbf{Frecuencia y amortiguamiento son independientes.} $\\fnat$ solo\n        depende de $LC$ y se midió con \\SI{0.4}{\\percent} de error; $Q$ depende\n        además de toda la resistencia del lazo y se desvió un\n        \\SI{14}{\\percent}. Es el parámetro sensible del diseño.\n  \\item \\textbf{Los dos dominios dicen lo mismo.} El pico del Bode y el\n        sobrepico del escalón son la misma información leída de dos maneras:\n        \\SI{5.2}{\\decibel} de un lado, \\SI{41}{\\percent} del otro, y las dos\n        salen del mismo par de polos a \\SI{73.4}{\\degree}.\n\\end{enumerate}\n\n\\noindent\nPara un diseño donde importe la respuesta transitoria, este $Q$ es demasiado\nalto: convendría subir $R_1$ hasta llevar el filtro cerca de\n$Q = \\tfrac{1}{\\sqrt{2}}$, que es lo más plano que se consigue sin resonar.\n",
+      "figuras": [],
+      "nivel": 0
+    },
+    {
+      "titulo": "Anexo: cómo se armó este informe",
+      "cuerpo": "Este informe no se escribió a mano: se generó con Xtal a partir de la carpeta\ndel proyecto. Las cuatro fuentes de datos entran cada una por su comando y todas\nterminan siendo lo mismo --- una \\emph{medición}: pares $(x,y)$ con su unidad y\nsu procedencia --- que después se consolidan en gráficos.\n\n\\begin{lstlisting}[language=consola, caption={Las cuatro maneras de conseguir una curva.}, captionpos=b]\n# 1. Teorica: se evalua la formula, no hay archivo de entrada.\nxtal meas formula --id teorica_mag \\\n     --expr \"-10*math::log10((1-(f/f0)^2)^2 + (f/(q*f0))^2)\" \\\n     --from 20 --to 100000 --points 400 --scale log \\\n     --const f0=1073.02 --const q=2.0430 --x-unit Hz --y-unit dB\n\n# 2. Simulada: ngspice corre el netlist. Deja magnitud y fase.\nxtal circuit import fuentes/filtro-rlc.cir --as filtro-rlc\nxtal sim ac filtro-rlc --as sim --node \"v(out)\" \\\n     --from 20 --to 100000 --sweep dec --points 30\n\n# 3. Medida: el CSV del instrumento, salteando su metadata.\nxtal meas import fuentes/medicion_bode.csv --id medida_mag \\\n     --skip-rows 6 --x-col 0 --y-col 1 --kind measured --x-unit Hz --y-unit dB\n\n# 4. Importada: un rawfile que ya existia (LTspice o ngspice).\nxtal raw import fuentes/variante-q-alto.raw --as q_alto --node \"v(out)\"\n\\end{lstlisting}\n\nUn gráfico es una \\emph{receta} sobre esas mediciones: las referencia por su\nidentificador y les aplica una vista. No guarda datos adentro, así que la misma\nmedición puede aparecer en varios gráficos y cada gráfico puede juntar todas las\nque haga falta.\n\n\\begin{lstlisting}[language=consola, caption={El Bode de la Figura~\\ref{fig:bode}, completo.}, captionpos=b]\nxtal plot new bode --kind bode \\\n     --title \"Respuesta en frecuencia del filtro RLC\" \\\n     --x-label \"Frecuencia\" --y-label \"Ganancia\"\n\nxtal plot add-series bode --measurement teorica_mag  --panel magnitude\nxtal plot add-series bode --measurement sim          --panel magnitude\nxtal plot add-series bode --measurement medida_mag   --panel magnitude\nxtal plot add-series bode --measurement teorica_fase --panel phase\nxtal plot add-series bode --measurement sim_fase     --panel phase\nxtal plot add-series bode --measurement medida_fase  --panel phase\n\nxtal run --open\n\\end{lstlisting}\n\n\\noindent\nEn ningún lado se pidió un color, un tipo de línea ni una escala. El eje\nlogarítmico sale de haber declarado el gráfico como Bode; el trazo de cada curva\nsale de cómo se obtuvo el dato; el color, del rol de la señal. Lo que se declara\nes lo que se quiere ver, no cómo dibujarlo.\n\n\\vspace{0.6em}\n\\noindent\nEl proyecto entero se reconstruye desde cero con un solo comando:\n\n\\begin{lstlisting}[language=consola]\n./reproducir.sh\n\\end{lstlisting}\n\n\\noindent\nque borra todo lo derivado (\\texttt{mediciones/}, \\texttt{graficos/},\n\\texttt{esquematicos/}, \\texttt{salida/}), lo vuelve a generar desde\n\\texttt{fuentes/} y compila el PDF. Las únicas entradas son los netlists, los\nCSV del instrumento, la imagen, el texto de las secciones y el\n\\texttt{xtal.toml} que las indexa.\n",
+      "figuras": [],
+      "nivel": 0
+    }
+  ],
+  "doctor": {
+    "version": "0.3.1",
+    "dependencies": [
+      {
+        "name": "tectonic",
+        "available": true,
+        "required": true,
+        "purpose": "compilar el informe a PDF (motor recomendado)"
+      },
+      {
+        "name": "pdflatex",
+        "available": true,
+        "required": false,
+        "purpose": "compilar con TeX Live, si preferís no usar Tectonic"
+      },
+      {
+        "name": "ngspice",
+        "available": true,
+        "required": false,
+        "purpose": "simular circuitos (`xtal sim`)"
+      }
+    ],
+    "ltspice": false,
+    "config": {
+      "dir": "/Users/manu/.config/xtal",
+      "file_exists": true
+    },
+    "ai": {
+      "agents": [
+        {
+          "id": "claude-code",
+          "name": "Claude Code",
+          "installed": true,
+          "skill": "al_dia",
+          "mcp": "ok",
+          "ready": true,
+          "missing": null
+        },
+        {
+          "id": "claude-desktop",
+          "name": "Claude Desktop",
+          "installed": false,
+          "skill": "no_aplica",
+          "mcp": "no_registrado",
+          "ready": true,
+          "missing": null
+        },
+        {
+          "id": "codex",
+          "name": "Codex",
+          "installed": true,
+          "skill": "al_dia",
+          "mcp": "ok",
+          "ready": true,
+          "missing": null
+        },
+        {
+          "id": "copilot",
+          "name": "GitHub Copilot CLI",
+          "installed": false,
+          "skill": "sin_agente",
+          "mcp": "no_aplica",
+          "ready": true,
+          "missing": null
+        },
+        {
+          "id": "opencode",
+          "name": "opencode",
+          "installed": false,
+          "skill": "sin_agente",
+          "mcp": "no_aplica",
+          "ready": true,
+          "missing": null
+        }
+      ],
+      "ok": true
+    },
+    "can_build": true
+  },
+  "arbol": [
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/esquematicos",
+      "nombre": "esquematicos",
+      "relativa": "esquematicos",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/esquematicos/filtro-rc.cir",
+          "nombre": "filtro-rc.cir",
+          "relativa": "esquematicos/filtro-rc.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/esquematicos/filtro-rlc.cir",
+          "nombre": "filtro-rlc.cir",
+          "relativa": "esquematicos/filtro-rlc.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/esquematicos/variante-q-alto.cir",
+          "nombre": "variante-q-alto.cir",
+          "relativa": "esquematicos/variante-q-alto.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes",
+      "nombre": "fuentes",
+      "relativa": "fuentes",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/filtro-rc.cir",
+          "nombre": "filtro-rc.cir",
+          "relativa": "fuentes/filtro-rc.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/filtro-rlc.cir",
+          "nombre": "filtro-rlc.cir",
+          "relativa": "fuentes/filtro-rlc.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/generar_mediciones.py",
+          "nombre": "generar_mediciones.py",
+          "relativa": "fuentes/generar_mediciones.py",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/medicion_bode.csv",
+          "nombre": "medicion_bode.csv",
+          "relativa": "fuentes/medicion_bode.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/medicion_escalon.csv",
+          "nombre": "medicion_escalon.csv",
+          "relativa": "fuentes/medicion_escalon.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/medicion_residuos.csv",
+          "nombre": "medicion_residuos.csv",
+          "relativa": "fuentes/medicion_residuos.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/variante-q-alto.cir",
+          "nombre": "variante-q-alto.cir",
+          "relativa": "fuentes/variante-q-alto.cir",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/fuentes/variante-q-alto.raw",
+          "nombre": "variante-q-alto.raw",
+          "relativa": "fuentes/variante-q-alto.raw",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos",
+      "nombre": "graficos",
+      "relativa": "graficos",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/bode.toml",
+          "nombre": "bode.toml",
+          "relativa": "graficos/bode.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/escalon.toml",
+          "nombre": "escalon.toml",
+          "relativa": "graficos/escalon.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/escalones.toml",
+          "nombre": "escalones.toml",
+          "relativa": "graficos/escalones.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/familia.toml",
+          "nombre": "familia.toml",
+          "relativa": "graficos/familia.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/ordenes.toml",
+          "nombre": "ordenes.toml",
+          "relativa": "graficos/ordenes.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/graficos/residuos.toml",
+          "nombre": "residuos.toml",
+          "relativa": "graficos/residuos.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/imagenes",
+      "nombre": "imagenes",
+      "relativa": "imagenes",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/imagenes/captura-osciloscopio.png",
+          "nombre": "captura-osciloscopio.png",
+          "relativa": "imagenes/captura-osciloscopio.png",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones",
+      "nombre": "mediciones",
+      "relativa": "mediciones",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_fase.csv",
+          "nombre": "medida_fase.csv",
+          "relativa": "mediciones/medida_fase.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_fase.toml",
+          "nombre": "medida_fase.toml",
+          "relativa": "mediciones/medida_fase.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_mag.csv",
+          "nombre": "medida_mag.csv",
+          "relativa": "mediciones/medida_mag.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_mag.toml",
+          "nombre": "medida_mag.toml",
+          "relativa": "mediciones/medida_mag.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_paso.csv",
+          "nombre": "medida_paso.csv",
+          "relativa": "mediciones/medida_paso.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/medida_paso.toml",
+          "nombre": "medida_paso.toml",
+          "relativa": "mediciones/medida_paso.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_in.csv",
+          "nombre": "paso_in.csv",
+          "relativa": "mediciones/paso_in.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_in.toml",
+          "nombre": "paso_in.toml",
+          "relativa": "mediciones/paso_in.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_out.csv",
+          "nombre": "paso_out.csv",
+          "relativa": "mediciones/paso_out.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_out.toml",
+          "nombre": "paso_out.toml",
+          "relativa": "mediciones/paso_out.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_rc.csv",
+          "nombre": "paso_rc.csv",
+          "relativa": "mediciones/paso_rc.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/paso_rc.toml",
+          "nombre": "paso_rc.toml",
+          "relativa": "mediciones/paso_rc.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_050.csv",
+          "nombre": "q_050.csv",
+          "relativa": "mediciones/q_050.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_050.toml",
+          "nombre": "q_050.toml",
+          "relativa": "mediciones/q_050.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_071.csv",
+          "nombre": "q_071.csv",
+          "relativa": "mediciones/q_071.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_071.toml",
+          "nombre": "q_071.toml",
+          "relativa": "mediciones/q_071.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_204.csv",
+          "nombre": "q_204.csv",
+          "relativa": "mediciones/q_204.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_204.toml",
+          "nombre": "q_204.toml",
+          "relativa": "mediciones/q_204.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_alto_fase.csv",
+          "nombre": "q_alto_fase.csv",
+          "relativa": "mediciones/q_alto_fase.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_alto_fase.toml",
+          "nombre": "q_alto_fase.toml",
+          "relativa": "mediciones/q_alto_fase.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_alto.csv",
+          "nombre": "q_alto.csv",
+          "relativa": "mediciones/q_alto.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/q_alto.toml",
+          "nombre": "q_alto.toml",
+          "relativa": "mediciones/q_alto.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/residuo.csv",
+          "nombre": "residuo.csv",
+          "relativa": "mediciones/residuo.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/residuo.toml",
+          "nombre": "residuo.toml",
+          "relativa": "mediciones/residuo.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_fase.csv",
+          "nombre": "sim_fase.csv",
+          "relativa": "mediciones/sim_fase.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_fase.toml",
+          "nombre": "sim_fase.toml",
+          "relativa": "mediciones/sim_fase.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_rc_fase.csv",
+          "nombre": "sim_rc_fase.csv",
+          "relativa": "mediciones/sim_rc_fase.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_rc_fase.toml",
+          "nombre": "sim_rc_fase.toml",
+          "relativa": "mediciones/sim_rc_fase.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_rc.csv",
+          "nombre": "sim_rc.csv",
+          "relativa": "mediciones/sim_rc.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim_rc.toml",
+          "nombre": "sim_rc.toml",
+          "relativa": "mediciones/sim_rc.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim.csv",
+          "nombre": "sim.csv",
+          "relativa": "mediciones/sim.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/sim.toml",
+          "nombre": "sim.toml",
+          "relativa": "mediciones/sim.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_fase.csv",
+          "nombre": "teorica_fase.csv",
+          "relativa": "mediciones/teorica_fase.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_fase.toml",
+          "nombre": "teorica_fase.toml",
+          "relativa": "mediciones/teorica_fase.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_mag.csv",
+          "nombre": "teorica_mag.csv",
+          "relativa": "mediciones/teorica_mag.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_mag.toml",
+          "nombre": "teorica_mag.toml",
+          "relativa": "mediciones/teorica_mag.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_paso.csv",
+          "nombre": "teorica_paso.csv",
+          "relativa": "mediciones/teorica_paso.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_paso.toml",
+          "nombre": "teorica_paso.toml",
+          "relativa": "mediciones/teorica_paso.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_rc.csv",
+          "nombre": "teorica_rc.csv",
+          "relativa": "mediciones/teorica_rc.csv",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/mediciones/teorica_rc.toml",
+          "nombre": "teorica_rc.toml",
+          "relativa": "mediciones/teorica_rc.toml",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida",
+      "nombre": "salida",
+      "relativa": "salida",
+      "es_carpeta": true,
+      "es_generado": true,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos",
+          "nombre": "datos",
+          "relativa": "salida/datos",
+          "es_carpeta": true,
+          "es_generado": true,
+          "hijos": [
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-medida_fase.dat",
+              "nombre": "bode-medida_fase.dat",
+              "relativa": "salida/datos/bode-medida_fase.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-medida_mag.dat",
+              "nombre": "bode-medida_mag.dat",
+              "relativa": "salida/datos/bode-medida_mag.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-sim_fase.dat",
+              "nombre": "bode-sim_fase.dat",
+              "relativa": "salida/datos/bode-sim_fase.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-sim.dat",
+              "nombre": "bode-sim.dat",
+              "relativa": "salida/datos/bode-sim.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-teorica_fase.dat",
+              "nombre": "bode-teorica_fase.dat",
+              "relativa": "salida/datos/bode-teorica_fase.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/bode-teorica_mag.dat",
+              "nombre": "bode-teorica_mag.dat",
+              "relativa": "salida/datos/bode-teorica_mag.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalon-medida_paso.dat",
+              "nombre": "escalon-medida_paso.dat",
+              "relativa": "salida/datos/escalon-medida_paso.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalon-paso_in.dat",
+              "nombre": "escalon-paso_in.dat",
+              "relativa": "salida/datos/escalon-paso_in.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalon-paso_out.dat",
+              "nombre": "escalon-paso_out.dat",
+              "relativa": "salida/datos/escalon-paso_out.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalon-teorica_paso.dat",
+              "nombre": "escalon-teorica_paso.dat",
+              "relativa": "salida/datos/escalon-teorica_paso.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalones-paso_out.dat",
+              "nombre": "escalones-paso_out.dat",
+              "relativa": "salida/datos/escalones-paso_out.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/escalones-paso_rc.dat",
+              "nombre": "escalones-paso_rc.dat",
+              "relativa": "salida/datos/escalones-paso_rc.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/familia-q_050.dat",
+              "nombre": "familia-q_050.dat",
+              "relativa": "salida/datos/familia-q_050.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/familia-q_071.dat",
+              "nombre": "familia-q_071.dat",
+              "relativa": "salida/datos/familia-q_071.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/familia-q_204.dat",
+              "nombre": "familia-q_204.dat",
+              "relativa": "salida/datos/familia-q_204.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/familia-q_alto.dat",
+              "nombre": "familia-q_alto.dat",
+              "relativa": "salida/datos/familia-q_alto.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/ordenes-sim_rc.dat",
+              "nombre": "ordenes-sim_rc.dat",
+              "relativa": "salida/datos/ordenes-sim_rc.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/ordenes-sim.dat",
+              "nombre": "ordenes-sim.dat",
+              "relativa": "salida/datos/ordenes-sim.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/ordenes-teorica_mag.dat",
+              "nombre": "ordenes-teorica_mag.dat",
+              "relativa": "salida/datos/ordenes-teorica_mag.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/ordenes-teorica_rc.dat",
+              "nombre": "ordenes-teorica_rc.dat",
+              "relativa": "salida/datos/ordenes-teorica_rc.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/datos/residuos-residuo.dat",
+              "nombre": "residuos-residuo.dat",
+              "relativa": "salida/datos/residuos-residuo.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            }
+          ]
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos",
+          "nombre": "graficos",
+          "relativa": "salida/graficos",
+          "es_carpeta": true,
+          "es_generado": true,
+          "hijos": [
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/bode.tex",
+              "nombre": "bode.tex",
+              "relativa": "salida/graficos/bode.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/escalon.tex",
+              "nombre": "escalon.tex",
+              "relativa": "salida/graficos/escalon.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/escalones.tex",
+              "nombre": "escalones.tex",
+              "relativa": "salida/graficos/escalones.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/familia.tex",
+              "nombre": "familia.tex",
+              "relativa": "salida/graficos/familia.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/ordenes.tex",
+              "nombre": "ordenes.tex",
+              "relativa": "salida/graficos/ordenes.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/graficos/residuos.tex",
+              "nombre": "residuos.tex",
+              "relativa": "salida/graficos/residuos.tex",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            }
+          ]
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim",
+          "nombre": "sim",
+          "relativa": "salida/sim",
+          "es_carpeta": true,
+          "es_generado": true,
+          "hijos": [
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/paso__0.dat",
+              "nombre": "paso__0.dat",
+              "relativa": "salida/sim/paso__0.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/paso__1.dat",
+              "nombre": "paso__1.dat",
+              "relativa": "salida/sim/paso__1.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/paso_rc__0.dat",
+              "nombre": "paso_rc__0.dat",
+              "relativa": "salida/sim/paso_rc__0.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/paso_rc.cir",
+              "nombre": "paso_rc.cir",
+              "relativa": "salida/sim/paso_rc.cir",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/paso.cir",
+              "nombre": "paso.cir",
+              "relativa": "salida/sim/paso.cir",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/sim__0.dat",
+              "nombre": "sim__0.dat",
+              "relativa": "salida/sim/sim__0.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/sim_rc__0.dat",
+              "nombre": "sim_rc__0.dat",
+              "relativa": "salida/sim/sim_rc__0.dat",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/sim_rc.cir",
+              "nombre": "sim_rc.cir",
+              "relativa": "salida/sim/sim_rc.cir",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            },
+            {
+              "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/sim/sim.cir",
+              "nombre": "sim.cir",
+              "relativa": "salida/sim/sim.cir",
+              "es_carpeta": false,
+              "es_generado": true,
+              "hijos": []
+            }
+          ]
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/main.log",
+          "nombre": "main.log",
+          "relativa": "salida/main.log",
+          "es_carpeta": false,
+          "es_generado": true,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/main.pdf",
+          "nombre": "main.pdf",
+          "relativa": "salida/main.pdf",
+          "es_carpeta": false,
+          "es_generado": true,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/main.synctex.gz",
+          "nombre": "main.synctex.gz",
+          "relativa": "salida/main.synctex.gz",
+          "es_carpeta": false,
+          "es_generado": true,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/salida/main.tex",
+          "nombre": "main.tex",
+          "relativa": "salida/main.tex",
+          "es_carpeta": false,
+          "es_generado": true,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones",
+      "nombre": "secciones",
+      "relativa": "secciones",
+      "es_carpeta": true,
+      "es_generado": false,
+      "hijos": [
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/01-objetivo.tex",
+          "nombre": "01-objetivo.tex",
+          "relativa": "secciones/01-objetivo.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/02-circuito.tex",
+          "nombre": "02-circuito.tex",
+          "relativa": "secciones/02-circuito.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/02b-netlist.tex",
+          "nombre": "02b-netlist.tex",
+          "relativa": "secciones/02b-netlist.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/03-modelo.tex",
+          "nombre": "03-modelo.tex",
+          "relativa": "secciones/03-modelo.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/03b-parametros.tex",
+          "nombre": "03b-parametros.tex",
+          "relativa": "secciones/03b-parametros.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/03c-familia.tex",
+          "nombre": "03c-familia.tex",
+          "relativa": "secciones/03c-familia.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/04-banco.tex",
+          "nombre": "04-banco.tex",
+          "relativa": "secciones/04-banco.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/04b-captura.tex",
+          "nombre": "04b-captura.tex",
+          "relativa": "secciones/04b-captura.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/05-frecuencia.tex",
+          "nombre": "05-frecuencia.tex",
+          "relativa": "secciones/05-frecuencia.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/05b-residuos.tex",
+          "nombre": "05b-residuos.tex",
+          "relativa": "secciones/05b-residuos.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/06-temporal.tex",
+          "nombre": "06-temporal.tex",
+          "relativa": "secciones/06-temporal.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/07-polos.tex",
+          "nombre": "07-polos.tex",
+          "relativa": "secciones/07-polos.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/08-ordenes.tex",
+          "nombre": "08-ordenes.tex",
+          "relativa": "secciones/08-ordenes.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/09-conclusiones.tex",
+          "nombre": "09-conclusiones.tex",
+          "relativa": "secciones/09-conclusiones.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        },
+        {
+          "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/10-anexo.tex",
+          "nombre": "10-anexo.tex",
+          "relativa": "secciones/10-anexo.tex",
+          "es_carpeta": false,
+          "es_generado": false,
+          "hijos": []
+        }
+      ]
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/README.md",
+      "nombre": "README.md",
+      "relativa": "README.md",
+      "es_carpeta": false,
+      "es_generado": false,
+      "hijos": []
+    },
+    {
+      "ruta": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/reproducir.sh",
+      "nombre": "reproducir.sh",
+      "relativa": "reproducir.sh",
+      "es_carpeta": false,
+      "es_generado": false,
+      "hijos": []
+    }
+  ],
+  "abierto": "/Users/manu/dev/personal/xtal/examples/filtro-rlc/secciones/01-objetivo.tex"
+}

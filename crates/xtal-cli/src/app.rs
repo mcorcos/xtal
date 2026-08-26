@@ -12,9 +12,11 @@
 //!
 //! ## Cómo funciona
 //!
-//! Cada comando arma una URL `xtal://…` y se la da al sistema con `open`. macOS busca
-//! qué app registró ese esquema (lo declara `app/Config/Info.plist`), la levanta si no
-//! está andando y le entrega la URL. Del otro lado la atiende `Ordenes.swift`.
+//! Cada comando arma una URL `xtal://…` y se la da al sistema. En macOS con `open`: el
+//! sistema busca qué app registró ese esquema (lo declara `app/Config/Info.plist`), la
+//! levanta si no está andando y le entrega la URL, y del otro lado la atiende
+//! `Ordenes.swift`. En Windows con `cmd /c start`, y quien enruta es el **registro** —la
+//! clave la escribe el instalador— y del otro lado atiende `ordenes.rs` de `app-win/`.
 //!
 //! No hay socket, ni puerto, ni daemon: la misma decisión que el MCP sobre stdio.
 //!
@@ -31,8 +33,8 @@ use crate::cli::{AppArgs, AppCmd, ModoAppArg, PanelAppArg, VistaAppArg};
 use crate::ctx;
 
 pub fn cmd_app(args: AppArgs, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    if !cfg!(target_os = "macos") {
-        bail!("la app de escritorio de Xtal es solo para macOS");
+    if !cfg!(any(target_os = "macos", target_os = "windows")) {
+        bail!("la app de escritorio de Xtal está para macOS y Windows");
     }
 
     let (ruta, detalle) = match &args.command {
@@ -126,6 +128,14 @@ fn armar(ruta: &str, frente: bool) -> String {
 /// elige una sola. Es la contraparte de `XTAL_BIN`, que la app usa para hablarle al
 /// binario de un worktree.
 fn abrir(url: &str) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    return abrir_windows(url);
+    #[cfg(not(target_os = "windows"))]
+    return abrir_unix(url);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn abrir_unix(url: &str) -> Result<()> {
     let mut cmd = Proc::new("open");
     cmd.arg("-g");
     if let Ok(app) = std::env::var("XTAL_APP") {
@@ -141,6 +151,56 @@ fn abrir(url: &str) -> Result<()> {
         bail!(
             "no encontré la app de escritorio de Xtal. ¿Está instalada y abierta al menos una vez?\n  open: {}",
             err.trim()
+        );
+    }
+    Ok(())
+}
+
+/// La misma idea en Windows, con tres diferencias que importan.
+///
+/// 1. **Quien enruta el esquema es el registro, no el sistema de archivos.** La clave la
+///    escribe el instalador de la app (`HKCU\Software\Classes\xtal`), y el valor que
+///    guarda es la ruta del `Xtal.exe` instalado. Si nunca se instaló, no hay nada que
+///    abrir y el error tiene que decir eso.
+/// 2. **No existe un `open`.** Se usa `cmd /c start`, que es una orden interna de `cmd`.
+///    El `""` de más es el título de la ventana: sin él, `start` toma el primer
+///    argumento entrecomillado como título y no abre nada.
+/// 3. **`start` no puede "no robar el foco".** No hay equivalente de `-g`: Windows le da
+///    el foco a la ventana que atiende la URL. Lo que sí se puede es que la app no se
+///    traiga sola al frente cuando la orden no lo pidió, y eso lo decide el lado de la
+///    app (ver `ordenes.rs` de la app: solo llama a `set_focus` con `frente=1`).
+///
+/// `XTAL_APP=C:\ruta\Xtal.exe` fuerza a qué copia va la orden. Ahí se ejecuta el .exe
+/// directamente con la URL como argumento, que es como Windows se la pasaría: la app
+/// tiene el plugin de instancia única, así que el proceso nuevo se la entrega al que ya
+/// está corriendo y se muere.
+#[cfg(target_os = "windows")]
+fn abrir_windows(url: &str) -> Result<()> {
+    if let Ok(app) = std::env::var("XTAL_APP") {
+        if !app.is_empty() {
+            let salida = Proc::new(&app)
+                .arg(url)
+                .output()
+                .with_context(|| format!("no pude ejecutar {app}"))?;
+            if !salida.status.success() {
+                bail!(
+                    "{app} devolvió un error: {}",
+                    String::from_utf8_lossy(&salida.stderr).trim()
+                );
+            }
+            return Ok(());
+        }
+    }
+
+    let salida = Proc::new("cmd")
+        .args(["/c", "start", ""])
+        .arg(url)
+        .output()
+        .context("no pude ejecutar `cmd /c start`")?;
+    if !salida.status.success() {
+        bail!(
+            "no encontré la app de escritorio de Xtal. ¿Está instalada?\n  start: {}",
+            String::from_utf8_lossy(&salida.stderr).trim()
         );
     }
     Ok(())

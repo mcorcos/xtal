@@ -56,6 +56,23 @@ jobs:
           set -euo pipefail
           # En workflow_dispatch no hay tag: usamos la version de Cargo.toml tal cual.
           CARGO_VERSION="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
+
+          # La app de escritorio tiene su propio Cargo.toml (es otro workspace) y su
+          # propio package.json y tauri.conf.json. Los tres tienen que decir lo mismo:
+          # si no, el instalador de Windows sale con una version distinta a la del
+          # binario que trae adentro, y `xtal update` compara contra la equivocada.
+          for archivo in \
+            "app-win/src-tauri/Cargo.toml:^version" \
+            "app-win/src-tauri/tauri.conf.json:\"version\"" \
+            "app-win/package.json:\"version\""
+          do
+            f="${archivo%%:*}"; patron="${archivo##*:}"
+            v="$(grep -m1 "$patron" "$f" | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')"
+            if [ "$v" != "$CARGO_VERSION" ]; then
+              echo "::error::$f dice $v pero el workspace dice $CARGO_VERSION. Sincronizalos."
+              exit 1
+            fi
+          done
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG_VERSION="${GITHUB_REF_NAME#v}"
             if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
@@ -132,6 +149,14 @@ jobs:
           # Linux ARM (runner nativo, gratis en repos publicos: no hace falta cross).
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
+          # Windows x86_64. Toolchain MSVC, que es el default de Rust en Windows y el
+          # que el resto del sistema espera (el de `-gnu` linkea contra mingw y necesita
+          # sus DLLs al lado). Va empaquetado en **zip** y no en tar.gz: `tar` existe en
+          # Windows 10 desde 2018, pero el doble click que todo el mundo hace es el del
+          # Explorador, y el Explorador abre zip.
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            zip: true
     steps:
       - uses: actions/checkout@v5
 
@@ -154,7 +179,7 @@ jobs:
           name: docs-assets
           path: assets
 
-      - name: Armar el tarball
+      - name: Armar el paquete
         id: pack
         shell: bash
         run: |
@@ -162,25 +187,126 @@ jobs:
           VERSION="${{ needs.check.outputs.version }}"
           TARGET="${{ matrix.target }}"
           NAME="xtal-${VERSION}-${TARGET}"
-          BIN="target/${TARGET}/release/xtal"
+          EXE=""
+          if [ "${{ matrix.zip }}" = "true" ]; then EXE=".exe"; fi
+          BIN="target/${TARGET}/release/xtal${EXE}"
 
-          # El tarball se descomprime en una carpeta con su propio nombre (nunca
+          # El paquete se descomprime en una carpeta con su propio nombre (nunca
           # desparrama archivos en el cwd del usuario).
           mkdir -p "dist/${NAME}"
-          cp "$BIN" "dist/${NAME}/xtal"
+          cp "$BIN" "dist/${NAME}/xtal${EXE}"
           cp README.md LICENSE SKILL.md "dist/${NAME}/"
           # Los completions y la man page vienen del job `assets`, generados por el
           # binario a partir de la misma definición de comandos que los flags reales.
           cp -R assets/completions assets/man "dist/${NAME}/"
 
-          tar -czf "dist/${NAME}.tar.gz" -C dist "${NAME}"
+          if [ "${{ matrix.zip }}" = "true" ]; then
+            # `powershell Compress-Archive` en vez de `zip`: el runner de Windows no
+            # trae `zip`, y bash ahí es el de Git for Windows, que tampoco.
+            powershell -NoProfile -Command \
+              "Compress-Archive -Path 'dist/${NAME}' -DestinationPath 'dist/${NAME}.zip'"
+          else
+            tar -czf "dist/${NAME}.tar.gz" -C dist "${NAME}"
+          fi
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Subir el tarball como artifact
+      - name: Subir el paquete como artifact
         uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.pack.outputs.name }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3b. La app de escritorio para Windows
+  # ---------------------------------------------------------------------------
+  #
+  # Se compila SOLO en Windows. Tauri no cross-compila: el instalador NSIS y el MSI los
+  # arma con herramientas de Windows, y el webview contra el que linkea es WebView2, que
+  # solo existe ahí. Esta es la razón de que el job viva acá y no en la matriz de arriba.
+  #
+  # El binario `xtal` NO va adentro del instalador. La app le habla al `xtal` instalado
+  # en la máquina y **lo busca en las rutas donde queda** (ver `xtal_cli.rs` de la app).
+  # Meterlo adentro daría dos copias con versiones que se separan solas, y ninguna de las
+  # dos sería la que el usuario corre en la terminal.
+  app:
+    name: app de escritorio (Windows)
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Los dos workspaces: el de la CLI (la raíz) y el de la app. Este job compila
+          # los dos.
+          workspaces: |
+            .
+            app-win/src-tauri
+          key: app-windows
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-win/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: app-win
+        run: npm ci
+
+      # El binario de la CLI viaja ADENTRO del instalador de la app.
+      #
+      # Sin esto, bajar el `.exe` y abrirlo deja una app que no puede hacer nada: le
+      # habla al comando `xtal`, y si no está instalado no compila, no simula y no lee un
+      # proyecto. «Bajá el instalador y además abrí PowerShell y pegá un comando» no es
+      # un instalador.
+      #
+      # No hay riesgo de dos copias desincronizadas: la app **prefiere la que esté
+      # instalada en el sistema** y solo cae a esta si no hay ninguna. Ver el comentario
+      # de `bundled()` en `app-win/src-tauri/src/xtal_cli.rs`.
+      - name: Compilar la CLI y meterla adentro de la app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --bin xtal
+          cp target/release/xtal.exe app-win/src-tauri/resources/xtal.exe
+          ls -la app-win/src-tauri/resources/
+
+      - name: Compilar la app y armar el instalador
+        working-directory: app-win
+        # `tauri build` corre `npm run build` por su cuenta (lo dice `beforeBuildCommand`)
+        # y después arma los dos formatos que declara `tauri.conf.json`: el `.exe` de
+        # NSIS y el `.msi`. Los dos instalan **por usuario**, sin pedir administrador:
+        # un TP de facultad no puede depender de tener permisos en la máquina.
+        run: npm run tauri build
+
+      - name: Juntar los instaladores con un nombre estable
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check.outputs.version }}"
+          OUT=src-tauri/target/release/bundle
+          mkdir -p dist
+          # Tauri los nombra `Xtal_0.3.1_x64-setup.exe` y `Xtal_0.3.1_x64_en-US.msi`.
+          # Se renombran al esquema del resto de los assets para que `install.ps1` y la
+          # página de la Release puedan armar la URL sin adivinar el idioma del MSI.
+          cp "$OUT"/nsis/*-setup.exe "dist/Xtal-${VERSION}-windows-x64-setup.exe"
+          cp "$OUT"/msi/*.msi        "dist/Xtal-${VERSION}-windows-x64.msi"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: xtal-app-windows
+          path: dist/*
           retention-days: 7
           if-no-files-found: error
 
@@ -189,14 +315,18 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: publicar release
-    needs: [check, build]
+    needs: [check, build, app]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
-      - name: Bajar todos los tarballs
+      # Hace falta el repo: los manifiestos los generan scripts de `packaging/`.
+      - uses: actions/checkout@v5
+
+      - name: Bajar todos los paquetes
         uses: actions/download-artifact@v5
         with:
-          # Solo los tarballs: `docs-assets` ya viaja adentro de cada uno.
+          # Los binarios (`xtal-*`) y la app (`xtal-app-windows`). `docs-assets` no:
+          # ya viaja adentro de cada paquete de la CLI.
           pattern: xtal-*
           path: dist
           merge-multiple: true
@@ -205,8 +335,31 @@ jobs:
         working-directory: dist
         run: |
           set -euo pipefail
-          # Un solo archivo con todos los hashes: es lo que verifica install.sh.
-          sha256sum *.tar.gz | tee SHA256SUMS
+          # Un solo archivo con todos los hashes: es lo que verifican install.sh y
+          # install.ps1. Van los instaladores de la app también — es lo que más se baja
+          # a mano desde la página, y es justo donde un archivo cortado pasa inadvertido.
+          sha256sum *.tar.gz *.zip *.exe *.msi | tee SHA256SUMS
+
+      # Los manifiestos de los dos gestores de paquetes de Windows, con los hashes de
+      # esta Release ya calculados. Se suben como assets para que publicarlos sea copiar
+      # un archivo y no volver a generarlo a mano.
+      #
+      # **No se publican solos**, por la misma razón que el tap de Homebrew no se
+      # actualiza desde acá: haría falta guardar un token con permiso de escritura sobre
+      # otro repo en los secrets de un repo público. Ver docs/RELEASING.md.
+      #   - scoop  → el repo del bucket los regenera solo, leyendo el SHA256SUMS.
+      #   - winget → es el repo de Microsoft y se publica por pull request:
+      #              `wingetcreate submit --token <TOKEN> <carpeta>`.
+      - name: Armar los manifiestos de scoop y winget
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check.outputs.version }}"
+          mkdir -p paquetes/winget
+          ./packaging/scoop/render-manifest.sh "$VERSION" dist > paquetes/xtal.json
+          ./packaging/winget/render-manifests.sh "$VERSION" dist/SHA256SUMS paquetes/winget
+          # Un tar y no cuatro assets sueltos: son archivos de una pieza, se bajan juntos.
+          tar -czf dist/manifiestos-${VERSION}.tar.gz -C paquetes .
+          ls -la paquetes paquetes/winget
 
       - name: Crear la GitHub Release
         uses: softprops/action-gh-release@v2
@@ -215,4 +368,7 @@ jobs:
           generate_release_notes: true
           files: |
             dist/*.tar.gz
+            dist/*.zip
+            dist/*.exe
+            dist/*.msi
             dist/SHA256SUMS

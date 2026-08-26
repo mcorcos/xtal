@@ -53,6 +53,25 @@ xtal doctor
 
 ## Instalación
 
+**Windows** — tres caminos, todos **sin permisos de administrador**:
+
+```powershell
+# 1. El instalador de la app: bajás el .exe de la Release y listo.
+#    Trae el comando `xtal` adentro, así que con eso solo ya funciona todo.
+
+# 2. winget, que viene de fábrica en Windows 11:
+winget install UNIT.Xtal
+
+# 3. Una línea, que deja la CLI y la app:
+irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex
+```
+
+Solo la CLI, sin la app: `scoop install xtal` (después de agregar el bucket, ver más
+abajo), o `install.ps1 -SinApp`.
+
+`install.ps1` baja el binario, verifica el checksum, lo deja en
+`%LOCALAPPDATA%\Programs\xtal` y lo agrega al PATH del usuario.
+
 **Homebrew** (macOS y Linux) — instala también Tectonic:
 
 ```bash

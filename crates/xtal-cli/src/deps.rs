@@ -27,11 +27,18 @@ pub enum DepKind {
 
 /// Nombre del paquete en cada package manager. `None` = ese manager no lo trae, y
 /// caemos a instrucciones manuales.
+///
+/// **Los tres de Windows están verificados uno por uno** (26 de agosto de 2026), no
+/// adivinados: un id de paquete inventado hace que `xtal setup` proponga un comando que
+/// falla, que es peor que no proponer nada.
 pub struct PkgNames {
     pub brew: Option<&'static str>,
     pub apt: Option<&'static str>,
     pub dnf: Option<&'static str>,
     pub pacman: Option<&'static str>,
+    pub scoop: Option<&'static str>,
+    pub winget: Option<&'static str>,
+    pub choco: Option<&'static str>,
 }
 
 impl PkgNames {
@@ -41,6 +48,9 @@ impl PkgNames {
             PkgMgr::Apt => self.apt,
             PkgMgr::Dnf => self.dnf,
             PkgMgr::Pacman => self.pacman,
+            PkgMgr::Scoop => self.scoop,
+            PkgMgr::Winget => self.winget,
+            PkgMgr::Choco => self.choco,
         }
         .map(|s| s.to_string())
     }
@@ -49,23 +59,34 @@ impl PkgNames {
 // Tablas de paquetes. Están acá y no desperdigadas para que agregar una dependencia
 // nueva sea tocar un solo lugar.
 
-/// Tectonic no está en los repos por default de Debian/Ubuntu: `apt = None` hace que
-/// ahí se muestren las instrucciones manuales en vez de un comando que no existe.
+/// Tectonic no está en los repos por default de Debian/Ubuntu ni en winget: `apt` y
+/// `winget` en `None` hacen que ahí se muestren las instrucciones manuales en vez de un
+/// comando que no existe.
 pub fn tectonic_pkgs() -> PkgNames {
     PkgNames {
         brew: Some("tectonic"),
         apt: None,
         dnf: Some("tectonic"),
         pacman: Some("tectonic"),
+        // Está en el bucket `main` de scoop, que viene de fábrica.
+        scoop: Some("tectonic"),
+        winget: None,
+        choco: Some("tectonic"),
     }
 }
 
+/// El motor de respaldo. En Windows la distribución de LaTeX es **MiKTeX**, no TeX Live:
+/// es la que baja los paquetes que faltan sola, que es lo que uno quiere si Tectonic no
+/// está.
 pub fn texlive_pkgs() -> PkgNames {
     PkgNames {
         brew: Some("texlive"),
         apt: Some("texlive-latex-extra"),
         dnf: Some("texlive-scheme-medium"),
         pacman: Some("texlive-core"),
+        scoop: Some("latex"),
+        winget: Some("MiKTeX.MiKTeX"),
+        choco: Some("miktex"),
     }
 }
 
@@ -75,6 +96,12 @@ pub fn ngspice_pkgs() -> PkgNames {
         apt: Some("ngspice"),
         dnf: Some("ngspice"),
         pacman: Some("ngspice"),
+        // **Vive en el bucket `extras`, no en `main`.** Sin agregarlo, el comando falla
+        // con "couldn't find manifest", que no dice qué hacer: por eso `install_cmd`
+        // agrega el bucket en la misma línea.
+        scoop: Some("ngspice"),
+        winget: None,
+        choco: Some("ngspice"),
     }
 }
 
@@ -166,7 +193,46 @@ pub fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
             "        {}",
             style("https://tectonic-typesetting.github.io/install.html").cyan()
         );
-        println!("        {}", style("o: cargo install tectonic").cyan());
+        if cfg!(target_os = "windows") {
+            // No está en winget (verificado), así que el camino corto es scoop, y el
+            // camino sin package manager es bajar el .zip del release.
+            println!("        {}", style("scoop install tectonic").cyan());
+            println!(
+                "        {}",
+                style("o el .zip de x86_64-pc-windows-msvc de github.com/tectonic-typesetting/tectonic/releases").cyan()
+            );
+        } else {
+            println!("        {}", style("o: cargo install tectonic").cyan());
+        }
+        return;
+    }
+    if cfg!(target_os = "windows") {
+        // En Windows se muestra primero cómo conseguir scoop: es lo que destraba las
+        // tres dependencias de una y no pide permisos de administrador.
+        println!(
+            "        {}",
+            style("(sin scoop: iwr -useb get.scoop.sh | iex)").dim()
+        );
+        if let Some(p) = pkgs.scoop {
+            let extra = if p == "ngspice" {
+                "scoop bucket add extras; "
+            } else {
+                ""
+            };
+            println!(
+                "        {}",
+                style(format!("{extra}scoop install {p}")).cyan()
+            );
+        }
+        if let Some(p) = pkgs.winget {
+            println!(
+                "        {}",
+                style(format!("winget install --id {p}")).cyan()
+            );
+        }
+        if let Some(p) = pkgs.choco {
+            println!("        {}", style(format!("choco install {p}")).cyan());
+        }
         return;
     }
     if let Some(p) = pkgs.brew {
@@ -198,12 +264,33 @@ pub enum PkgMgr {
     Apt,
     Dnf,
     Pacman,
+    Scoop,
+    Winget,
+    Choco,
 }
 
-/// En macOS, Homebrew. En Linux, el primero que exista entre apt/dnf/pacman.
+/// En macOS, Homebrew. En Linux, el primero que exista entre apt/dnf/pacman. En Windows,
+/// scoop → winget → chocolatey.
+///
+/// **Ese orden en Windows no es alfabético, es a propósito**: scoop instala en el home
+/// del usuario y no pide permisos de administrador, y además es el único que tiene los
+/// tres paquetes que Xtal necesita. winget viene de fábrica en Windows 11 pero solo trae
+/// MiKTeX. Chocolatey los tiene todos y pide administrador, así que va último.
 pub fn detect_pkg_mgr() -> Option<PkgMgr> {
     if cfg!(target_os = "macos") {
         return is_available("brew").then_some(PkgMgr::Brew);
+    }
+    if cfg!(target_os = "windows") {
+        for (bin, mgr) in [
+            ("scoop", PkgMgr::Scoop),
+            ("winget", PkgMgr::Winget),
+            ("choco", PkgMgr::Choco),
+        ] {
+            if is_available(bin) {
+                return Some(mgr);
+            }
+        }
+        return None;
     }
     for (bin, mgr) in [
         ("apt-get", PkgMgr::Apt),
@@ -238,6 +325,36 @@ pub fn install_cmd(mgr: PkgMgr, pkg: &str) -> (String, Vec<String>) {
                 pkg.into(),
             ],
         ),
+        // `ngspice` vive en el bucket `extras` de scoop y no en `main`. Agregar el
+        // bucket es idempotente —si ya está, avisa y sigue— así que se hace siempre en
+        // vez de averiguar primero. Sin esto el install falla con "couldn't find
+        // manifest", que no le dice a nadie que le falta un bucket.
+        PkgMgr::Scoop if pkg == "ngspice" => (
+            "powershell".into(),
+            vec![
+                "-NoProfile".into(),
+                "-Command".into(),
+                "scoop bucket add extras; scoop install ngspice".into(),
+            ],
+        ),
+        PkgMgr::Scoop => ("scoop".into(), vec!["install".into(), pkg.into()]),
+        PkgMgr::Winget => (
+            "winget".into(),
+            vec![
+                "install".into(),
+                "--exact".into(),
+                "--id".into(),
+                pkg.into(),
+                // Sin esto se planta esperando que alguien acepte los términos de la
+                // fuente, y en un `--yes` eso es colgarse para siempre.
+                "--accept-package-agreements".into(),
+                "--accept-source-agreements".into(),
+            ],
+        ),
+        PkgMgr::Choco => (
+            "choco".into(),
+            vec!["install".into(), "-y".into(), pkg.into()],
+        ),
     }
 }
 
@@ -256,6 +373,41 @@ mod tests {
             assert_eq!(cmd, "sudo", "{mgr:?} debería pedir sudo");
             assert!(args.contains(&"ngspice".to_string()));
         }
+    }
+
+    #[test]
+    fn los_paquetes_de_windows_son_los_verificados() {
+        // Verificados contra los repos el 26 de agosto de 2026. Si alguno cambia, este
+        // test avisa antes de que `xtal setup` proponga un comando que no existe.
+        //
+        // - tectonic: bucket `main` de scoop y chocolatey. **NO está en winget.**
+        // - ngspice: bucket `extras` de scoop y chocolatey. **NO está en winget.**
+        // - LaTeX completo en Windows es MiKTeX, y ese sí está en winget.
+        assert_eq!(tectonic_pkgs().winget, None);
+        assert_eq!(tectonic_pkgs().scoop, Some("tectonic"));
+        assert_eq!(ngspice_pkgs().winget, None);
+        assert_eq!(texlive_pkgs().winget, Some("MiKTeX.MiKTeX"));
+    }
+
+    #[test]
+    fn scoop_agrega_el_bucket_de_ngspice() {
+        // Sin el bucket, `scoop install ngspice` falla con "couldn't find manifest" y no
+        // dice que falta un bucket.
+        let (cmd, args) = install_cmd(PkgMgr::Scoop, "ngspice");
+        assert_eq!(cmd, "powershell");
+        assert!(args.last().unwrap().contains("bucket add extras"));
+
+        // El resto va derecho.
+        let (cmd, args) = install_cmd(PkgMgr::Scoop, "tectonic");
+        assert_eq!(cmd, "scoop");
+        assert_eq!(args, vec!["install", "tectonic"]);
+    }
+
+    #[test]
+    fn winget_no_se_cuelga_pidiendo_confirmacion() {
+        let (_, args) = install_cmd(PkgMgr::Winget, "MiKTeX.MiKTeX");
+        assert!(args.contains(&"--accept-source-agreements".to_string()));
+        assert!(args.contains(&"--accept-package-agreements".to_string()));
     }
 
     #[test]

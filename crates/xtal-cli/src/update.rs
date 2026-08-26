@@ -166,6 +166,24 @@ impl InstallMethod {
                 vec!["upgrade".into(), format!("{REPO}/xtal")],
             ),
             // El instalador es idempotente: bajar y pisar el binario ES la actualización.
+            //
+            // En Windows el instalador es `install.ps1` y se corre con PowerShell, no
+            // con `sh`. `irm | iex` es el equivalente exacto de `curl | sh`, y es la
+            // forma que la gente de Windows reconoce.
+            InstallMethod::Script if cfg!(target_os = "windows") => (
+                "powershell".into(),
+                vec![
+                    "-NoProfile".into(),
+                    "-ExecutionPolicy".into(),
+                    // La política por default de Windows bloquea los scripts bajados.
+                    // `Bypass` vale **solo para este proceso** y no cambia la config de
+                    // la máquina, que es lo que corresponde: un instalador no tiene por
+                    // qué dejarle la puerta abierta a los que vengan después.
+                    "Bypass".into(),
+                    "-Command".into(),
+                    format!("irm https://raw.githubusercontent.com/{REPO}/main/install.ps1 | iex"),
+                ],
+            ),
             InstallMethod::Script => (
                 "sh".into(),
                 vec![

@@ -5,9 +5,24 @@
 > ojo. **Nos traemos el criterio y los números, no la marca**: nada de navy, arena ni
 > logo de AVF. Es la misma relación que ese portal tiene con Attio.
 >
-> Este archivo es la regla de uso. Los valores viven en Swift, en
-> `app/XtalPackage/Sources/XtalFeature/Design/Tokens.swift`, y **ese es el único lugar
-> del código con un color escrito**. Un color a mano en una vista es un bug.
+> Este archivo es la regla de uso. Los valores viven **en dos archivos, uno por app**, y
+> tienen que decir exactamente lo mismo:
+>
+> - macOS → `app/XtalPackage/Sources/XtalFeature/Design/Tokens.swift`
+> - Windows → `app-win/src/design/tokens.css`
+>
+> **Son los únicos dos lugares del código con un color escrito.** Un color a mano en una
+> vista es un bug, en cualquiera de las dos.
+>
+> Los que en Swift son `dyn(claro, oscuro)` en CSS son una variable redefinida en el
+> bloque de oscuro. Los que llevan alfa (`00000008`) van como `rgb(… / …%)`, que es lo
+> mismo escrito como lo escribe CSS.
+
+## Antes que nada: los valores están en el código
+
+Este archivo explica **por qué** cada número es el que es. Los números están en
+`Tokens.swift` y en `tokens.css`, y si alguna vez no coinciden con esta tabla, **los del
+código tienen razón** — esta se actualiza, no al revés.
 
 ## La regla que manda sobre todas
 
@@ -50,9 +65,12 @@ letra se ve suelta, y cerrarla un pelo es la mitad de la sensación de prolijo.
 
 El error que aplana una pantalla es escribir label y valor del mismo tamaño.
 
-**La fuente del UI es la del sistema.** En una app de Mac, SF es lo correcto: es la que
-hace que se sienta parte del sistema operativo. El monoespaciado (editor, terminal,
-números) va en SF Mono.
+**La fuente del UI es la del sistema**, y por eso no es la misma en las dos apps: en Mac
+es SF, en Windows es Segoe UI Variable con Segoe UI de respaldo. Es lo que hace que se
+sienta parte del sistema operativo, y ese es justamente el motivo de que no se unifique.
+
+El monoespaciado (editor, terminal, números) es SF Mono en Mac y Cascadia Code en
+Windows, con Consolas de respaldo — que está en cualquier Windows desde Vista.
 
 ## Color
 
@@ -117,7 +135,11 @@ Base 4. Nada de números sueltos.
   que de verdad flota.
 - Más de dos fuentes en pantalla.
 - Title Case en español. Sentence case siempre: "Abrir carpeta", no "Abrir Carpeta".
-- Un color escrito a mano en una vista. Va a `Tokens.swift` o no va.
+- Un color escrito a mano en una vista. Va a `Tokens.swift` / `tokens.css` o no va.
+- **Que las dos apps se separen.** Un panel que en Windows muestra algo que en Mac no, o
+  al revés, es un bug — salvo que esté escrito acá o en `APP.md` con su razón. Ya pasó
+  una vez: el lateral del modo editor de Windows arrancó con «Qué falta» arriba, que en
+  Mac no está, porque se escribió leyendo un párrafo viejo de `APP.md` en vez del código.
 - **Apagar el texto de lo que no está seleccionado.** Vale para el sidebar y para
   cualquier lista de navegación: todos los ítems van en texto principal, y lo único que
   distingue al activo es el fondo. Era el error que hacía que el menú del portal no se
@@ -135,4 +157,13 @@ Base 4. Nada de números sueltos.
   `border` de verdad ocupa lugar y mueve el contenido. En SwiftUI un `.overlay` con
   `.stroke()` no ocupa nada: el problema no existe, y la intención sale gratis.
 - **Lucide y shadcn.** En Mac los íconos son **SF Symbols**: es lo que hace que la app se
-  vea del sistema. Se mantiene la regla de fondo: un concepto = un ícono.
+  vea del sistema.
+
+  En Windows no hay un equivalente que se pueda usar —Segoe Fluent Icons existe pero es
+  solo de Windows 11, y una app que en Windows 10 muestra cuadraditos vacíos no es una
+  opción—, así que van dibujados a mano en `app-win/src/design/Icono.tsx`: SVG de 24×24
+  con trazo de 1.75, que es la proporción de Lucide. **No es una librería**: son los
+  treinta que la app usa. Traerse un paquete de mil para usar treinta es peso muerto
+  adentro del instalador.
+
+  En las dos se mantiene la regla de fondo: **un concepto = un ícono**.

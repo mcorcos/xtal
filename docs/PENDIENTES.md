@@ -1,6 +1,6 @@
 # Qué falta en Xtal
 
-Estado al **14 de agosto de 2026**, versión publicada **0.3.1**.
+Estado al **26 de agosto de 2026**, versión publicada **0.3.1**.
 
 Este archivo es para retomar el laburo sin tener que reconstruir el contexto. Dice qué
 está hecho, qué falta, por qué importa cada cosa y dónde se toca. Está ordenado por lo
@@ -162,11 +162,41 @@ Queda afuera de este punto lo de los **logos**: el `theme.toml` de ITBA tiene la
 `[logos]` comentada y el motor todavía no la lee. Cuando se implemente, el theme genérico
 es el que prueba el caso "no hay logo".
 
-### 7. Windows no existe
+### 7. Windows — HECHO, pero nadie lo corrió todavía (26 de agosto de 2026)
 
-No hay binario ni se probó. `install.sh` es sh POSIX. El código usa `directories`, que
-sí resuelve rutas de Windows, y `mcp/install.rs` ya contempla `%APPDATA%`, pero de ahí a
-que ande hay un trecho. Solo vale la pena si aparece alguien que lo necesite.
+Dejó de ser "no existe". Lo que hay ahora:
+
+- **Binario de la CLI** para `x86_64-pc-windows-msvc`, en el release, empaquetado en zip.
+- **`install.ps1`**: una línea en PowerShell que baja la CLI, verifica el SHA256, la deja
+  en `%LOCALAPPDATA%\Programs\xtal`, la agrega al PATH del usuario, instala la app y
+  corre `xtal setup --yes`. **No pide administrador**, a propósito: en la máquina de una
+  facultad no se tiene.
+- **La app de escritorio**, en `app-win/`, con Tauri. Ver `docs/APP-WINDOWS.md`.
+- **Los gestores de paquetes de Windows** en `deps.rs`: scoop → winget → chocolatey, en
+  ese orden. Los ids están **verificados uno por uno** contra los repos, no adivinados:
+  tectonic y ngspice **no están en winget** (sí en scoop y chocolatey), ngspice vive en
+  el bucket `extras` de scoop y no en `main`, y la distribución de LaTeX en Windows es
+  MiKTeX, que sí está en winget. Hay un test que lo fija.
+- **`xtal app` anda en Windows**: `cmd /c start` con la URL, y quien enruta es el
+  registro. La diferencia que importa es que ahí **cada `xtal://…` arranca un proceso
+  nuevo**, así que la app necesita el plugin de instancia única — sin eso,
+  `xtal app compilar` abriría una segunda ventana.
+- **CI en `windows-latest`**: los tests del workspace, el parseo de `install.ps1`, y la
+  app entera (tipos, bundle, fmt, clippy y tests).
+
+- **El instalador trae la CLI adentro**, así que bajar el `.exe` alcanza.
+- **scoop y winget**, los dos gestores de paquetes de Windows, con sus manifiestos
+  generados por `packaging/` y viajando adentro de la Release.
+- **El CI arma el instalador** y verifica que pese: un `.exe` truncado también existe.
+
+**Lo que sigue abierto, y es lo mismo que el punto 2**: nadie con una máquina con Windows
+lo instaló todavía. Se verificó todo lo verificable desde una Mac —compila para el target
+de Windows, los tests pasan, la interfaz dibuja en los dos temas— pero el instalador
+NSIS, ConPTY, WebView2 y el registro de `xtal://` solo se prueban ahí. La primera corrida
+del CI en Windows va a decir bastante; el primer usuario de verdad, más.
+
+Tampoco está **firmada**: SmartScreen va a mostrar «Windows protegió su PC» la primera
+vez. Eso necesita un certificado de firma de código, que se paga.
 
 ---
 

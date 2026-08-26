@@ -957,9 +957,17 @@ mod tests {
     fn el_skill_tiene_el_frontmatter_que_los_agentes_necesitan() {
         // Sin `name` y `description` en el frontmatter, Claude Code no lo descubre y
         // todo este módulo no sirve para nada.
-        assert!(SKILL.starts_with("---\n"), "falta el frontmatter");
-        let fin = SKILL[4..].find("\n---").expect("frontmatter sin cerrar");
-        let front = &SKILL[4..4 + fin];
+        //
+        // **Se normalizan los finales de línea antes de mirar.** El skill viaja adentro
+        // del binario con `include_str!`, y git en Windows lo saca con CRLF: ahí deja de
+        // empezar con `---\n` y el test se cae con un mensaje que no explica nada. Lo
+        // encontró el CI de Windows. El arreglo de fondo es el `.gitattributes` de la
+        // raíz, que fija LF; esto es el cinturón, para que un archivo que se cuele con
+        // CRLF no vuelva a costar media hora.
+        let skill = SKILL.replace("\r\n", "\n");
+        assert!(skill.starts_with("---\n"), "falta el frontmatter");
+        let fin = skill[4..].find("\n---").expect("frontmatter sin cerrar");
+        let front = &skill[4..4 + fin];
         assert!(front.contains("name: xtal"), "falta name: {front}");
         assert!(front.contains("description:"), "falta description");
         // La description es lo que decide si el skill se activa: tiene que nombrar los

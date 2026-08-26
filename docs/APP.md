@@ -1,8 +1,27 @@
 # La app de escritorio
 
-> **En definición.** Este documento junta lo que Manu quiere que sea la app. Se va
-> completando a medida que lo cuenta. Nada de acá está construido todavía salvo el
-> esqueleto vacío en `app/`.
+> **Este archivo describe la app que existe.** Está construida y funciona: en macOS es
+> `app/` (Swift + AppKit) y en Windows es `app-win/` (Tauri). Son la misma app.
+>
+> ## 🛑 Cuando este archivo y el código no coinciden, **manda el código**
+>
+> No es una formalidad. Este documento arrastró durante meses un párrafo que decía que
+> «Qué falta» iba **arriba de la lista de archivos**, cuando el código lo tiene en el
+> lateral del modo agente y el del modo editor muestra **solo el árbol**. Alguien
+> escribió la app de Windows leyendo esa frase en vez del código, y le salió otra app.
+>
+> Dónde está la verdad de cada cosa:
+>
+> | Qué | Mac | Windows |
+> |---|---|---|
+> | Las dos pantallas y sus paneles | `app/…/Workspace/Workspace.swift` | `app-win/src/workspace/Workspace.tsx` |
+> | El sistema de diseño | `app/…/Design/Tokens.swift` | `app-win/src/design/tokens.css` |
+> | Las secciones del informe | `app/…/Core/Secciones.swift` | `app-win/src-tauri/src/secciones.rs` |
+> | Los ajustes | `app/…/Settings/Ajustes.swift` | `app-win/src/settings/Ajustes.tsx` |
+> | Los atajos y el menú | `app/Xtal/XtalApp.swift` | el `keydown` de `Workspace.tsx` |
+>
+> Lo que todavía es **idea y no está construido** va marcado con «*(idea)*». Si no dice
+> eso, está hecho.
 
 ## El lema
 
@@ -25,7 +44,31 @@ Por eso la app tiene que tener antes que nada lo que tiene Overleaf:
 
 - Un explorador con la carpeta tal cual es, y **crear, renombrar y borrar** archivos.
 - Un editor que escribe `.tex` de verdad.
-- **⌘S guarda y compila**, y lo hace solo mientras trabajás.
+- **⌘S compila.** Guardar no existe como acción aparte: el editor escribe al disco
+  mientras tipeás. Ver abajo.
+
+### No hay que guardar
+
+**El editor escribe al disco en cada tecla.** No hay estado «sin guardar», no hay punto
+en la solapa, no hay diálogo al cerrar.
+
+La razón: el proyecto es una carpeta de archivos planos y **la fuente de verdad es el
+disco**. Un buffer sucio adentro de la app sería una segunda verdad, y ahí empiezan los
+problemas — sobre todo con un agente escribiendo en la misma carpeta al mismo tiempo.
+
+Un archivo se escribe en el acto. El cuerpo de una sección va por la CLI y con 600 ms de
+retraso, porque mandar un proceso por cada tecla es absurdo.
+
+Lo único que ⌘S puede agregar entonces es **ver el resultado**, y por eso el comando se
+llama «Guardar y compilar» y no «Guardar». Con *Compilar al guardar* prendido (que es el
+default) ni eso hace falta: recompila solo 1,2 s después de la última tecla.
+
+**La trampa que esto tiene, y que ya costó datos una vez:** el editor no puede distinguir
+«el usuario tecleó» de «la app cargó un archivo». Si no se distingue, abrir algo que
+devuelve vacío —el archivo todavía no está, la CLI falló— guarda ese vacío arriba de lo
+que había. Pasó: las cuatro secciones del ejemplo quedaron en un salto de línea. La regla
+es una sola y está implementada en las dos apps: **al disco solo va lo que alguien
+tecleó**.
 
 Qué se compila, en orden: el `.tex` que estás editando; si no, un `main.tex` tuyo en la
 raíz —la señal de «acá el LaTeX lo escribo yo», que Xtal no genera ni pisa—; y si no hay
@@ -172,10 +215,14 @@ Esto ya es cómo funciona Xtal hoy: un proyecto es una carpeta de archivos plano
 
 Que un TP viva en git tiene que ser natural, no un trámite aparte:
 
-- **Clonar** un TP desde git y abrirlo.
-- **Subir** la carpeta a git sin salir de la app, a `usuario/tp3`.
-- Un **mini control de git** adentro: ver qué cambió, commitear, pushear.
-- **Iniciar sesión con la cuenta de git** desde la app.
+- Un **mini control de git** adentro: ver qué cambió, commitear, pushear. **Hecho** — es
+  la barra de abajo.
+- **Empezar a versionar** una carpeta que todavía no está en git. **Hecho** — el botón
+  aparece cuando no hay repo.
+- **Clonar** un TP desde git y abrirlo. *(idea)*
+- **Iniciar sesión con la cuenta de git** desde la app. *(idea)* — el panel Cuentas de
+  Ajustes existe, con los botones deshabilitados y la explicación de por qué: Xtal no
+  tiene servidor ni cuentas propias.
 
 ## «Qué falta», a la vista
 
@@ -183,18 +230,42 @@ El objetivo nunca fue un gráfico suelto: es el informe, y son varios gráficos 
 que se consiguen en días distintos. Sin verlo escrito, qué falta vive en la cabeza del
 que lo está haciendo — y se olvida.
 
-Arriba de la lista de archivos va `xtal status` hecho pantalla: gráfico por gráfico, un
-chip por curva. Verde = ya está. Gris = falta conseguirla.
+Es `xtal status` hecho pantalla: gráfico por gráfico, un chip por curva. Verde = ya está.
+Gris = falta conseguirla.
+
+**Vive en el lateral del modo agente, y en ningún otro lado.** Arriba de todo, con las
+secciones del informe debajo. No está en el lateral del modo editor: ahí va el árbol de
+archivos y nada más.
+
+La razón es la de siempre en esta app — **cada modo muestra lo que su pregunta necesita**.
+Al lado del editor la pregunta es qué archivos hay. Al lado de un agente no es esa: los
+archivos los toca él, y lo que uno quiere saber es qué le falta al informe.
 
 ## Cuando no compila
 
 Un error de LaTeX es célebremente ilegible, y el que abre esta app por definición no
-quiere pelear con TeX. Cuando el informe no compila, **el lado del PDF muestra por qué**:
-la explicación en castellano primero y grande, el mensaje del compilador abajo, la línea
-que rompió, y un link a la sección donde está. El volcado completo queda a un click.
+quiere pelear con TeX. Cuando el informe no compila: la explicación en castellano primero
+y grande, el mensaje del compilador abajo, la línea que rompió, y un link a la sección
+donde está. El volcado completo queda a un click.
 
-Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
-resultado. Si no hay resultado, ahí va la explicación.
+**Va en una solapa detrás del PDF, no en lugar del PDF.** El panel derecho tiene dos
+solapas: `main.pdf` y `Errores`. Cuando hay un error, la de errores se marca con un punto
+ámbar y **el PDF se queda adelante**.
+
+Antes el error reemplazaba al PDF y estaba mal por una razón concreta: el informe que no
+compila hoy compilaba hace un minuto, y esa version es lo que uno necesita mirar mientras
+arregla. Sacarla de la pantalla justo cuando algo falla es sacar la única referencia que
+había.
+
+**Lo único que pasa al frente solo es el error de un informe que todavía no compiló
+nunca**: ahí no hay nada que dejar adelante. Y cuando el error se arregla, el PDF vuelve
+al frente solo — te quedaste mirando el error, lo corregiste, y lo que querés ver es el
+resultado.
+
+Al lado de las solapas hay un link **«ver el .tex»**. La pregunta «¿dónde está el LaTeX?»
+sale sola: uno ve el PDF pero el `.tex` no aparece por ningún lado, porque no lo escribís
+vos — lo arma Xtal en cada compilación y lo deja en `salida/main.tex`. El link va ahí
+porque es justo donde uno se hace la pregunta.
 
 ## Lo que se elige al principio no se cambia después
 
@@ -309,16 +380,47 @@ los dos sentidos (`Editor/Sincronia.swift`):
   las palabras largas dejando pasar cualquier cosa entre una y otra, que es donde caen
   los comandos, las llaves y los saltos de línea.
 
-## El panel lateral es el informe, no la carpeta
+## Los dos laterales
+
+**Son dos paneles distintos, no uno que cambia de contenido.** Cada modo tiene el suyo, y
+el mismo atajo (⌘1 / Ctrl+1) prende el que está en pantalla.
+
+| | Modo editor | Modo agente |
+|---|---|---|
+| Qué muestra | El árbol de archivos, la carpeta tal cual es | «Qué falta» arriba, las secciones del informe abajo |
+| Cabecera | El nombre del proyecto, `+` y recargar | «Qué falta» |
+| Pie | Ver en el Finder / el Explorador | Ídem |
+| Ancho | 240, fijo | 240, fijo |
+| Arranca | abierto | **cerrado** |
+
+**Ninguno de los dos muestra lo del otro.** El del editor no lleva «Qué falta»; el del
+agente no lleva el árbol.
+
+### El del agente: el informe, no la carpeta
 
 Al principio era un explorador de archivos: una lista de `.toml` de mediciones, de
 gráficos y de circuitos. Eso es la tripa de Xtal, no el informe. **Nadie abre
 `node_modules` para escribir su aplicación.**
 
-Ahora muestra lo que hay adentro del informe: qué falta, y sus secciones con las figuras
-que muestra cada una. Los archivos siguen ahí —son de texto y son tuyos— pero van
-plegados al final, cerrados por default. Se pueden mirar si uno quiere; no son la
-pantalla.
+Muestra las **secciones del informe con su título de verdad** —«Objetivo y alcance», no
+`01-objetivo.tex`—, indentadas si son subsecciones, y debajo de cada una las figuras que
+muestra. Salen de `xtal section list`, o sea del `xtal.toml`, que es donde el informe
+declara su estructura. Las figuras no se abren: un gráfico se mira en el PDF, no en su
+archivo de configuración.
+
+Con el botón derecho: cambiarle el nombre, agregarle una subsección, sacarla del informe.
+Cada una es un comando de la CLI (`section rename|add|remove`) — la app no toca el
+manifiesto por su cuenta.
+
+### El del editor: la carpeta tal cual es
+
+Carpetas que se abren y se cierran, y adentro todo lo que hay. `salida/` se muestra igual
+pero apagada: es de mirar, no de editar, porque se pisa en la próxima compilación.
+
+Las carpetas de la tripa —`mediciones/`, `graficos/`, `esquematicos/`, `fuentes/`—
+arrancan **cerradas**: es cómo Xtal guarda los datos, no algo que uno vaya a abrir.
+`salida/` arranca abierta, porque ahí está el `.tex` generado y es lo que uno mira cuando
+algo no compila.
 
 ## Que se entienda el TOML
 
@@ -336,23 +438,48 @@ un `.toml` sin saber qué hace es abrirlo a ciegas.
 
 La idea de fondo: cada cosa difícil de LaTeX tiene que tener adelante algo fácil.
 
-- **Meter un bloque**: un menú `+` con figura, ecuación, tabla, lista, código, cita.
-  Se inserta donde está el cursor. Lo difícil de LaTeX nunca fue la idea, fue acordarse
-  de la sintaxis; nadie recuerda el orden de `\begin{figure}`, `\centering`,
+- **Meter un bloque**: una barra arriba del editor con sección, subsección, ecuación,
+  figura, tabla y lista, y el resto en un `···`. Se inserta donde está el cursor y el
+  cursor queda **adentro** del bloque. Lo difícil de LaTeX nunca fue la idea, fue
+  acordarse de la sintaxis; nadie recuerda el orden de `\begin{figure}`, `\centering`,
   `\includegraphics`, `\caption` y `\label`.
-- **Cambiar de facultad**: un desplegable con la institución y el formato. Cambia el
-  theme y recompila. Es una línea de un TOML, pero puesta donde se busca.
-- Y así con el resto.
+  - **Estado**: en Windows está a la vista. En Mac el componente (`Bloques.swift`) está
+    escrito pero **no está enchufado a ninguna vista** — es código muerto. Es la única
+    cosa que las dos apps no muestran igual, y está anotada en el código de las dos.
+- **Cambiar de facultad**: ~~un desplegable con la institución y el formato~~ —
+  **se sacó a propósito**, ver «Lo que se elige al principio no se cambia después». En la
+  barra quedó el sello, que es para mirar.
 
 El LaTeX sigue estando abajo, entero, para el que lo quiera tocar.
 
 ## Plataformas
 
-**Mac primero.** Cuando esté perfecta, se copia a Windows y Linux con lo que se pueda.
+**Mac y Windows.** Son la misma app: mismo modelo, mismas pantallas, mismos atajos, mismo
+sistema de diseño y los mismos números.
+
+- macOS → `app/`, Swift + AppKit. Terminal libghostty, visor PDFKit, editor `NSTextView`.
+- Windows → `app-win/`, Tauri. Terminal ConPTY + xterm.js, visor pdf.js, editor
+  CodeMirror 6. Detalle en [`APP-WINDOWS.md`](APP-WINDOWS.md).
+
+Las dos le hablan al mismo binario `xtal` y ninguna reimplementa nada.
+
+**Dos diferencias, las dos por Windows y las dos anotadas en el código:**
+
+1. **Los Ajustes.** En Mac son una escena que abre el menú de la aplicación con ⌘,.
+   Windows no tiene barra de menú de aplicación, así que hay un engranaje en la barra.
+   El atajo es el mismo (Ctrl+,).
+2. **La barra de bloques**, arriba.
+
+Linux *(idea)*: la app de Tauri compila ahí, pero no se probó ni se publica.
 
 ## Cómo se construye
 
 De a poco, una pieza por vez. Nada de UI hasta tener claro qué va adentro.
+
+Y una regla que salió de equivocarse: **antes de tocar una pantalla, leer el archivo que
+la dibuja**. Este documento explica *por qué* cada cosa es como es, y para eso sirve —
+pero *qué* dibuja cada panel lo dice el código, y cuando los dos no coinciden, el código
+tiene razón.
 
 ---
 
