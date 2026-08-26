@@ -252,6 +252,88 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### La app para Windows — HECHO (2026-08-26), pedido de Manu → `docs/APP-WINDOWS.md`
+Se clonó la app entera a Windows. **`app-win/`, con Tauri**, no Electron: el núcleo ya es
+Rust y el backend de la app se lee igual que el resto del repo; Electron mete un Chromium
+de 150 MB adentro del instalador, y WebView2 ya está en Windows. Mismo repo a propósito —
+la app y la CLI van clavadas a la misma version, y el job `check` del release no publica
+si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
+- **Es la misma app, no una parecida.** Mismos tokens (los números de `Tokens.swift`
+  pasados a variables CSS), mismas pantallas, mismos atajos, mismas decisiones. Cada
+  módulo de Rust tiene su contraparte en Swift anotada al lado.
+- Lo que cambió, y por qué: terminal **ConPTY + xterm.js** (Ghostty no corre en Windows),
+  visor **pdf.js** (PDFKit es de Apple), editor **CodeMirror 6**, íconos **SVG propios**
+  (SF Symbols es de Apple y Segoe Fluent Icons es solo de Windows 11).
+- **Lo que NO cambia es el motor**: la app le habla al binario `xtal` y no reimplementa
+  nada. Por eso el binario **no va adentro del instalador** — serían dos copias que se
+  separan solas, y ninguna sería la que el usuario corre en la terminal.
+- **Cinco cosas que solo pasan en Windows**, todas anotadas donde corresponde:
+  1. **Cada proceso abre una consola negra** si no se le pide lo contrario. Por eso
+     *todo* `Command` se arma en `proceso.rs` con `CREATE_NO_WINDOW` y en ningún otro
+     lado. Sin eso, compilar dispara cuatro parpadeos de consola arriba de la app.
+  2. **`xtal://` lo enruta el registro, no el sistema**, y **cada URL arranca un proceso
+     nuevo**. De ahí el plugin de instancia única: sin él, `xtal app compilar` abre una
+     segunda ventana. Y **`start` no sabe "no robar el foco"**: no hay `-g`.
+  3. **El PATH de una app no es el de la terminal**, y en Windows los lugares son más
+     (`%LOCALAPPDATA%\Programs`, shims de scoop, chocolatey, MiKTeX). Sin eso compilar
+     falla *adentro* de la app y anda en la terminal, que es el bug más confuso que hay.
+  4. **`rename` falla si el destino existe**, al revés que en Unix: el guardado atómico
+     borra primero, y por eso el temporal se escribe completo antes.
+  5. **Las rutas se comparan mal**: el synctex las trae con `/` y el árbol con `\`, y
+     encima no distingue mayúsculas. Sin normalizar, la sincronía "no anda" y no dice
+     por qué.
+- **`install.ps1`** — una línea de PowerShell deja la CLI y la app. Verifica el SHA256,
+  instala en `%LOCALAPPDATA%\Programs\xtal`, escribe el PATH **del usuario** y corre
+  `xtal setup --yes`. **Nunca pide administrador**: en la máquina de una facultad no se
+  tiene. Lo parsea el CI en un runner de Windows — un error de sintaxis ahí arruina la
+  primera impresión y no se descubre hasta que alguien instala.
+- **Los paquetes de Windows están verificados uno por uno**, no adivinados (y esto salió
+  de corregirme a mí mismo: la primera version del cartel decía `winget install UNIT.Xtal`,
+  que no existe). Tectonic y ngspice **no están en winget**; sí en scoop y chocolatey.
+  **ngspice vive en el bucket `extras`**, así que `install_cmd` lo agrega en la misma
+  línea: sin eso falla con "couldn't find manifest", que no dice que falta un bucket. La
+  distribución de LaTeX en Windows es **MiKTeX**, y esa sí está en winget. Hay un test.
+- **`maqueta.html` + `dev/retratar.mjs`** — la app corriendo en un navegador común con
+  datos falsos, reemplazando `window.__TAURI_INTERNALS__`, que es por donde pasa *todo*
+  lo que el frontend le pide a Rust. Sin esto la interfaz se escribe a ciegas: compila,
+  pero nadie sabe si dibuja. Es la idea de `Desarrollo.swift`.
+  - **Encontró el primer bug de verdad**: el modo agente salía en negro. `listar()` de
+    `sesiones.ts` armaba un array nuevo en cada llamada y `useSyncExternalStore` compara
+    por identidad → loop de renders hasta «Maximum update depth exceeded». Ahora hay una
+    foto que solo se rehace cuando algo cambia.
+  - El retratista maneja Chrome por CDP y no con `--screenshot` por dos razones: el
+    `--screenshot` usa el tema del sistema (y **el modo claro hay que probarlo igual que
+    el oscuro**), y las pantallas que se abren con un click necesitan manos.
+- **La auditoría, que hubo que hacer** (`docs/APP-WINDOWS.md` la lista entera). La
+  primera version salió **otra app**: el lateral del modo editor tenía «Qué falta» arriba
+  del árbol, que en Mac no está. Manu lo vio en el primer retrato.
+  - **La causa, y es la que importa**: se escribió leyendo `docs/APP.md` y los archivos
+    chicos de Swift, pero **no `Workspace.swift`** —1182 líneas, el archivo que dibuja la
+    pantalla—, del que solo se hicieron greps. Y `docs/APP.md` tenía un párrafo viejo
+    («arriba de la lista de archivos va `xtal status`») que **una sección más abajo del
+    mismo archivo contradecía**. El repo estaba al día: no fue un rebase.
+  - Salieron **25 divergencias**. Cinco estructurales: el lateral; las secciones (son
+    `[[sections]]` del `xtal.toml` con su título de verdad y sus figuras, no archivos
+    `secciones/*.tex`); **el editor guarda en cada tecla, no con Ctrl+S**; el guard
+    `cargandoTexto` que evita escribir un vacío arriba de lo que había; y la lista de
+    secciones del modo agente. Ocho de barra —el sello del molde, Ctrl+2, «ver el .tex»,
+    la flecha de volver al revés, un Ctrl+E que yo había inventado—. Y los Ajustes
+    enteros, con la apariencia forzable que me había perdido.
+  - **Tres diferencias quedan a propósito**, anotadas en el código: el engranaje de
+    Ajustes (Windows no tiene barra de menú de aplicación), la barra de bloques a la vista
+    (en Mac `Bloques.swift` está escrito pero **no enchufado a ninguna vista**), y nada más.
+  - **Los `.md` se reescribieron después**, que era la otra mitad del problema. `APP.md`
+    ahora abre con «cuando este archivo y el código no coinciden, manda el código» y una
+    tabla de qué archivo es la verdad de cada cosa; lo que es idea y no está construido va
+    marcado. `APP-DISENO.md` dice que los tokens viven en dos archivos y suma «que las dos
+    apps se separen» a la lista de lo que nunca se hace.
+- **Lo que falta y hay que decirlo**: **nadie lo corrió en Windows todavía**. Se verificó
+  todo lo verificable desde una Mac —el workspace compila para `x86_64-pc-windows-msvc`,
+  19 tests del backend de la app en verde, TypeScript limpio, bundle armado, la interfaz
+  dibujada en los dos temas— pero NSIS, ConPTY, WebView2 y el registro solo se prueban
+  ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
+  va a advertir la primera vez.
+
 ### Dos flechas, no una que adivine — HECHO (2026-08-26), pedido de Manu
 Manu lo probó y no andaba: la autodetección de dirección erraba. La razón no se arregla —
 **casi siempre hay selección de los dos lados**: uno marca algo en el PDF para mirarlo,

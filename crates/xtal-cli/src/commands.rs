@@ -1244,13 +1244,28 @@ pub(crate) fn slugify(name: &str) -> String {
     out.trim_matches('-').to_string()
 }
 
-/// Abre un archivo con el visor del sistema (Mac: `open`, Linux: `xdg-open`).
+/// Abre un archivo con el visor del sistema.
+///
+/// Mac: `open`. Linux: `xdg-open`. Windows: **`cmd /c start`**, porque no hay un
+/// ejecutable `start` — es una orden interna de `cmd`. El `""` de más es el título de
+/// la ventana: sin él, `start` toma la ruta como título y no abre nada, y ese síntoma
+/// solo aparece cuando la ruta va entre comillas (o sea, cuando tiene espacios).
 fn open_file(path: &Path) {
-    #[cfg(target_os = "macos")]
-    let cmd = "open";
-    #[cfg(not(target_os = "macos"))]
-    let cmd = "xdg-open";
-    let _ = std::process::Command::new(cmd).arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/c", "start", ""])
+            .arg(path)
+            .spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        #[cfg(target_os = "macos")]
+        let cmd = "open";
+        #[cfg(not(target_os = "macos"))]
+        let cmd = "xdg-open";
+        let _ = std::process::Command::new(cmd).arg(path).spawn();
+    }
 }
 
 #[cfg(test)]

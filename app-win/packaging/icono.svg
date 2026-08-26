@@ -1,0 +1,30 @@
+<!--
+  El ícono de Xtal.
+
+  Un cristal: la marca es el nombre. Se dibuja con dos facetas y nada más, porque a
+  16 píxeles —el tamaño de la barra de tareas y el de la solapa— cualquier detalle se
+  convierte en un borrón gris.
+
+  El fondo es el azul de acción del sistema de diseño (#266df0). Es el único color
+  saturado de la app, así que es el que la identifica.
+
+  Se rasteriza con `packaging/hacer-iconos.sh`, que después le pide a `tauri icon` los
+  .ico y los .png de todos los tamaños.
+
+  **El `width`/`height` es 1024 y el `viewBox` 512**: Chrome retrata la ventana entera,
+  así que si el SVG mide menos que la ventana el dibujo queda en un rincón y todo lo
+  demás sale transparente. `tauri icon` después achica esa foto entera y el cristal
+  termina chiquito y descentrado. Pasó.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <rect width="512" height="512" rx="114" fill="#266df0"/>
+  <!-- El cristal. La faceta clara y la oscura le dan volumen sin sombras ni degradés. -->
+  <g transform="translate(256 256)">
+    <!-- cara izquierda, en blanco pleno -->
+    <path d="M0 -150 L-96 -46 L-58 132 L0 150 Z" fill="#ffffff"/>
+    <!-- cara derecha, apenas apagada: es lo que hace que se lea como un volumen -->
+    <path d="M0 -150 L96 -46 L58 132 L0 150 Z" fill="#ffffff" opacity="0.72"/>
+    <!-- la tapa, que cierra la punta -->
+    <path d="M-96 -46 L0 -104 L96 -46 L0 -150 Z" fill="#ffffff" opacity="0.88"/>
+  </g>
+</svg>

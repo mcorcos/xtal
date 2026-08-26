@@ -1,0 +1,168 @@
+/* Los valores del sistema de diseño. **Es el único lugar del CSS con un color escrito**:
+   un hex a mano en un componente rompe el modo oscuro y queda afuera de cualquier
+   cambio futuro.
+
+   De dónde salen: `docs/APP-DISENO.md`. Son los mismos números que
+   `app/XtalPackage/Sources/XtalFeature/Design/Tokens.swift` — la app de Windows es la
+   misma app, no una parecida.
+
+   Los que en Swift son `dyn(claro, oscuro)` acá son una variable redefinida en el
+   bloque de oscuro. Los que en Swift llevan alfa (`00000008`) van como `rgb(… / …%)`,
+   que es lo mismo escrito como lo escribe CSS. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Texto. Casi negro, no gris tintado: el tinte es lo que lava una pantalla. */
+  --texto-1: #101112;
+  --texto-2: #5e5f63;
+  --texto-3: #898a8d;
+  --texto-off: #a2a4a7;
+
+  /* Superficies. En claro `elevado` es igual a `base` y la separación la hace el
+     borde; en oscuro la hace el fondo, que aclara. */
+  --bg-base: #ffffff;
+  --bg-app: #f6f7f7;
+  --bg-sidebar: #fbfbfb;
+  --bg-elevado: #ffffff;
+  --bg-hover: rgb(0 0 0 / 3.1%);
+  --bg-activo: rgb(0 0 0 / 5.9%);
+
+  /* Bordes. */
+  --borde-sutil: #eeeff1;
+  --borde: #e6e7ea;
+  --borde-fuerte: #d9dade;
+
+  /* El único color de acción. No hay secundario. */
+  --acento: #266df0;
+  --acento-suave: rgb(38 109 240 / 12%);
+
+  /* Chips semánticos. Cada familia son tres valores con roles fijos, nunca tres
+     colores sueltos: `bg` el fondo, `tint` el borde, `deep` el texto.
+     **No se invierten en oscuro**: leen bien igual, y duplicarlos serían treinta
+     tokens más para mantener. */
+  --verde-bg: #e0fced;   --verde-tint: #cbf7e1;   --verde-deep: #007d53;
+  --ambar-bg: #fff3cc;   --ambar-tint: #ffe59e;   --ambar-deep: #874d00;
+  --rojo-bg: #ffebeb;    --rojo-tint: #ffdcdb;    --rojo-deep: #ba2525;
+  --azul-bg: #e5eeff;    --azul-tint: #d6e5ff;    --azul-deep: #215bc4;
+  --gris-bg: #f6f7f7;    --gris-tint: #eeeff1;    --gris-deep: #505155;
+
+  /* La terminal. Son los mismos valores que `--bg-sidebar` y `--texto-1`: tiene que
+     verse como una parte de la app y no como una consola pegada adentro. */
+  --term-fondo: #fbfbfb;
+  --term-texto: #101112;
+  --term-cursor: #266df0;
+  --term-seleccion: #d6e5ff;
+
+  /* Radios: se eligen por el ALTO de la pieza, no por gusto. Ronda un tercio.
+     Un chip de 22 con radio 12 se ve como una pastilla. */
+  --r-chip: 7px;
+  --r-boton: 8px;
+  --r-valor: 9px;
+  --r-panel: 10px;
+  --r-tarjeta: 12px;
+
+  /* Alturas: son tres y son fijas. Una fila mide 32 aunque su contenido mida 18: el
+     alto lo fija la fila, así una lista tiene ritmo parejo y no serrucho. */
+  --h-chip: 22px;
+  --h-boton: 28px;
+  --h-fila: 32px;
+
+  /* Espaciado, base 4. Nada de números sueltos. */
+  --s-xs: 4px;
+  --s-sm: 6px;
+  --s-md: 8px;
+  --s-lg: 12px;
+  --s-xl: 16px;
+  --s-xxl: 24px;
+
+  /* Tipografía. Dos tamaños hacen toda la jerarquía, los dos en medium y los dos con
+     tracking negativo: a tamaños chicos la letra viene suelta y cerrarla un pelo es la
+     mitad de la sensación de prolijo.
+
+     **La fuente es la del sistema.** En Mac eso es SF; en Windows es Segoe UI Variable
+     (Windows 11) con Segoe UI de respaldo. Es lo que hace que la app se sienta parte
+     del sistema operativo, y es el motivo de que la lista arranque por las dos. */
+  --fuente: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    system-ui, "Helvetica Neue", sans-serif;
+  /* El monoespaciado del editor y la terminal. Cascadia Code viene con Windows
+     Terminal y con Visual Studio; Consolas está en cualquier Windows desde Vista. */
+  --mono: "Cascadia Code", "Cascadia Mono", Menlo, Consolas, "SF Mono",
+    "DejaVu Sans Mono", monospace;
+
+  --t-label: 12px;
+  --t-valor: 14px;
+  --t-titulo: 15px;
+  --t-titulo-grande: 22px;
+  --t-mono: 12.5px;
+  --tracking: -0.01em;
+}
+
+/* El modo oscuro se pinta en dos lugares y con el mismo bloque:
+   - `prefers-color-scheme` cuando la apariencia es «auto», que es el default;
+   - `[data-tema="oscuro"]` cuando la persona lo forzó en Ajustes.
+
+   El `:not([data-tema="claro"])` de la media query es lo que hace que forzar claro
+   gane sobre un sistema en oscuro. Sin eso, «Claro» no haría nada en una Mac oscura. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --texto-1: #f2f2f3;
+    --texto-2: #bdbec1;
+    --texto-3: #949599;
+    --texto-off: #6e6f73;
+
+    --bg-base: #171c20;
+    --bg-app: #1c1c1e;
+    --bg-sidebar: #191a1b;
+    --bg-elevado: #222b31;
+    --bg-hover: rgb(255 255 255 / 5.9%);
+    --bg-activo: rgb(255 255 255 / 10.2%);
+
+    --borde-sutil: #2a2b2d;
+    --borde: #37383b;
+    --borde-fuerte: #4e4f53;
+
+    --acento: #5c92f5;
+    --acento-suave: rgb(92 146 245 / 18%);
+
+    --term-fondo: #1c1c1e;
+    --term-texto: #f2f2f3;
+    --term-cursor: #5c92f5;
+    --term-seleccion: #284b62;
+  }
+}
+
+/* Y otra vez, para cuando la apariencia se eligió a mano. Es el mismo bloque: un
+   `@media` no se puede reusar desde un selector, así que se repite. Cambiar un color
+   acá y no allá es el bug clásico — por eso los dos bloques van pegados. */
+:root[data-tema="oscuro"] {
+  --texto-1: #f2f2f3;
+  --texto-2: #bdbec1;
+  --texto-3: #949599;
+  --texto-off: #6e6f73;
+
+  --bg-base: #171c20;
+  --bg-app: #1c1c1e;
+  --bg-sidebar: #191a1b;
+  --bg-elevado: #222b31;
+  --bg-hover: rgb(255 255 255 / 5.9%);
+  --bg-activo: rgb(255 255 255 / 10.2%);
+
+  --borde-sutil: #2a2b2d;
+  --borde: #37383b;
+  --borde-fuerte: #4e4f53;
+
+  --acento: #5c92f5;
+  --acento-suave: rgb(92 146 245 / 18%);
+
+  --term-fondo: #1c1c1e;
+  --term-texto: #f2f2f3;
+  --term-cursor: #5c92f5;
+  --term-seleccion: #284b62;
+}
+
+/* Que el navegador sepa qué tema es, para los controles nativos (el `<select>`, las
+   barras de scroll, el cursor de texto). Sin esto, un `<select>` sale claro en una app
+   oscura. */
+:root[data-tema="oscuro"] { color-scheme: dark; }
+:root[data-tema="claro"] { color-scheme: light; }

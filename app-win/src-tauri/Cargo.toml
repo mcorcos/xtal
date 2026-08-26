@@ -1,0 +1,75 @@
+# Workspace propio, aparte del de la CLI.
+#
+# La app tiene otras dependencias (Tauri, un PTY, un webview) y otro ciclo de release:
+# el `cargo test --workspace` de la CLI no tiene por qué compilar medio Chromium para
+# correr los tests de `xtal-data`. La CI las construye por separado.
+[workspace]
+
+[package]
+name = "xtal-app"
+version = "0.3.1"
+description = "Xtal — LaTeX made easy"
+authors = ["UNIT"]
+edition = "2021"
+rust-version = "1.82"
+
+[lib]
+# El sufijo `_lib` parece redundante pero hace falta: sin él el nombre de la lib
+# choca con el del binario, y en Windows eso es un error de link.
+# https://github.com/rust-lang/cargo/issues/8519
+name = "xtal_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Sin `protocol-asset` a propósito: las imágenes y el PDF se leen con `leer_bytes` y
+# se muestran como blob. El protocolo de assets obliga a declarar un ámbito de rutas,
+# y acá el ámbito es "la carpeta que el usuario abrió", que no se conoce hasta que la
+# abre.
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+
+# `xtal://` — la puerta por la que el agente maneja la app.
+#
+# En Mac el esquema se declara en el Info.plist y macOS enruta. En Windows va a
+# parar al **registro**, y lo escribe el instalador: por eso el plugin se
+# registra en tiempo de build (ver `tauri.conf.json`) y no en caliente.
+tauri-plugin-deep-link = "2"
+# Sin esto, `xtal app abrir` levanta una SEGUNDA ventana de Xtal en vez de
+# hablarle a la que ya está abierta — que es justo lo contrario de lo que se pide.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# La terminal integrada. `portable-pty` es la capa de PTY de WezTerm: en Windows
+# habla **ConPTY** (la API de consola de Windows 10 1809 en adelante) y en Unix
+# abre un pty de toda la vida. Es lo que hace que adentro corra `claude` de verdad
+# y no un emulador a medias.
+portable-pty = "0.9"
+
+# El vigía de la carpeta. En Windows va por `ReadDirectoryChangesW`, en macOS por
+# FSEvents: no es polling. La CLI (`xtal watch`) sí usa polling a propósito, para
+# no cargarse una dependencia; en una app que ya trae un webview adentro, esa
+# economía no tiene sentido.
+notify = "7"
+notify-debouncer-full = "0.4"
+
+# `salida/main.synctex.gz` viene comprimido con gzip.
+flate2 = "1"
+
+# Borrar manda a la papelera, no borra. En Windows es la Papelera de reciclaje.
+trash = "5"
+
+anyhow = "1"
+
+[target.'cfg(windows)'.dependencies]
+# Para no abrir una ventana de consola negra cada vez que se corre `xtal` o `git`.
+# Es el detalle que delata a una app de escritorio hecha sobre una CLI.
+winapi = { version = "0.3", features = ["winbase"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

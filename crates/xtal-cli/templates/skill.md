@@ -139,7 +139,7 @@ Xtal también es una **app de Mac**: editor a la izquierda, PDF a la derecha, y 
 agente donde la terminal ocupa media pantalla. Si estás corriendo adentro de esa terminal
 tenés `XTAL_PROJECT` en el entorno.
 
-Podés manejarla con `xtal app` (necesita macOS y la app instalada). **Es lo único que te
+Podés manejarla con `xtal app` (necesita la app instalada; hay para macOS y para Windows). **Es lo único que te
 permite mover la ventana**: apretar un botón necesita el permiso de accesibilidad del
 sistema, así que sin esto solo te queda pedirle a la persona que apriete.
 

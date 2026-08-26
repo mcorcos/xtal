@@ -6,6 +6,9 @@
 # <- compile <- cli. Esto evita que la lógica de presentación contamine el núcleo.
 [workspace]
 resolver = "2"
+# La app de escritorio es su propio workspace: tiene otras dependencias (Tauri, un PTY,
+# un webview) y otro ciclo de release. Ver app-win/src-tauri/Cargo.toml.
+exclude = ["app-win/src-tauri"]
 members = [
     "crates/xtal-model",   # tipos de dominio puros (Measurement, Plot, estilos)
     "crates/xtal-config",  # configuración en cascada de 4 capas
