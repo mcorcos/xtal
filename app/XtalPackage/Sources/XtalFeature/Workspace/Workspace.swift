@@ -182,8 +182,11 @@ public struct Workspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .xtalGuardarYCompilar)) { _ in
             Task { await guardarYCompilar() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .xtalSincronizar)) { _ in
-            sincronizar()
+        .onReceive(NotificationCenter.default.publisher(for: .xtalSincronizarAlPdf)) { _ in
+            sincronizarAlPdf()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .xtalSincronizarAlEditor)) { _ in
+            sincronizarAlEditor()
         }
         // Las dos órdenes de afuera que necesitan tocar el estado de esta pantalla.
         .onReceive(NotificationCenter.default.publisher(for: .xtalVerSolapa)) { aviso in
@@ -259,7 +262,7 @@ public struct Workspace: View {
                 } else {
                     sincronia.seleccionEditor = texto
                 }
-                sincronizar()
+                if texto.hasPrefix("pdf:") { sincronizarAlEditor() } else { sincronizarAlPdf() }
                 if let png = Desarrollo.rutaRetratoSync {
                     sincronia.retratar(a: png)
                     // El aviso llega en el ciclo siguiente al de la búsqueda.
@@ -315,7 +318,19 @@ public struct Workspace: View {
                 // con su cursor y su comportamiento: no hay nada que inventar.
                 HSplitView {
                     editor
-                    if verPdf { panelSalida }
+                    if verPdf {
+                        // Las flechas van paradas SOBRE el divisor, no en una barra: el
+                        // gesto es «llevar esto de acá para allá», y el botón tiene que
+                        // estar en el medio de esos dos lugares.
+                        //
+                        // Se cuelgan del panel derecho con un desplazamiento negativo,
+                        // que las deja montadas mitad y mitad sobre el borde. Medir
+                        // dónde quedó el divisor no es opción: `HSplitView` es un
+                        // `NSSplitView` por abajo y **no propaga las preferences de sus
+                        // hijos** — un `GeometryReader` adentro reporta cero.
+                        panelSalida
+                            .overlay(alignment: .topLeading) { flechasSincronia }
+                    }
                 }
             }
             .frame(minHeight: 240)
@@ -666,30 +681,50 @@ public struct Workspace: View {
         }
     }
 
-    /// El botón que une los dos paneles. **Uno solo, y va para los dos lados.**
+    /// Las dos flechas, **paradas en el borde entre el editor y el PDF**.
     ///
-    /// Overleaf pone dos flechas, una por sentido, y te hace elegir cuál. Acá no hace
-    /// falta: si hay algo seleccionado en el editor la única pregunta razonable es
-    /// «¿dónde quedó esto en el PDF?», y si no hay nada seleccionado ahí pero sí en el
-    /// PDF, la pregunta es la inversa. El programa ya sabe la respuesta.
+    /// ## Por qué dos y no una que decida sola
     ///
-    /// Va en el borde entre los dos paneles porque es de los dos, no de ninguno.
-    private var botonSincronizar: some View {
-        Button(action: sincronizar) {
-            HStack(spacing: Tok.S.xs) {
-                Image(systemName: "arrow.left.arrow.right").font(.system(size: 11))
-                Text("Sincronizar").font(Tok.F.label).lineLimit(1)
-            }
-            .foregroundStyle(Tok.textSecondary)
-            .padding(.horizontal, Tok.S.md)
-            .frame(height: 22)
-            .background(Tok.bgActive,
-                        in: RoundedRectangle(cornerRadius: Tok.R.chip, style: .continuous))
-            .contentShape(Rectangle())
+    /// La primera versión tenía un botón solo que miraba dónde había selección y elegía
+    /// la dirección. En la práctica adivina mal, y por una razón que no se va a
+    /// arreglar: **casi siempre hay selección de los dos lados**. Uno marca algo en el
+    /// PDF para mirarlo, después se va al editor a escribir, y la selección vieja del
+    /// PDF sigue ahí. El botón tiene que apostar, y cuando pierde te lleva justo para el
+    /// lado contrario al que querías.
+    ///
+    /// Dos flechas no adivinan nada. Es lo que hace Overleaf y es lo que corresponde:
+    /// la dirección la sabe la persona, no el programa.
+    ///
+    /// ## Por qué acá y no en una barra
+    ///
+    /// Estaban en la barra del panel derecho, que es *casi* el borde. Casi no alcanza:
+    /// el gesto es «llevar esto de acá para allá», y el botón tiene que estar en el
+    /// medio de esos dos lugares. Se posiciona sobre el divisor midiendo el ancho del
+    /// editor (`AnchoDelEditor`), así que sigue al divisor cuando lo arrastrás.
+    ///
+    /// Solo aparecen con **las dos vistas en pantalla**: sin el PDF abierto no hay dos
+    /// lados entre los cuales ir.
+    private var flechasSincronia: some View {
+        VStack(spacing: 0) {
+            FlechaSync(icono: "arrow.right", ayuda: "Llevar lo seleccionado al PDF (⌥⌘→)",
+                       accion: sincronizarAlPdf)
+                .keyboardShortcut(.rightArrow, modifiers: [.option, .command])
+            Rectangle().fill(Tok.borderSubtle).frame(width: 22, height: 1)
+            FlechaSync(icono: "arrow.left", ayuda: "Traer al editor lo seleccionado en el PDF (⌥⌘←)",
+                       accion: sincronizarAlEditor)
+                .keyboardShortcut(.leftArrow, modifiers: [.option, .command])
         }
-        .buttonStyle(.plain)
-        .keyboardShortcut("j", modifiers: [.command, .shift])
-        .help("Seleccioná texto de un lado y apretá acá: lo resalta del otro (⇧⌘J)")
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .stroke(Tok.borderDefault, lineWidth: 1))
+        .shadow(color: .black.opacity(0.22), radius: 5, y: 1)
+        // Pegadas al borde izquierdo del panel derecho, que es el divisor, y debajo de
+        // la barra de solapas para no encimarse.
+        //
+        // **Adentro y no a caballo del borde**: `HSplitView` recorta a sus hijos, así
+        // que un desplazamiento negativo deja la mitad de la cápsula cortada. Se ve
+        // como un bug, no como una decisión.
+        .offset(x: Tok.S.sm, y: Tok.H.fila + Tok.S.md)
     }
 
     /// Decide para dónde va la sincronía y la hace.
@@ -697,21 +732,28 @@ public struct Workspace: View {
     /// El orden importa: **gana el editor**. Cuando alguien selecciona en el editor, el
     /// PDF suele conservar una selección vieja de hace diez minutos, y arrancar de ahí
     /// sería ir para el lado contrario al que se acaba de pedir.
-    private func sincronizar() {
+    /// Del editor al PDF: resalta lo que está seleccionado en el editor.
+    private func sincronizarAlPdf() {
         let delEditor = sincronia.seleccionEditor.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !delEditor.isEmpty {
-            solapa = .pdf
-            sincronia.alPdf(desde: delEditor)
+        guard !delEditor.isEmpty else {
+            sincronia.avisar("Seleccioná algo en el editor y volvé a apretar", bien: false)
             return
         }
-        // La vuelta exacta primero: el mapa de SyncTeX dice archivo y línea sin
-        // adivinar. Buscar el texto en los fuentes queda para cuando no hay mapa.
+        solapa = .pdf
+        sincronia.alPdf(desde: delEditor)
+    }
+
+    /// Del PDF al editor: abre el archivo que produjo lo seleccionado en el PDF.
+    ///
+    /// La vuelta exacta primero —el mapa de SyncTeX dice archivo y línea sin adivinar—
+    /// y buscar el texto en los fuentes queda para cuando no hay mapa.
+    private func sincronizarAlEditor() {
         if let destino = sincronia.fuenteDeLaSeleccion() {
             alFuente(destino.archivo, linea: destino.linea, como: "sincronía")
             return
         }
         guard let delPdf = sincronia.seleccionDelPdf() else {
-            sincronia.avisar("Seleccioná texto de un lado y volvé a apretar", bien: false)
+            sincronia.avisar("Seleccioná algo en el PDF y volvé a apretar", bien: false)
             return
         }
         alEditorDesde(delPdf)
@@ -733,31 +775,48 @@ public struct Workspace: View {
         if !yaAbierto { alEditor { abrirArchivo(url) } } else { alEditor {} }
 
         let fuente = yaAbierto ? texto : ((try? String(contentsOf: url, encoding: .utf8)) ?? "")
-        guard let rango = Self.rangoDeLinea(linea, en: fuente) else { return }
+        guard let (rango, desde) = Self.rangoDeParrafo(linea, en: fuente) else { return }
         if yaAbierto {
             revelar = EditorCodigo.Revelar(rango: rango)
         } else {
             // El editor recién va a tener este archivo adentro en el próximo ciclo.
             DispatchQueue.main.async { revelar = EditorCodigo.Revelar(rango: rango) }
         }
-        sincronia.avisar("\(url.lastPathComponent), línea \(linea)", bien: true)
+        sincronia.avisar("\(url.lastPathComponent), línea \(desde)", bien: true)
         _ = como
     }
 
-    /// El rango de caracteres de una línea (contando desde 1).
-    static func rangoDeLinea(_ linea: Int, en texto: String) -> NSRange? {
-        guard linea >= 1 else { return nil }
-        let s = texto as NSString
-        var actual = 1, inicio = 0, i = 0
-        while i < s.length {
-            if actual == linea { break }
-            if s.character(at: i) == 10 { actual += 1; inicio = i + 1 }
-            i += 1
+    /// El párrafo al que pertenece esa línea, y en qué línea arranca.
+    ///
+    /// **No se marca la línea sola, y no es un capricho.** SyncTeX tiene la granularidad
+    /// de TeX, y TeX arma un párrafo entero de una sola vez, cuando llega al final: la
+    /// caja de la primera línea impresa queda anotada con la línea del fuente donde el
+    /// párrafo *termina*. Marcar esa línea deja el cursor en el renglón en blanco de
+    /// abajo, que se lee como que erró.
+    ///
+    /// Marcando el párrafo se ve el bloque completo, que además es lo que uno quiere
+    /// cuando viene del PDF: dónde está esto que estoy leyendo.
+    static func rangoDeParrafo(_ linea: Int, en texto: String) -> (NSRange, Int)? {
+        let lineas = texto.components(separatedBy: "\n")
+        guard linea >= 1, !lineas.isEmpty else { return nil }
+        // Si cayó pasado el final, o en una línea en blanco, se toma la anterior con
+        // texto: es el párrafo que la produjo.
+        var i = min(linea, lineas.count) - 1
+        while i > 0, lineas[i].trimmingCharacters(in: .whitespaces).isEmpty { i -= 1 }
+        guard !lineas[i].trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+
+        var desde = i, hasta = i
+        while desde > 0, !lineas[desde - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+            desde -= 1
         }
-        guard actual == linea else { return nil }
-        var fin = inicio
-        while fin < s.length, s.character(at: fin) != 10 { fin += 1 }
-        return NSRange(location: inicio, length: max(0, fin - inicio))
+        while hasta + 1 < lineas.count,
+              !lineas[hasta + 1].trimmingCharacters(in: .whitespaces).isEmpty {
+            hasta += 1
+        }
+
+        let inicio = lineas[..<desde].reduce(0) { $0 + ($1 as NSString).length + 1 }
+        let largo = lineas[desde...hasta].reduce(0) { $0 + ($1 as NSString).length + 1 } - 1
+        return (NSRange(location: inicio, length: max(0, largo)), desde + 1)
     }
 
     /// Del PDF al fuente: encuentra de qué archivo salió ese texto, lo abre y lo marca.
@@ -1019,9 +1078,6 @@ public struct Workspace: View {
     private var barraSalida: some View {
         VStack(spacing: 0) {
             HStack(spacing: Tok.S.xs) {
-                botonSincronizar
-                Rectangle().fill(Tok.borderSubtle).frame(width: 1, height: 16)
-                    .padding(.horizontal, Tok.S.xs)
                 Solapa(titulo: "main.pdf", icono: "doc.richtext",
                        activa: solapa == .pdf) { solapa = .pdf }
                 Solapa(titulo: "Errores", icono: "exclamationmark.triangle",
@@ -1097,5 +1153,30 @@ public struct Workspace: View {
         abierto = como
         cargandoTexto = texto != nuevo
         texto = nuevo
+    }
+}
+
+// MARK: - Las flechas del divisor
+
+/// Una de las dos flechas. Chica, sin fondo propio: el fondo es el de la cápsula.
+private struct FlechaSync: View {
+    let icono: String
+    let ayuda: String
+    let accion: () -> Void
+
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: accion) {
+            Image(systemName: icono)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hover ? Tok.textPrimary : Tok.textSecondary)
+                .frame(width: 26, height: 24)
+                .background(hover ? Tok.bgHover : .clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(ayuda)
+        .onHover { hover = $0 }
     }
 }

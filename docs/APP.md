@@ -219,22 +219,39 @@ uno en su `theme.toml` —su sigla, o el nombre completo si no tiene—: el que 
 de su facultad lo ve en el desplegable sin tocar la app. El genérico va último y se llama
 «Sin institución», que es lo que hace.
 
-## Una flecha sola, que va para los dos lados
+## Dos flechas, paradas en el divisor
 
-Overleaf pone **dos flechas** entre el editor y el PDF, una por sentido, y te hace elegir
-cuál apretar. Acá hay **una sola** y decide sola: si hay algo seleccionado en el editor,
-la única pregunta razonable es «¿dónde quedó esto en el PDF?»; si ahí no hay nada
-seleccionado pero sí en el PDF, la pregunta es la inversa. Dos botones para dos mitades
-de la misma idea es hacerle elegir a la persona algo que el programa ya sabe.
+Entre el editor y el PDF hay **dos flechas**: `→` lleva lo seleccionado en el editor al
+PDF, `←` trae al editor lo seleccionado en el PDF. Están en el borde entre los dos
+paneles, porque el gesto es «llevar esto de acá para allá» y el botón tiene que estar en
+el medio de esos dos lugares. También en el menú *Ver*, con ⌥⌘→ y ⌥⌘←.
 
-El botón está en el borde entre los dos paneles, porque es de los dos y de ninguno.
-También está en el menú *Ver* (⇧⌘J).
+Solo aparecen con **las dos vistas en pantalla**: sin el PDF abierto no hay dos lados
+entre los cuales ir. En modo agente tampoco, porque ahí no hay editor.
 
-- **Del editor al PDF**: lo seleccionado se resalta **en amarillo** en el PDF y la página
-  salta ahí. Se resalta todo, no solo la prosa: las ecuaciones, las tablas y los
-  esquemáticos también.
-- **Del PDF al editor**: se abre el archivo que produjo eso y el cursor queda en la línea.
-  Si estabas en modo agente, te lleva al editor. **Doble click en el PDF hace lo mismo.**
+### Por qué dos y no una que decida sola
+
+La primera versión tenía un botón solo que miraba dónde había selección y elegía la
+dirección. **Adivina mal**, y por una razón que no se arregla: casi siempre hay selección
+de los dos lados. Uno marca algo en el PDF para mirarlo, después se va al editor a
+escribir, y la selección vieja del PDF sigue ahí. El botón tiene que apostar, y cuando
+pierde te lleva justo para el lado contrario al que querías.
+
+Dos flechas no adivinan nada. La dirección la sabe la persona, no el programa.
+
+### Detalles que se sienten
+
+- **La vuelta arranca donde arranca la selección**, no en su centro. Con el centro,
+  marcar tres párrafos para «llevame a esto» terminaba en la figura que había en el medio.
+- **Se marca el párrafo entero**, no la línea sola. SyncTeX tiene la granularidad de TeX,
+  y TeX arma un párrafo de una sola vez cuando llega al final: la caja de la primera línea
+  impresa queda anotada con la línea del fuente donde el párrafo *termina*. Marcar esa
+  línea deja el cursor en el renglón en blanco de abajo, que se lee como que erró.
+- **Las flechas van adentro del panel derecho, pegadas al borde**, y no a caballo del
+  divisor: `HSplitView` recorta a sus hijos, así que la mitad que sobresale se corta y se
+  ve como un bug. Medir dónde quedó el divisor tampoco es opción — es un `NSSplitView`
+  por abajo y no propaga las preferences de sus hijos: un `GeometryReader` adentro
+  reporta cero.
 
 ### SyncTeX primero, el texto de respaldo
 
