@@ -1,0 +1,52 @@
+# Regenera el manifiesto cuando hay una Release nueva de Xtal.
+#
+# Mira cada hora en vez de que Xtal empuje acá: empujar pediría guardar un token con
+# permiso de escritura sobre este repo en los secrets de uno público. Es la misma
+# decisión que el tap de Homebrew, y por la misma razón.
+name: Actualizar el manifiesto
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Mirar la última Release y regenerar
+        run: |
+          set -euo pipefail
+          VERSION="$(curl -fsSL https://api.github.com/repos/mcorcos/xtal/releases/latest \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')"
+          if [ -z "$VERSION" ]; then
+            echo "::error::no pude leer la última version"
+            exit 1
+          fi
+          ACTUAL="$(grep -m1 '"version"' bucket/xtal.json 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+          if [ "$VERSION" = "$ACTUAL" ]; then
+            echo "ya está en $VERSION, no hay nada que hacer"
+            exit 0
+          fi
+
+          # El script vive en el repo de Xtal: la plantilla está en un solo lugar.
+          curl -fsSL -o /tmp/render.sh \
+            https://raw.githubusercontent.com/mcorcos/xtal/main/packaging/scoop/render-manifest.sh
+          chmod +x /tmp/render.sh
+          mkdir -p bucket
+          /tmp/render.sh "$VERSION" --from-release > bucket/xtal.json
+
+          # Que sea JSON válido antes de commitear: un manifiesto roto le rompe el
+          # `scoop update` a todo el que tenga el bucket agregado.
+          python3 -c "import json,sys; json.load(open('bucket/xtal.json'))"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/xtal.json
+          git commit -m "Xtal $VERSION"
+          git push

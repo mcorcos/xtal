@@ -1,0 +1,29 @@
+# Fin de línea: **LF siempre, en todas las plataformas.**
+#
+# Por qué, en concreto: git en Windows convierte a CRLF al hacer checkout, y varios
+# archivos de texto de este repo no son solo texto — **viajan adentro del binario** con
+# `include_str!` / `rust-embed`:
+#
+#   - `crates/xtal-cli/templates/skill.md` es el skill que se escribe en
+#     `~/.claude/skills/xtal/SKILL.md`. Con CRLF deja de empezar con `---\n`, y ahí se
+#     rompen dos cosas: el test que verifica el frontmatter (lo encontró el CI de
+#     Windows), y la comparación de `skill_status()`, que compara contenido para decidir
+#     si el skill está al día — con los finales de línea cambiados diría «viejo» para
+#     siempre y `xtal doctor` lo reinstalaría en cada corrida.
+#   - `themes/` y `examples/` se embeben igual.
+#
+# `text=auto` deja que git detecte qué es binario; `eol=lf` fija el final de línea de lo
+# que sí es texto. Los .png, .pdf y .gz quedan afuera solos.
+* text=auto eol=lf
+
+# Los que sí o sí son binarios, marcados a mano: que git no intente adivinar con un
+# archivo que empieza con bytes que parecen texto.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.gz binary
+*.raw binary
+*.icns binary
