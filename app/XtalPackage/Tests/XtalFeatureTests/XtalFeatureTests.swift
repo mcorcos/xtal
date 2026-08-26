@@ -40,7 +40,7 @@ import Testing
 }
 
 @MainActor
-@Test func el_manifiesto_va_primero_y_salida_no_aparece() throws {
+@Test func el_manifiesto_no_se_lista_y_salida_tampoco() throws {
     let base = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("xtal-test-\(UUID().uuidString)")
     let fm = FileManager.default
@@ -55,11 +55,16 @@ import Testing
     try "".write(to: base.appendingPathComponent("salida/main.tex"), atomically: true, encoding: .utf8)
 
     let p = Proyecto(carpeta: base)
-    #expect(p.archivos.first?.nombre == "xtal.toml")
+    // El manifiesto NO se lista. Todo lo que tiene adentro —el título, la institución,
+    // el formato, el plan, el texto de cada sección— ya se edita desde la app, y
+    // dejarlo además como texto crea dos dueños del mismo archivo: el editor con su
+    // copia en memoria y la CLI escribiendo por abajo.
+    #expect(!p.archivos.contains { $0.nombre == "xtal.toml" })
     #expect(!p.archivos.contains { $0.url.path.contains("/salida/") })
     #expect(p.archivos.contains { $0.nombre == "uno.tex" })
-    // Y lo primero que se abre es el manifiesto, no un archivo cualquiera.
-    #expect(p.seleccionado?.nombre == "xtal.toml")
+    // Pero algo tiene que quedar abierto: el editor en blanco no le dice a nadie qué
+    // hacer.
+    #expect(p.seleccionado != nil)
 }
 
 @Test func el_binario_se_busca_donde_de_verdad_queda_instalado() {
@@ -198,7 +203,7 @@ import Testing
 // MARK: - El árbol de archivos
 
 @MainActor
-@Test func el_arbol_muestra_todo_y_pone_el_manifiesto_arriba() throws {
+@Test func el_arbol_esconde_el_manifiesto_y_abre_la_primera_seccion() throws {
     let base = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("xtal-arbol-\(UUID().uuidString)")
     let fm = FileManager.default
@@ -208,12 +213,18 @@ import Testing
 
     try "".write(to: base.appendingPathComponent("xtal.toml"), atomically: true, encoding: .utf8)
     try "".write(to: base.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+    // Dos secciones, para que se vea que gana la primera y no cualquiera: van
+    // numeradas, así que el orden alfabético es el orden del informe.
+    try fm.createDirectory(at: base.appendingPathComponent("secciones"), withIntermediateDirectories: true)
+    try "".write(to: base.appendingPathComponent("secciones/02-metodo.tex"), atomically: true, encoding: .utf8)
+    try "".write(to: base.appendingPathComponent("secciones/01-intro.tex"), atomically: true, encoding: .utf8)
     // El .tex generado TIENE que aparecer: es justo lo que uno quiere mirar cuando
     // algo no compila. Antes la app lo escondía.
     try "".write(to: base.appendingPathComponent("salida/main.tex"), atomically: true, encoding: .utf8)
 
     let arbol = Arbol(carpeta: base)
-    #expect(arbol.raiz.first?.nombre == "xtal.toml")
+    // El manifiesto no aparece: se edita desde la app, no como texto. Ver `Arbol.leer`.
+    #expect(!arbol.raiz.contains { $0.nombre == "xtal.toml" })
     // Carpetas antes que archivos sueltos.
     let nombres = arbol.raiz.map(\.nombre)
     #expect(nombres.firstIndex(of: "mediciones")! < nombres.firstIndex(of: "README.md")!)
@@ -221,9 +232,9 @@ import Testing
     let salida = try #require(arbol.raiz.first { $0.nombre == "salida" })
     #expect(salida.hijos.contains { $0.nombre == "main.tex" })
     #expect(salida.hijos.first?.esGenerado == true)
-    // Al abrir un proyecto se abre el manifiesto: la pantalla en blanco no le dice a
-    // nadie qué hacer.
-    #expect(arbol.seleccionado?.lastPathComponent == "xtal.toml")
+    // Al abrir un proyecto se abre la primera sección: la pantalla en blanco no le dice
+    // a nadie qué hacer, y el manifiesto es la tripa, no el trabajo.
+    #expect(arbol.seleccionado?.lastPathComponent == "01-intro.tex")
 }
 
 @MainActor
