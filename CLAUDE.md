@@ -327,6 +327,30 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
     tabla de qué archivo es la verdad de cada cosa; lo que es idea y no está construido va
     marcado. `APP-DISENO.md` dice que los tokens viven en dos archivos y suma «que las dos
     apps se separen» a la lista de lo que nunca se hace.
+- **El instalable, que es lo que hace que exista** (PR #11):
+  - **El instalador NSIS trae `xtal.exe` adentro.** Sin eso, bajar el `.exe` deja una app
+    que no puede hacer nada: le habla al comando `xtal` y sin él no compila ni simula.
+    «Bajá el instalador y además abrí PowerShell y pegá un comando» no es un instalador.
+    **No hay dos copias peleando**: la app prefiere la CLI instalada en el sistema y solo
+    cae a la de adentro, así la app y la terminal nunca corren versiones distintas.
+  - **Cuatro caminos, ninguno con administrador**: el `.exe` de la Release,
+    `winget install UNIT.Xtal`, `irm …/install.ps1 | iex`, y `scoop install xtal` para la
+    CLI sola.
+  - **scoop es el Homebrew de Windows** y se resolvió igual que el tap:
+    `packaging/scoop/render-manifest.sh` con los mismos dos modos, y un bucket aparte que
+    se actualiza solo leyendo el `SHA256SUMS`. Cero secrets.
+  - **winget va a mano**, con `wingetcreate submit`: es el repo de Microsoft y se publica
+    por pull request. Automatizarlo pediría guardar un token de escritura sobre otro repo
+    en los secrets de uno público — lo mismo que se descartó para Homebrew. Los tres
+    manifiestos viajan ya armados adentro de la Release.
+  - **El CI arma el instalador** (job `instalable`). Mismo argumento que el job `pdf`: era
+    el único agujero que podía romper el producto sin que nadie se entere. Verifica que
+    el `.exe` y el `.msi` existan **y que pesen** — un instalador truncado también existe.
+  - **El ícono es propio** (`app-win/packaging/icono.svg`, un cristal sobre el azul de
+    acción). Antes salía con el logo de Tauri. Se rasteriza con Chrome, que ya estaba
+    para los retratos. **Trampa**: si el SVG mide menos que la ventana, Chrome retrata la
+    ventana entera y el dibujo queda en un rincón; `tauri icon` después achica esa foto y
+    el ícono sale chiquito y descentrado.
 - **Lo que falta y hay que decirlo**: **nadie lo corrió en Windows todavía**. Se verificó
   todo lo verificable desde una Mac —el workspace compila para `x86_64-pc-windows-msvc`,
   19 tests del backend de la app en verde, TypeScript limpio, bundle armado, la interfaz

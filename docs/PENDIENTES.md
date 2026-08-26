@@ -184,6 +184,11 @@ Dejó de ser "no existe". Lo que hay ahora:
 - **CI en `windows-latest`**: los tests del workspace, el parseo de `install.ps1`, y la
   app entera (tipos, bundle, fmt, clippy y tests).
 
+- **El instalador trae la CLI adentro**, así que bajar el `.exe` alcanza.
+- **scoop y winget**, los dos gestores de paquetes de Windows, con sus manifiestos
+  generados por `packaging/` y viajando adentro de la Release.
+- **El CI arma el instalador** y verifica que pese: un `.exe` truncado también existe.
+
 **Lo que sigue abierto, y es lo mismo que el punto 2**: nadie con una máquina con Windows
 lo instaló todavía. Se verificó todo lo verificable desde una Mac —compila para el target
 de Windows, los tests pasan, la interfaz dibuja en los dos temas— pero el instalador
