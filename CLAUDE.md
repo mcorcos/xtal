@@ -252,6 +252,21 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### Abrir un proyecto y que haya algo abierto — HECHO (2026-08-26)
+Dos tests de la app venían fallando desde antes, los dos por lo mismo: esperaban que el
+`xtal.toml` fuera el primer archivo de la lista y lo que se abría al arrancar. El
+manifiesto **dejó de listarse a propósito** (ver `Arbol.leer`: editarlo como texto además
+de desde la app crea dos dueños del mismo archivo), así que los tests quedaron viejos.
+- Pero la intención que fijaban seguía siendo válida y **no se cumplía**: abrir un
+  proyecto dejaba el editor en blanco. El comentario del código decía que el punto de
+  partida lo elegía `Secciones`, y no era cierto — el editor solo dibuja lo que está
+  seleccionado en el árbol.
+- `Arbol.primeraSeccion(en:)`: al abrir se selecciona el primer `.tex` de `secciones/`.
+  Van numerados, así que alfabético es el orden del informe. Sin secciones no se abre
+  nada, que es lo correcto en un proyecto vacío.
+- Los dos tests se reescribieron para fijar lo de hoy: el manifiesto **no** aparece,
+  `salida/` tampoco, y algo queda abierto.
+
 ### El molde se elige al principio, y ahí queda — HECHO (2026-08-26), pedido de Manu
 El theme y el formato se cambiaban desde un menú de la barra, con un click y sin decir
 nada. Manu pidió lo contrario: **preguntarlos al crear el proyecto y no dejar cambiarlos

@@ -42,9 +42,27 @@ public final class Arbol {
         // La que sí arranca abierta es `salida/`, porque ahí está el `.tex`.
         let tripa: Set<String> = ["mediciones", "graficos", "esquematicos", "fuentes"]
         abiertas = Set(raiz.filter { $0.esCarpeta && !tripa.contains($0.nombre) }.map(\.url))
-        // Y no se abre ningún archivo: el punto de partida es la primera sección del
-        // informe, que la elige `Secciones`. Abrir el proyecto mostrando su manifiesto
-        // es mostrar la tripa antes que el trabajo.
+        // Y se abre la primera sección del informe.
+        //
+        // Abrir un proyecto y encontrarse el editor en blanco no le dice a nadie qué
+        // hacer. El manifiesto tampoco sirve de punto de partida —es la tripa, y además
+        // no se lista, ver `leer`—: lo que uno viene a hacer es escribir el informe, y
+        // eso empieza en `secciones/`.
+        seleccionado = Self.primeraSeccion(en: carpeta)
+    }
+
+    /// El `.tex` con el que arranca el informe: el primero de `secciones/`, por nombre.
+    ///
+    /// Van numerados (`01-objetivo.tex`, `02-circuito.tex`), así que el orden
+    /// alfabético es el orden del informe. Si el proyecto todavía no tiene secciones,
+    /// no se abre nada: es un proyecto vacío y no hay nada que mostrar.
+    static func primeraSeccion(en carpeta: URL) -> URL? {
+        let dir = carpeta.appendingPathComponent("secciones")
+        let hijos = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return hijos
+            .filter { $0.pathExtension.lowercased() == "tex" }
+            .min { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     public func recargar() {
