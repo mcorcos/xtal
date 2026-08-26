@@ -196,6 +196,56 @@ que rompió, y un link a la sección donde está. El volcado completo queda a un
 Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
 resultado. Si no hay resultado, ahí va la explicación.
 
+## Una flecha sola, que va para los dos lados
+
+Overleaf pone **dos flechas** entre el editor y el PDF, una por sentido, y te hace elegir
+cuál apretar. Acá hay **una sola** y decide sola: si hay algo seleccionado en el editor,
+la única pregunta razonable es «¿dónde quedó esto en el PDF?»; si ahí no hay nada
+seleccionado pero sí en el PDF, la pregunta es la inversa. Dos botones para dos mitades
+de la misma idea es hacerle elegir a la persona algo que el programa ya sabe.
+
+El botón está en el borde entre los dos paneles, porque es de los dos y de ninguno.
+También está en el menú *Ver* (⇧⌘J).
+
+- **Del editor al PDF**: el texto seleccionado se resalta **en amarillo** en el PDF y la
+  página salta ahí.
+- **Del PDF al editor**: se busca de qué archivo salió ese texto, se abre y se marca. Si
+  estabas en modo agente, te lleva al editor.
+
+### Por qué por texto y no con SyncTeX
+
+SyncTeX es el mecanismo canónico: el motor de LaTeX anota, mientras compone, en qué línea
+del fuente nació cada caja del PDF. Da la ubicación exacta de cualquier cosa, incluso de
+una ecuación o una tabla, que no tienen texto buscable. **No se usa acá**, y es a
+propósito:
+
+- **Lo que se quiere es resaltar el texto**, no la línea. SyncTeX devuelve el rectángulo
+  de una caja: da un bloque, no las palabras.
+- Habría que pasarle `--synctex` al motor, parsear un formato propio comprimido y
+  mantener ese parser. Son cientos de líneas para llegar a algo menos preciso en el caso
+  que importa.
+- El texto que uno selecciona en un informe es prosa el 90% de las veces, y la prosa
+  **está** en el PDF: se puede buscar.
+
+El precio: una selección que es pura matemática o puros comandos no tiene texto que
+buscar, y ahí el botón no encuentra nada — y lo dice, en vez de quedarse mudo.
+
+### Las dos traducciones
+
+El LaTeX que uno selecciona no es el texto que sale impreso, así que hay que traducir en
+los dos sentidos (`Editor/Sincronia.swift`):
+
+- **Yendo al PDF**, se limpia el LaTeX: los comandos de formato dejan lo que envuelven
+  (`\textbf{modelo}` → «modelo») y el resto se va con sus argumentos, porque en el PDF son
+  otra cosa —una `\ref` es un número, un `\SI{330}{\ohm}` se compone con su propia
+  tipografía—. Después se busca **el pedazo más largo que exista, y se sigue desde donde
+  ese pedazo terminó**: los cortes caen solos donde el PDF cambia de fuente (una negrita
+  en el medio de la oración), y la cobertura sale contigua en vez de con huecos.
+- **Volviendo al fuente**, no se puede buscar literal: en el PDF dice «el modelo teórico»
+  y el fuente puede decir `el \textbf{modelo} teórico`. Se arma un patrón que encadena
+  las palabras largas dejando pasar cualquier cosa entre una y otra, que es donde caen
+  los comandos, las llaves y los saltos de línea.
+
 ## El panel lateral es el informe, no la carpeta
 
 Al principio era un explorador de archivos: una lista de `.toml` de mediciones, de

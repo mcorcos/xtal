@@ -46,6 +46,15 @@ struct XtalApp: App {
                     .keyboardShortcut("2", modifiers: .command)
                 Button("Terminal") { alternar("xtal.panel.terminal") }
                     .keyboardShortcut("j", modifiers: .command)
+
+                Divider()
+
+                // La ida y vuelta entre el editor y el PDF. Sin atajo acá por lo mismo
+                // que «Guardar y compilar»: lo tiene el botón de la barra, y dos vistas
+                // con el mismo atajo se pisan. Está en el menú para que se descubra.
+                Button("Sincronizar con el PDF") {
+                    NotificationCenter.default.post(name: .xtalSincronizar, object: nil)
+                }
             }
         }
 

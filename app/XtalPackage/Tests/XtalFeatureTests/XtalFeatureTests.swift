@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PDFKit
 import Testing
 @testable import XtalFeature
 
@@ -290,4 +291,101 @@ import Testing
     #expect(!fm.fileExists(atPath: creado.path))
     #expect(fm.fileExists(atPath: base.appendingPathComponent("intro.tex").path))
     #expect(arbol.seleccionado?.lastPathComponent == "intro.tex")
+}
+
+// MARK: - La ida y vuelta entre el editor y el PDF
+//
+// Lo que se testea acá es la traducción, que es donde esto se puede romper en silencio:
+// el LaTeX que uno selecciona no es el texto que sale impreso, y si la limpieza deja
+// pasar un `\textbf` o se come una palabra, la búsqueda no encuentra nada y el botón
+// parece roto. El resaltado en sí necesita un PDF y una vista: eso se mira abriendo
+// la app.
+
+@Test func el_latex_se_vuelve_el_texto_que_imprime() {
+    // Los comandos de formato dejan lo que envuelven.
+    #expect(Sincronia.textoPlano(de: "el \\textbf{modelo} teórico")
+            == "el modelo teórico")
+    // Anidados, de adentro hacia afuera.
+    #expect(Sincronia.textoPlano(de: "\\emph{muy \\textbf{importante}}")
+            == "muy importante")
+    // Las referencias y las unidades se van: en el PDF son un número compuesto, no
+    // hay string que buscar.
+    #expect(Sincronia.textoPlano(de: "la Figura~\\ref{fig:bode} compara")
+            == "la Figura compara")
+    #expect(Sincronia.textoPlano(de: "vale \\SI{330}{\\ohm} exactos")
+            == "vale exactos")
+    // La matemática también.
+    #expect(Sincronia.textoPlano(de: "con $Q = 2$ resuena") == "con resuena")
+    // Los comentarios no se imprimen.
+    #expect(Sincronia.textoPlano(de: "texto real % una nota al margen")
+            == "texto real")
+    // Un `%` escapado SÍ se imprime: es el signo de porcentaje.
+    #expect(Sincronia.textoPlano(de: "sube un 10\\% igual").contains("10"))
+    // Los entornos no aportan texto.
+    #expect(Sincronia.textoPlano(de: "\\begin{itemize}\n\\item uno\n\\end{itemize}")
+            == "uno")
+}
+
+@Test func una_seleccion_muy_corta_no_se_busca() {
+    // Buscar «de la» pinta media docena de páginas de amarillo: es ruido, no ayuda.
+    #expect(!Sincronia.buscable("de la"))
+    #expect(!Sincronia.buscable("un texto"))
+    #expect(Sincronia.buscable("la respuesta en frecuencia del filtro"))
+}
+
+/// El PDF del ejemplo del repositorio, si está compilado.
+///
+/// Buscar de verdad necesita un PDF de verdad: fuentes, justificado, palabras cortadas
+/// con guión y cambios de tipografía en el medio de una oración. Fabricar uno en el test
+/// daría un PDF de juguete que encuentra todo y no probaría nada.
+@MainActor
+private func pdfDelEjemplo() -> PDFDocument? {
+    // .../app/XtalPackage/Tests/XtalFeatureTests/XtalFeatureTests.swift -> raíz del repo
+    var raiz = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { raiz.deleteLastPathComponent() }
+    return PDFDocument(url: raiz.appendingPathComponent("examples/filtro-rlc/salida/main.pdf"))
+}
+
+@MainActor
+@Test func un_parrafo_del_informe_se_encuentra_en_el_pdf() throws {
+    guard let doc = pdfDelEjemplo() else { return }   // sin PDF compilado no hay qué probar
+
+    // Prosa corrida, sin comandos: tiene que salir de una.
+    let plano = Sincronia.textoPlano(
+        de: "Las tres describen el mismo filtro, pero no son la misma curva")
+    #expect(Sincronia.buscar(plano, en: doc).count == 1)
+
+    // Con comandos en el medio: el PDF cambia de tipografía ahí y la búsqueda se parte
+    // sola. Lo que importa es que cubra el párrafo, no que sea un solo pedazo.
+    let conNegritas = Sincronia.textoPlano(de:
+        "usa la convención de color de Xtal en los dos ejes que tiene: "
+        + "\\textbf{el color dice qué señal es} (ámbar la entrada, verde la salida)")
+    let pedazos = Sincronia.buscar(conNegritas, en: doc)
+    #expect(!pedazos.isEmpty)
+    // Todos en la misma página: si alguno se fue a otra, matcheó en cualquier lado y la
+    // ayuda se volvió ruido.
+    let paginas = Set(pedazos.compactMap { $0.pages.first.map { doc.index(for: $0) } })
+    #expect(paginas.count == 1, "los pedazos se dispersaron: \(paginas)")
+    // Y entre todos tienen que cubrir la mayor parte de lo que se pidió.
+    let cubierto = pedazos.map { ($0.string ?? "").count }.reduce(0, +)
+    #expect(cubierto > conNegritas.count * 3 / 4, "cubrió \(cubierto) de \(conNegritas.count)")
+
+    // Lo que no está en el informe no se inventa.
+    #expect(Sincronia.buscar("el teorema del limite central aplicado", en: doc).isEmpty)
+}
+
+@Test func del_pdf_se_vuelve_al_fuente_aunque_haya_comandos_en_el_medio() {
+    // Lo que dice el PDF, plano; lo que dice el fuente, con comandos adentro.
+    let fuente = """
+    La \\textbf{respuesta} en frecuencia del filtro~\\ref{fig:bode} se mide
+    con un barrido logarítmico.
+    """
+    let rango = try! #require(Sincronia.rango(de: "respuesta en frecuencia del filtro",
+                                              en: fuente))
+    let encontrado = (fuente as NSString).substring(with: rango)
+    #expect(encontrado.contains("respuesta"))
+    #expect(encontrado.contains("filtro"))
+
+    // Lo que no está, no está: mejor decirlo que marcar cualquier cosa.
+    #expect(Sincronia.rango(de: "conclusiones del trabajo práctico", en: fuente) == nil)
 }

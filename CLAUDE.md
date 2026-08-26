@@ -252,6 +252,50 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### La flecha entre el editor y el PDF — HECHO (2026-08-26), pedido de Manu
+Overleaf pone dos flechas entre el editor y el compilado, una por sentido. Manu pidió
+**una sola, bidireccional**: seleccionás texto de un lado, apretás, y se resalta del otro.
+Ver `docs/APP.md` («Una flecha sola, que va para los dos lados»).
+- **`Editor/Sincronia.swift`** es todo el motor. El botón vive en la barra del panel de
+  salida —el borde entre los dos paneles, que es de los dos y de ninguno— y también en
+  el menú *Ver*. **⇧⌘J** (⌘J ya era la terminal).
+- **La dirección no se elige: la decide el programa.** Gana el editor, porque el PDF
+  suele conservar una selección vieja de hace diez minutos y arrancar de ahí sería ir
+  para el lado contrario al que se acaba de pedir.
+- **Se hace por texto, NO con SyncTeX**, y está argumentado en el docstring de
+  `Sincronia`: lo que se pidió es resaltar *el texto*, y SyncTeX da el rectángulo de una
+  caja. Además habría que pasarle `--synctex` al motor y mantener un parser de un formato
+  propio comprimido. El precio: una selección de pura matemática no tiene qué buscar, y
+  ahí el botón lo dice en vez de quedarse mudo.
+- **La búsqueda es «el pedazo más largo que exista, y seguir desde ahí»**, no partir por
+  la mitad. Partiendo a ciegas, los cortes caían en el medio de las negritas y el párrafo
+  quedaba resaltado con huecos: el PDF arranca otra corrida donde el fuente dice
+  `\textbf{...}`, y una búsqueda que la cruce falla aunque las palabras estén todas.
+  Con esto los cortes caen solos donde el PDF cambia de fuente. **Verificado con el PNG.**
+- Desde el segundo pedazo se busca solo en la página del primero (y la siguiente, que un
+  párrafo puede cruzar): sin eso, «de la señal» matchea en diez páginas y se pinta todo.
+- **El resaltado va por `PDFView.highlightedSelections`**, no por anotaciones: es la API
+  que existe justo para esto (es lo que usa cualquier visor para los resultados de
+  búsqueda) y no toca el documento.
+- **Tres ganchos nuevos de desarrollo**, porque sin manos no se puede ni seleccionar ni
+  apretar: `XTAL_SYNC="texto"` simula la selección del editor y dispara el botón;
+  `XTAL_SYNC="pdf:texto"` la simula del otro lado; `XTAL_SYNC_PNG=/ruta.png` deja la
+  página del PDF **con los resaltados dibujados**. El último hizo falta porque el retrato
+  normal de la ventana no sirve para esto: un `PDFView` sale en blanco en el PNG (ya
+  estaba anotado en `Desarrollo`). `Sincronia.retratar` dibuja la página a mano y encima
+  las selecciones.
+- **Dos bugs salieron de probarlo de verdad**, los dos del ciclo de vida de SwiftUI:
+  1. En `updateNSView` del editor, cargar un archivo estaba encadenado con `else if` al
+     pedido de marcar un rango. Cuando la sincronía viene del PDF las dos cosas pasan en
+     el mismo ciclo, y el pedido se perdía. Ahora la carga no corta la cadena.
+  2. `scrollRangeToVisible` justo después de cargar el texto **no hace nada**: el layout
+     todavía no midió las líneas, así que el rango no tiene posición en pantalla. Va un
+     turno después del run loop. Costó encontrarlo porque la selección SÍ se aplicaba;
+     lo único que no pasaba era el scroll.
+- **Lo que NO se hizo**, por si vuelve: una orden `xtal app resaltar "texto"` para que el
+  agente pueda señalar un párrafo en el PDF desde la terminal. Sale casi gratis ahora que
+  `Sincronia.alPdf` existe, pero es scope aparte.
+
 ### Un solo ejemplo, y que muestre todo — HECHO (2026-08-26), pedido de Manu
 Había dos proyectos en el repo (`examples/rc-lowpass` y `vacio/`) y el ejemplo era
 un pasabajos RC de dos páginas: alcanzaba para el primer minuto, no para mostrar de

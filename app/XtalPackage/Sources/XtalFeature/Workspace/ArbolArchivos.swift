@@ -129,6 +129,9 @@ struct VisorArchivo: View {
     let url: URL
     @Binding var texto: String
     @Binding var insercion: EditorCodigo.Insercion?
+    /// La ida y vuelta con el PDF del informe.
+    let sincronia: Sincronia
+    @Binding var revelar: EditorCodigo.Revelar?
 
     var body: some View {
         // El `frame` va acá y no adentro de cada caso: un `NSViewRepresentable` no
@@ -142,11 +145,15 @@ struct VisorArchivo: View {
     private var contenido: some View {
         switch Arbol.clase(de: url) {
         case .texto:
-            EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion)
+            EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion,
+                         sincronia: sincronia, revelar: $revelar)
         case .imagen:
             imagen
         case .pdf:
-            VisorPDF(url: url)
+            // Un PDF cualquiera abierto desde el árbol NO se enchufa a la sincronía: si
+            // le prestara la vista, «resaltar en el PDF» pasaría a apuntar a este en vez
+            // de al informe. La sincronía es con `salida/main.pdf` y con ninguno más.
+            VisorPDF(url: url, sincronia: nil)
         case .otro:
             Vacio(icono: "doc", titulo: "No sé abrir este archivo",
                   detalle: "Es un \(url.pathExtension.uppercased()). Abrilo con el Finder si lo necesitás.")

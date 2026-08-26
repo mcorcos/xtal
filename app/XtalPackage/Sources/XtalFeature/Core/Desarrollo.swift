@@ -46,6 +46,29 @@ public enum Desarrollo {
         max(1, Int(ProcessInfo.processInfo.environment["XTAL_SESIONES"] ?? "") ?? 1)
     }
 
+    /// `XTAL_SYNC="un texto"` — hace de cuenta que eso está seleccionado en el editor
+    /// y aprieta el botón de sincronizar, apenas termina de compilar. Con el prefijo
+    /// `pdf:` la selección se simula del otro lado, para probar la vuelta.
+    ///
+    /// Existe por lo mismo que `XTAL_DEV`: una sesión sin manos no puede seleccionar
+    /// texto ni apretar un botón, y sin poder dispararla no hay forma de mirar si la
+    /// sincronía resalta lo que tiene que resaltar. Con esto, un `XTAL_SNAPSHOT` del
+    /// mismo arranque sale con el amarillo puesto (o sin nada, que también es un
+    /// resultado).
+    public static var textoASincronizar: String? {
+        let v = ProcessInfo.processInfo.environment["XTAL_SYNC"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
+    /// `XTAL_SYNC_PNG=/ruta.png` — junto con `XTAL_SYNC`, deja la página del PDF con
+    /// los resaltados dibujados. Ver `Sincronia.retratar`.
+    public static var rutaRetratoSync: URL? {
+        guard let p = ProcessInfo.processInfo.environment["XTAL_SYNC_PNG"], !p.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
+    }
+
     /// `XTAL_COMPILAR=1` — compila apenas abre, sin esperar un ⌘R.
     public static var compilarAlAbrir: Bool {
         ProcessInfo.processInfo.environment["XTAL_COMPILAR"] == "1"
