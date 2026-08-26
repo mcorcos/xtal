@@ -97,6 +97,18 @@ pub struct DocumentMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
 
+    /// El resumen, para el formato `paper`. Va arriba de todo, cruzando las dos
+    /// columnas, que es donde lo espera cualquiera que lea un paper.
+    ///
+    /// La clave en el TOML es `abstract`, que es como se llama en todos lados; en Rust
+    /// no se puede porque es palabra reservada.
+    #[serde(rename = "abstract", default, skip_serializing_if = "Option::is_none")]
+    pub abstract_text: Option<String>,
+
+    /// Las palabras clave, separadas por coma. Van debajo del resumen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keywords: Option<String>,
+
     /// Paquetes de LaTeX que este informe necesita, además de los que Xtal ya trae.
     ///
     /// Se escriben como los escribirías en el `.tex`, con sus opciones si hacen falta:

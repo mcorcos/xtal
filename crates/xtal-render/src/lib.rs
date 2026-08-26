@@ -187,7 +187,7 @@ mod tests {
         // `float` habilita `\begin{figure}[H]` — «acá y no donde vos quieras», que es
         // lo que uno quiere en un informe. Sin él: «Unknown float option `H'».
         let theme = Theme::load("generico", None).unwrap();
-        let p = document::build_preamble(&theme, &doc_vacio());
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad);
         assert!(p.contains("\\usepackage{float}"), "falta float:\n{p}");
         // Sin graphicspath, una imagen en la carpeta del proyecto no se encuentra: el
         // .tex se genera adentro de `salida/` y ahí no hay ninguna foto.
@@ -203,12 +203,49 @@ mod tests {
         let theme = Theme::load("generico", None).unwrap();
         let mut doc = doc_vacio();
         doc.packages = vec!["booktabs".into(), "[version=4]{mhchem}".into()];
-        let p = document::build_preamble(&theme, &doc);
+        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad);
         assert!(p.contains("\\usepackage{booktabs}"));
         // Si ya trae llaves se escribe tal cual: obligar a una sola forma es hacer que
         // alguien tenga que adivinar cuál.
         assert!(p.contains("\\usepackage[version=4]{mhchem}"));
         assert!(!p.contains("{[version=4]{mhchem}}"));
+    }
+
+    #[test]
+    fn el_formato_paper_trae_lo_que_una_columna_angosta_necesita() {
+        // Un paper a dos columnas no perdona lo que un informe a una columna sí: la
+        // línea mide la mitad. Estos cuatro son los que se notan.
+        let theme = Theme::load("generico", None).unwrap();
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Paper);
+        for paquete in ["microtype", "flushend", "booktabs", "newtxtext,newtxmath"] {
+            assert!(
+                p.contains(&format!("\\usepackage{{{paquete}}}")),
+                "falta {paquete}:\n{p}"
+            );
+        }
+        // `cleveref` DESPUÉS de `hyperref`, siempre: al revés los `\cref` salen sin
+        // link y el error que tira no dice que el problema es el orden.
+        let hyperref = p.find("{hyperref}").expect("falta hyperref");
+        let cleveref = p.find("{cleveref}").expect("falta cleveref");
+        assert!(
+            hyperref < cleveref,
+            "cleveref quedó antes que hyperref:\n{p}"
+        );
+        // Y la caja de texto es la del formato, no la del informe de facultad.
+        assert!(p.contains("columnsep"), "el paper no separa las columnas");
+    }
+
+    #[test]
+    fn el_informe_de_facultad_no_arrastra_lo_del_paper() {
+        // Lo que se entrega en una materia no gana nada con Times ni con columnas
+        // balanceadas, y cada paquete de más es uno que puede chocar con lo que el
+        // alumno agregue en `[document] packages`.
+        let theme = Theme::load("generico", None).unwrap();
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad);
+        for paquete in ["microtype", "flushend", "newtxtext", "cleveref", "authblk"] {
+            assert!(!p.contains(paquete), "{paquete} se coló en facultad:\n{p}");
+        }
+        assert!(p.contains("margin=2.5cm"), "cambió el margen del informe");
     }
 
     #[test]
@@ -219,7 +256,7 @@ mod tests {
         let mut doc = doc_vacio();
         doc.packages = vec!["booktabs".into()];
         doc.preamble = Some("\\newcommand{\\vin}{V}".into());
-        let p = document::build_preamble(&theme, &doc);
+        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad);
         let base = p.find("Preámbulo base").unwrap();
         let paquetes = p.find("Paquetes que pide el informe").unwrap();
         let propio = p.find("Preámbulo del informe").unwrap();

@@ -449,3 +449,30 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     let inventado = ejemplo.appendingPathComponent("secciones/99-no-existe.tex")
     #expect(st.cajas(archivo: inventado, lineas: 1...100) { _ in 842 }.isEmpty)
 }
+
+// MARK: - La tarjeta de proyecto nuevo
+
+@MainActor
+@Test func el_slug_de_la_app_dice_lo_mismo_que_el_de_la_cli() {
+    // Los mismos casos que testea `commands::slugify` en Rust. Están duplicados a
+    // propósito —la app no puede lanzar un proceso por cada tecla para mostrar la ruta—
+    // y esto es lo que evita que se separen sin que nadie se entere.
+    #expect(ProyectoNuevo.slug("TP4 - Filtros LLC") == "tp4-filtros-llc")
+    #expect(ProyectoNuevo.slug("  Hola  Mundo ") == "hola-mundo")
+    // Las tildes se conservan: la CLI hace lo mismo, y si acá se sacaran, la ruta que
+    // se muestra no sería la carpeta que se crea.
+    #expect(ProyectoNuevo.slug("Eléctrica") == "eléctrica")
+    #expect(ProyectoNuevo.slug("") == "")
+    #expect(ProyectoNuevo.slug("!!!") == "")
+}
+
+@MainActor
+@Test func los_themes_se_listan_con_el_nombre_que_declaran() {
+    let lista = ProyectoNuevo.disponibles()
+    #expect(!lista.isEmpty)
+    // El genérico siempre está, y va último: es la salida para el que no está en
+    // ninguna institución, no la primera opción que se ofrece.
+    #expect(lista.last?.id == "generico")
+    // Y no se muestra con su id crudo.
+    #expect(lista.last?.nombre != "generico")
+}

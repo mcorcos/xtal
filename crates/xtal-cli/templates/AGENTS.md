@@ -140,6 +140,35 @@ xtal run
 
 ---
 
+## El molde: institución y formato
+
+El `[project] theme` y el `[document] format` deciden cómo se ve el documento entero:
+la carátula, los márgenes, la tipografía y qué paquetes de LaTeX se cargan.
+
+- `format = "facultad"` — una columna, carátula con título, autores e institución,
+  índice. Es el default y lo que se entrega en una materia.
+- `format = "paper"` — dos columnas, encabezado a todo el ancho, tipografía Times.
+  Trae además `microtype`, `booktabs`, `cleveref`, `subcaption`, `flushend` y `xurl`,
+  que es lo que una columna angosta necesita para no verse mal.
+
+En formato `paper`, `[document]` acepta dos claves más que van arriba de todo, cruzando
+las dos columnas:
+
+```toml
+[document]
+abstract = "Un párrafo con lo que se hizo y qué dio."
+keywords = "filtro RLC, respuesta en frecuencia, factor de mérito"
+```
+
+**La app no deja cambiar el theme ni el formato de un proyecto ya empezado**: se eligen
+al crearlo. Vos sí podés (`xtal config set format paper`), y a veces es lo que hace
+falta — pero **avisá antes de qué se lleva puesto**: cambia el ancho de la caja de
+texto, así que las figuras se reacomodan, los saltos de página se corren y el
+`preamble` propio del informe puede chocar con los paquetes del formato nuevo. Compilá
+y mirá el resultado antes de decir que está hecho.
+
+---
+
 ## Si esto se abre con la app
 
 Xtal también es una app de Mac. Si estás corriendo adentro de su terminal, tenés

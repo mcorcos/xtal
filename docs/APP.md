@@ -196,6 +196,29 @@ que rompió, y un link a la sección donde está. El volcado completo queda a un
 Va ahí y no en un panel nuevo porque el lado derecho es donde uno mira para ver el
 resultado. Si no hay resultado, ahí va la explicación.
 
+## Lo que se elige al principio no se cambia después
+
+Al crear un informe, la app pregunta **dos cosas y nada más**: la institución y el
+formato. Un desplegable nativo cada una, con la explicación de qué se lleva cada opción
+debajo.
+
+No son preferencias: son el molde del documento. El formato decide la clase de LaTeX, los
+márgenes, la tipografía y qué paquetes se cargan; la institución decide la carátula, el
+color y la afiliación. **Cambiar cualquiera de las dos a mitad de camino es rehacer el
+documento**, y en un informe con figuras ya ubicadas y texto ya escrito eso se lleva
+puesto el trabajo: el ancho de la caja de texto cambia, las figuras se reacomodan solas y
+los saltos de página se corren.
+
+Antes se podían cambiar desde un menú de la barra, con un click y sin decir nada. Ya no.
+En la barra quedó **el sello**: qué institución y cuántas columnas, para mirar. El que de
+verdad quiera cambiarlo tiene un agente adentro de la app al que pedírselo, y ahí es una
+conversación con alguien que compila y mira el resultado, no un click al pasar.
+
+Los themes de la lista salen de los que hay instalados, con el nombre que declara cada
+uno en su `theme.toml` —su sigla, o el nombre completo si no tiene—: el que arma el theme
+de su facultad lo ve en el desplegable sin tocar la app. El genérico va último y se llama
+«Sin institución», que es lo que hace.
+
 ## Una flecha sola, que va para los dos lados
 
 Overleaf pone **dos flechas** entre el editor y el PDF, una por sentido, y te hace elegir

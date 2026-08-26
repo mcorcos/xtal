@@ -387,7 +387,7 @@ public struct Workspace: View {
             .keyboardShortcut("s", modifiers: .command)
             .disabled(proyecto.compilando)
 
-            menuFacultad
+            selloDelMolde
 
             Divider()
 
@@ -429,38 +429,28 @@ public struct Workspace: View {
         .help("Escribir vos, o hablarle al agente")
     }
 
-    /// Cambiar de theme es, en la práctica, **cambiar de facultad**: la carátula, los
-    /// colores y el preámbulo salen de ahí. Que sea un desplegable y no una línea en un
-    /// TOML es la mitad de lo que hace que esto se sienta una app.
-    private var menuFacultad: some View {
-        Menu {
-            Section("Institución") {
-                ForEach(ajuste.themes, id: \.self) { t in
-                    Button {
-                        Task { await ajuste.cambiarTheme(t); await proyecto.compilar() }
-                    } label: {
-                        Label(t.capitalized, systemImage: ajuste.theme == t ? "checkmark" : "building.columns")
-                    }
-                }
-            }
-            Section("Formato") {
-                Button {
-                    Task { await ajuste.cambiarFormato("facultad"); await proyecto.compilar() }
-                } label: {
-                    Label("Facultad — con carátula", systemImage: ajuste.formato == "facultad" ? "checkmark" : "doc.text")
-                }
-                Button {
-                    Task { await ajuste.cambiarFormato("paper"); await proyecto.compilar() }
-                } label: {
-                    Label("Paper — dos columnas", systemImage: ajuste.formato == "paper" ? "checkmark" : "doc.on.doc")
-                }
-            }
-        } label: {
-            Image(systemName: "building.columns")
+    /// Con qué molde se está escribiendo: institución y formato, **para mirar**.
+    ///
+    /// Antes esto era un menú y las dos cosas se cambiaban con un click. Estaba mal: el
+    /// formato decide la clase de LaTeX, los márgenes, la tipografía y los paquetes, y
+    /// la institución decide la carátula y el color. Cambiar cualquiera de las dos con
+    /// el informe ya escrito es rehacer el documento, y las figuras ya ubicadas y los
+    /// saltos de página se van al demonio sin que nadie haya avisado.
+    ///
+    /// Se elige **al crear el proyecto** (ver `ProyectoNuevo`), cuando todavía no hay
+    /// nada que romper. Acá queda a la vista, que es lo único que hacía falta: saber con
+    /// qué molde estás. El que necesite cambiarlo de verdad tiene un agente adentro de
+    /// la app al que pedírselo, y ahí es alguien que mira el resultado.
+    private var selloDelMolde: some View {
+        HStack(spacing: Tok.S.xs) {
+            Image(systemName: "building.columns").font(.system(size: 11))
+            Text(ajuste.theme.uppercased()).font(Tok.F.label)
+            Text("·").foregroundStyle(Tok.textTertiary)
+            Text(ajuste.formato == "paper" ? "2 columnas" : "1 columna").font(Tok.F.label)
         }
-        .menuIndicator(.hidden)
-        .help("Cambiar de institución o de formato")
-        .disabled(ajuste.aplicando)
+        .foregroundStyle(Tok.textTertiary)
+        .help("Institución y formato. Se eligen al crear el informe; para cambiarlos, "
+              + "pedíselo al agente — se rehace el documento entero.")
     }
 
     // MARK: - Paneles

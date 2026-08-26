@@ -252,6 +252,53 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### El molde se elige al principio, y ahí queda — HECHO (2026-08-26), pedido de Manu
+El theme y el formato se cambiaban desde un menú de la barra, con un click y sin decir
+nada. Manu pidió lo contrario: **preguntarlos al crear el proyecto y no dejar cambiarlos
+después**, porque a mitad de camino no tiene sentido — «si alguien lo quiere hacer lo
+hará con el chat».
+- **`Welcome/ProyectoNuevo.swift`** — la tarjeta: nombre, dónde, institución y formato,
+  con `Picker` de estilo `.menu` (el desplegable nativo de macOS). Se llega desde el
+  botón nuevo **«Informe nuevo»** del inicio, que antes no existía: la app sabía abrir y
+  sabía traer el ejemplo, pero no sabía crear.
+- **La lista de instituciones sale de los themes instalados**, con el nombre que declara
+  cada uno en su `theme.toml` (sigla, o nombre completo). El id es un slug y en un
+  desplegable se lee mal. El genérico va último y se llama «Sin institución».
+- **El slug está duplicado en Swift** para poder mostrar la ruta antes de crearla —
+  preguntarle a la CLI en cada tecla sería un proceso por letra— y hay un test con los
+  mismos casos que el de Rust. **Las tildes se conservan**: `slugify` de Rust no las
+  saca, y el `folding(.diacriticInsensitive)` del primer intento hacía que la ruta que se
+  muestra no fuera la carpeta que se crea.
+- **En el workspace, el menú se fue y quedó el sello**: institución y columnas, para
+  mirar, con el `help` que explica que se pide al agente. `Ajuste` perdió
+  `cambiarTheme`/`cambiarFormato`.
+- **El formato `paper`, ahora en serio.** Antes era `twocolumn` y nada más. Ahora
+  `format_preamble()` en `xtal-render/document.rs` le pone lo que una columna angosta
+  necesita: `microtype` (el que más se nota: sin él el justificado a media columna se
+  llena de ríos), `newtxtext`/`newtxmath` (Times), `flushend` (empareja la última
+  página), `xurl` (una URL sin cortar se sale de la caja), `cleveref`, `booktabs`,
+  `caption`/`subcaption`, `multirow`, `adjustbox`, `enumitem`, `authblk` y `titling`.
+  Márgenes de 2 cm con 6 mm entre columnas.
+  - **`cleveref` va después de `hyperref` y las fuentes antes**, y hay un test que lo
+    fija: al revés, los `\cref` salen sin link y el error no dice que el problema es el
+    orden.
+  - `authblk` une los autores con «and». El documento está en castellano: se cambia a
+    «y» con `\Authand`/`\Authands`.
+  - Todos los paquetes se verificaron **contra el bundle de Tectonic** antes de
+    comprometerlos, compilando un `.tex` de prueba. Ese bundle está congelado: que un
+    paquete exista en TeX Live no quiere decir que esté ahí.
+- **`[document] abstract` y `keywords`** en el modelo, para el formato paper: van arriba
+  de todo, cruzando las dos columnas, en una caja al 86% del ancho (a todo el ancho, un
+  párrafo de cuerpo chico da una línea larguísima). La clave en el TOML es `abstract`;
+  en Rust el campo es `abstract_text` porque `abstract` es palabra reservada.
+- **`amssymb` pasó a la base**, no solo al paper: no molesta a nadie y lo pide cualquier
+  informe con matemática.
+- **Trampa de los tests de Swift**: `ProyectoNuevo` es una `View`, así que está aislada al
+  actor principal. Un `@Test` sin `@MainActor` que llame a un método suyo **aborta el
+  proceso con SIGTRAP** en vez de fallar, y no imprime nada que ayude. Otra: un
+  comparador de `sorted` que no sea un orden estricto también aborta — por eso el orden
+  de los themes se arma con una clave (tupla) y no con `if`s adentro del comparador.
+
 ### SyncTeX: que se resalte todo, no solo la prosa — HECHO (2026-08-26), pedido de Manu
 Manu seleccionó un bloque con dos `align` adentro y en el PDF se resaltó **una sola
 línea**: la de prosa. Las ecuaciones no imprimen texto que se pueda buscar. Eso es
