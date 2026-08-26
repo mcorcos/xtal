@@ -487,3 +487,33 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     // Y no se muestra con su id crudo.
     #expect(lista.last?.nombre != "generico")
 }
+
+@MainActor
+@Test func del_pdf_se_marca_el_parrafo_entero_y_no_la_linea_en_blanco() {
+    // SyncTeX tiene la granularidad de TeX, y TeX arma un párrafo de una sola vez
+    // cuando llega al final: la caja de la primera línea impresa queda anotada con la
+    // línea donde el párrafo TERMINA. Acá el párrafo va de la 1 a la 3 y SyncTeX dice 4.
+    let texto = """
+    El ensayo se hace con el filtro cargado por la punta
+    del osciloscopio, que a estas frecuencias no carga
+    nada. La Figura 3 muestra la cadena.
+
+    \\begin{figure}[H]
+    """
+    let (rango, desde) = try! #require(Workspace.rangoDeParrafo(4, en: texto))
+    #expect(desde == 1, "tendría que arrancar en la primera línea del párrafo")
+    let marcado = (texto as NSString).substring(with: rango)
+    #expect(marcado.hasPrefix("El ensayo"))
+    #expect(marcado.hasSuffix("la cadena."))
+    // Y no se lleva la línea en blanco ni lo que viene después.
+    #expect(!marcado.contains("figure"))
+
+    // Cayendo en el medio del párrafo, el resultado es el mismo párrafo.
+    let (r2, d2) = try! #require(Workspace.rangoDeParrafo(2, en: texto))
+    #expect(d2 == 1)
+    #expect(r2 == rango)
+
+    // Una línea pasada del final no rompe.
+    #expect(Workspace.rangoDeParrafo(999, en: texto) != nil)
+    #expect(Workspace.rangoDeParrafo(0, en: texto) == nil)
+}

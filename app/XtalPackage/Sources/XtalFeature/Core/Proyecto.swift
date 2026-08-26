@@ -191,6 +191,8 @@ extension Notification.Name {
     /// ⌘S. Lo manda el menú y lo escucha el workspace: un atajo tiene que estar en el
     /// menú para que alguien lo descubra, y desde ahí no se llega al estado de la vista.
     public static let xtalGuardarYCompilar = Notification.Name("xtal.guardarYCompilar")
-    /// «Sincronizar con el PDF». Mismo arreglo que ⌘S: el menú avisa, el workspace hace.
-    public static let xtalSincronizar = Notification.Name("xtal.sincronizar")
+    /// Las dos direcciones de la sincronía. Mismo arreglo que ⌘S: el menú avisa, el
+    /// workspace hace. Son dos y no una con autodetección: ver `flechasSincronia`.
+    public static let xtalSincronizarAlPdf = Notification.Name("xtal.sincronizar.pdf")
+    public static let xtalSincronizarAlEditor = Notification.Name("xtal.sincronizar.editor")
 }

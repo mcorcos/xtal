@@ -252,6 +252,29 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### Dos flechas, no una que adivine — HECHO (2026-08-26), pedido de Manu
+Manu lo probó y no andaba: la autodetección de dirección erraba. La razón no se arregla —
+**casi siempre hay selección de los dos lados**: uno marca algo en el PDF para mirarlo,
+después se va al editor a escribir, y la selección vieja del PDF sigue ahí. El botón
+tiene que apostar y cuando pierde te lleva para el lado contrario.
+- Ahora son **dos**: `→` (editor al PDF, ⌥⌘→) y `←` (PDF al editor, ⌥⌘←). El menú *Ver*
+  tiene las dos.
+- **Van paradas en el divisor**, no en la barra del panel derecho. Dos cosas que costaron:
+  - `HSplitView` **recorta a sus hijos**: colgarlas del panel derecho con un
+    desplazamiento negativo, para que queden a caballo del borde, deja media cápsula
+    cortada. Van adentro, pegadas al borde.
+  - Y **no propaga las preferences de sus hijos** (es un `NSSplitView`): un
+    `GeometryReader` adentro del editor reporta **cero**, así que no se puede medir dónde
+    quedó el divisor para posicionarlas ahí.
+- Solo aparecen con las dos vistas: sin PDF no hay dos lados, y en modo agente no hay
+  editor.
+- **La vuelta arranca donde arranca la selección**, no en su centro: con el centro,
+  marcar tres párrafos terminaba en la figura del medio.
+- **Se marca el párrafo entero, no la línea.** SyncTeX tiene la granularidad de TeX, y
+  TeX arma un párrafo de una sola vez cuando llega al final: la caja de la primera línea
+  impresa queda anotada con la línea donde el párrafo **termina**. Marcar esa línea deja
+  el cursor en el renglón en blanco de abajo y se lee como que erró. `rangoDeParrafo`.
+
 ### Abrir un proyecto y que haya algo abierto — HECHO (2026-08-26)
 Dos tests de la app venían fallando desde antes, los dos por lo mismo: esperaban que el
 `xtal.toml` fuera el primer archivo de la lista y lo que se abría al arrancar. El

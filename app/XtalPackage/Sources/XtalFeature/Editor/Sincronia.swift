@@ -194,8 +194,17 @@ public final class Sincronia {
         guard let sel = vista?.currentSelection, let pagina = sel.pages.first else {
             return nil
         }
-        let caja = sel.bounds(for: pagina)
-        return fuenteDe(pagina: pagina, punto: CGPoint(x: caja.midX, y: caja.midY))
+        // Se pregunta por el **arranque** de la selección, no por su centro.
+        //
+        // Con el centro, marcar tres párrafos para «llevame a esto» terminaba en la
+        // figura que había en el medio. Lo que uno quiere decir al seleccionar de arriba
+        // hacia abajo es «llevame a donde empieza».
+        let primera = sel.selectionsByLine().first ?? sel
+        let caja = primera.bounds(for: pagina)
+        // Un pelo adentro del borde: justo en la esquina puede caer en el espacio entre
+        // dos cajas y no matchear ninguna.
+        return fuenteDe(pagina: pagina,
+                        punto: CGPoint(x: caja.minX + 2, y: caja.midY))
     }
 
     /// Lo que hay seleccionado en el PDF ahora mismo, ya normalizado.

@@ -49,11 +49,15 @@ struct XtalApp: App {
 
                 Divider()
 
-                // La ida y vuelta entre el editor y el PDF. Sin atajo acá por lo mismo
-                // que «Guardar y compilar»: lo tiene el botón de la barra, y dos vistas
-                // con el mismo atajo se pisan. Está en el menú para que se descubra.
-                Button("Sincronizar con el PDF") {
-                    NotificationCenter.default.post(name: .xtalSincronizar, object: nil)
+                // La ida y la vuelta entre el editor y el PDF, cada una por su lado.
+                // Sin atajo acá por lo mismo que «Guardar y compilar»: lo tienen los
+                // botones del divisor, y dos vistas con el mismo atajo se pisan. Están
+                // en el menú para que se descubran.
+                Button("Llevar la selección al PDF") {
+                    NotificationCenter.default.post(name: .xtalSincronizarAlPdf, object: nil)
+                }
+                Button("Traer del PDF al editor") {
+                    NotificationCenter.default.post(name: .xtalSincronizarAlEditor, object: nil)
                 }
             }
         }
