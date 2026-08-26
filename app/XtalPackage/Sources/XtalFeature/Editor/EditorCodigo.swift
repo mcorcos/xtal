@@ -150,8 +150,31 @@ struct EditorCodigo: NSViewRepresentable {
         func textViewDidChangeSelection(_ n: Notification) {
             guard let tv = n.object as? NSTextView else { return }
             let r = tv.selectedRange()
-            padre.sincronia.seleccionEditor =
-                r.length > 0 ? (tv.string as NSString).substring(with: r) : ""
+            let s = tv.string as NSString
+            padre.sincronia.seleccionEditor = r.length > 0 ? s.substring(with: r) : ""
+            // Las líneas son lo que entiende SyncTeX: el mapa que deja LaTeX habla de
+            // archivo y línea, no de caracteres.
+            padre.sincronia.archivoEditor = padre.archivoID
+            padre.sincronia.lineasEditor =
+                r.length > 0 ? Self.lineas(de: r, en: s) : nil
+        }
+
+        /// En qué líneas (contando desde 1) cae ese rango.
+        ///
+        /// Se cuentan los saltos a mano en vez de usar `enumerateSubstrings`: esto corre
+        /// en cada movimiento del cursor y un archivo de sección son un par de miles de
+        /// caracteres, así que contar es más barato que armar substrings.
+        static func lineas(de rango: NSRange, en s: NSString) -> ClosedRange<Int> {
+            var linea = 1, primera = 1
+            let fin = min(rango.location + rango.length, s.length)
+            var i = 0
+            while i < fin {
+                if i == rango.location { primera = linea }
+                if s.character(at: i) == 10 { linea += 1 }
+                i += 1
+            }
+            if rango.location >= fin { primera = linea }
+            return primera...max(primera, linea)
         }
 
         /// Mete el texto donde está el cursor, respetando el deshacer.

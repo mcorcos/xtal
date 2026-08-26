@@ -389,3 +389,63 @@ private func pdfDelEjemplo() -> PDFDocument? {
     // Lo que no está, no está: mejor decirlo que marcar cualquier cosa.
     #expect(Sincronia.rango(de: "conclusiones del trabajo práctico", en: fuente) == nil)
 }
+
+// MARK: - SyncTeX
+//
+// Se testea contra el `.synctex.gz` del ejemplo del repositorio, porque lo único que
+// puede romperse acá es leer mal un archivo real: el formato tiene un encabezado gzip
+// con campos opcionales, unidades en scaled points y el eje Y al revés que PDFKit.
+// Un archivo de juguete no probaría ninguna de esas tres cosas.
+
+private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
+    var raiz = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { raiz.deleteLastPathComponent() }
+    let ejemplo = raiz.appendingPathComponent("examples/filtro-rlc")
+    guard let st = SyncTeX.leer(alLadoDe: ejemplo.appendingPathComponent("salida/main.pdf"))
+    else { return nil }
+    return (st, ejemplo)
+}
+
+@Test func synctex_encuentra_la_ecuacion_que_el_texto_no_puede() throws {
+    guard let (st, ejemplo) = syncTexDelEjemplo() else { return }
+    let modelo = ejemplo.appendingPathComponent("secciones/03-modelo.tex")
+
+    // Las primeras doce líneas de `03-modelo.tex` son una línea de prosa, la ecuación
+    // (1) y la línea de prosa que sigue. Una ecuación NO tiene texto buscable: esto es
+    // exactamente lo que la búsqueda por texto no puede resolver.
+    let cajas = st.cajas(archivo: modelo, lineas: 1...12) { _ in 842 }
+    #expect(!cajas.isEmpty, "no encontró nada para 03-modelo.tex")
+
+    // Tienen que ser pocas y grandes: una por línea impresa. Si salen decenas, el
+    // filtro de cajas anidadas dejó de andar y se pinta la misma zona quince veces.
+    #expect(cajas.count <= 6, "demasiadas cajas: \(cajas.count)")
+
+    // Y una de ellas tiene que ser alta: la ecuación mide varias líneas de alto,
+    // mientras que un renglón de prosa mide unos 11 puntos.
+    #expect(cajas.contains { $0.rect.height > 25 }, "no salió la caja de la ecuación")
+
+    // Todas en la misma página, y esa página es la del capítulo 3.
+    #expect(Set(cajas.map(\.pagina)).count == 1)
+}
+
+@Test func synctex_vuelve_del_pdf_al_archivo_y_la_linea() throws {
+    guard let (st, ejemplo) = syncTexDelEjemplo() else { return }
+    let modelo = ejemplo.appendingPathComponent("secciones/03-modelo.tex")
+
+    // Se va y se vuelve: se pide dónde cayó la ecuación, y desde el centro de esa caja
+    // se pregunta de dónde salió. Tiene que dar el mismo archivo.
+    let cajas = st.cajas(archivo: modelo, lineas: 1...12) { _ in 842 }
+    let ecuacion = try #require(cajas.max(by: { $0.rect.height < $1.rect.height }))
+    let centro = CGPoint(x: ecuacion.rect.midX, y: ecuacion.rect.midY)
+
+    let vuelta = try #require(st.fuente(pagina: ecuacion.pagina, punto: centro,
+                                        altoDePagina: 842))
+    #expect(vuelta.archivo.hasSuffix("secciones/03-modelo.tex"), "\(vuelta.archivo)")
+    #expect((1...12).contains(vuelta.linea), "línea \(vuelta.linea)")
+}
+
+@Test func synctex_no_inventa_para_un_archivo_que_no_esta() throws {
+    guard let (st, ejemplo) = syncTexDelEjemplo() else { return }
+    let inventado = ejemplo.appendingPathComponent("secciones/99-no-existe.tex")
+    #expect(st.cajas(archivo: inventado, lineas: 1...100) { _ in 842 }.isEmpty)
+}

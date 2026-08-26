@@ -243,6 +243,19 @@ public struct Workspace: View {
                 try? await Task.sleep(for: .milliseconds(800))
                 if texto.hasPrefix("pdf:") {
                     sincronia.simularSeleccionEnPdf(String(texto.dropFirst(4)))
+                } else if texto.hasPrefix("lineas:") {
+                    // `lineas:secciones/03-modelo.tex:1-12` — la selección que hace
+                    // falta para probar SyncTeX, que trabaja con archivo y línea.
+                    let partes = texto.dropFirst(7).split(separator: ":")
+                    let rango = partes.count > 1 ? partes[1].split(separator: "-") : []
+                    if partes.count > 1, rango.count == 2,
+                       let desde = Int(rango[0]), let hasta = Int(rango[1]) {
+                        let url = proyecto.carpeta.appendingPathComponent(String(partes[0]))
+                        alEditor { abrirArchivo(url) }
+                        sincronia.archivoEditor = url.standardizedFileURL.path
+                        sincronia.lineasEditor = desde...hasta
+                        sincronia.seleccionEditor = "(líneas \(desde)–\(hasta))"
+                    }
                 } else {
                     sincronia.seleccionEditor = texto
                 }
@@ -701,11 +714,60 @@ public struct Workspace: View {
             sincronia.alPdf(desde: delEditor)
             return
         }
+        // La vuelta exacta primero: el mapa de SyncTeX dice archivo y línea sin
+        // adivinar. Buscar el texto en los fuentes queda para cuando no hay mapa.
+        if let destino = sincronia.fuenteDeLaSeleccion() {
+            alFuente(destino.archivo, linea: destino.linea, como: "sincronía")
+            return
+        }
         guard let delPdf = sincronia.seleccionDelPdf() else {
             sincronia.avisar("Seleccioná texto de un lado y volvé a apretar", bien: false)
             return
         }
         alEditorDesde(delPdf)
+    }
+
+    /// Abre ese archivo en el editor y deja el cursor en esa línea.
+    ///
+    /// Es donde termina todo lo que viene del PDF, venga del botón o de un doble click.
+    /// Los `.tex` de `salida/` se ignoran a propósito: SyncTeX también mapea el
+    /// `main.tex` generado y los gráficos, y mandar a alguien a editar ahí es mandarlo
+    /// a perder el trabajo en la próxima compilación.
+    private func alFuente(_ ruta: String, linea: Int, como: String) {
+        let url = URL(fileURLWithPath: ruta).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path), !generado(url) else {
+            sincronia.avisar("Eso sale de un archivo que genera Xtal", bien: false)
+            return
+        }
+        let yaAbierto = arbol.seleccionado?.standardizedFileURL == url
+        if !yaAbierto { alEditor { abrirArchivo(url) } } else { alEditor {} }
+
+        let fuente = yaAbierto ? texto : ((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+        guard let rango = Self.rangoDeLinea(linea, en: fuente) else { return }
+        if yaAbierto {
+            revelar = EditorCodigo.Revelar(rango: rango)
+        } else {
+            // El editor recién va a tener este archivo adentro en el próximo ciclo.
+            DispatchQueue.main.async { revelar = EditorCodigo.Revelar(rango: rango) }
+        }
+        sincronia.avisar("\(url.lastPathComponent), línea \(linea)", bien: true)
+        _ = como
+    }
+
+    /// El rango de caracteres de una línea (contando desde 1).
+    static func rangoDeLinea(_ linea: Int, en texto: String) -> NSRange? {
+        guard linea >= 1 else { return nil }
+        let s = texto as NSString
+        var actual = 1, inicio = 0, i = 0
+        while i < s.length {
+            if actual == linea { break }
+            if s.character(at: i) == 10 { actual += 1; inicio = i + 1 }
+            i += 1
+        }
+        guard actual == linea else { return nil }
+        var fin = inicio
+        while fin < s.length, s.character(at: fin) != 10 { fin += 1 }
+        return NSRange(location: inicio, length: max(0, fin - inicio))
     }
 
     /// Del PDF al fuente: encuentra de qué archivo salió ese texto, lo abre y lo marca.
@@ -924,7 +986,12 @@ public struct Workspace: View {
             switch solapa {
             case .pdf:
                 if proyecto.pdf != nil {
-                    VisorPDF(url: proyecto.pdf, sincronia: sincronia)
+                    VisorPDF(url: proyecto.pdf, sincronia: sincronia,
+                             alDobleClick: { pagina, punto in
+                                 guard let d = sincronia.fuenteDe(pagina: pagina, punto: punto)
+                                 else { return }
+                                 alFuente(d.archivo, linea: d.linea, como: "doble click")
+                             })
                 } else {
                     Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
                           detalle: "Apretá ⌘S y el PDF aparece acá")

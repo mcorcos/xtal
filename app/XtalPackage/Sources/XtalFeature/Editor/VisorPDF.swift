@@ -15,8 +15,13 @@ struct VisorPDF: NSViewRepresentable {
     /// no participan de la sincronía: la sincronía es con el informe.
     let sincronia: Sincronia?
 
+    /// Qué hacer cuando alguien hace doble click en una página: la vuelta al fuente.
+    /// Recibe la página y el punto, en coordenadas de esa página.
+    var alDobleClick: ((PDFPage, CGPoint) -> Void)?
+
     func makeNSView(context: Context) -> PDFView {
-        let v = PDFView()
+        let v = VistaPDF()
+        v.alDobleClick = alDobleClick
         v.autoScales = true
         v.displayMode = .singlePageContinuous
         v.displayDirection = .vertical
@@ -44,6 +49,7 @@ struct VisorPDF: NSViewRepresentable {
     }
 
     func updateNSView(_ v: PDFView, context: Context) {
+        (v as? VistaPDF)?.alDobleClick = alDobleClick
         // La vista se puede haber recreado (cambio de modo, panel que se abre): volver
         // a prestarla es barato y es lo que evita que la sincronía apunte a una muerta.
         sincronia?.vista = v
@@ -53,5 +59,26 @@ struct VisorPDF: NSViewRepresentable {
 
     private func cargar(en v: PDFView) {
         v.document = url.flatMap { PDFDocument(url: $0) }
+    }
+}
+
+
+/// El `PDFView` con una sola cosa agregada: **el doble click vuelve al fuente**.
+///
+/// Es lo que uno espera de un visor al lado de un editor —Overleaf y Skim hacen lo
+/// mismo— y es la mitad más útil de la sincronía: mirás el PDF, ves algo para corregir,
+/// hacés doble click ahí y estás parado en la línea que lo produjo.
+///
+/// Se llama a `super` igual, así que el doble click sigue seleccionando la palabra como
+/// en cualquier visor de Mac. Lo que hacemos es agregarle un efecto, no reemplazarlo.
+final class VistaPDF: PDFView {
+    var alDobleClick: ((PDFPage, CGPoint) -> Void)?
+
+    override func mouseDown(with evento: NSEvent) {
+        super.mouseDown(with: evento)
+        guard evento.clickCount == 2, let alDobleClick else { return }
+        let enVista = convert(evento.locationInWindow, from: nil)
+        guard let pagina = page(for: enVista, nearest: true) else { return }
+        alDobleClick(pagina, convert(enVista, to: pagina))
     }
 }

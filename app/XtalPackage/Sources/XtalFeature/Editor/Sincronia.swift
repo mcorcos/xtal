@@ -47,6 +47,23 @@ public final class Sincronia {
     /// Lo último que se seleccionó en el editor, en LaTeX crudo.
     @ObservationIgnored var seleccionEditor: String = ""
 
+    /// El archivo abierto en el editor y qué líneas abarca la selección. Es lo que
+    /// entiende SyncTeX, que habla de archivo y línea y no de caracteres.
+    @ObservationIgnored var archivoEditor: String = ""
+    @ObservationIgnored var lineasEditor: ClosedRange<Int>?
+
+    /// El mapa que dejó el motor, con la fecha del archivo del que salió.
+    ///
+    /// Se cachea porque son decenas de miles de líneas y se consulta en cada
+    /// sincronía; se relee cuando el `.synctex.gz` cambia, que es cada vez que se
+    /// recompila. Sin comparar la fecha, después de recompilar se resaltaría con las
+    /// coordenadas del PDF anterior.
+    @ObservationIgnored private var mapa: SyncTeX?
+    @ObservationIgnored private var mapaDe: URL?
+
+    /// Las marcas puestas en el PDF por SyncTeX, para poder sacarlas.
+    @ObservationIgnored private var marcas: [(PDFPage, PDFAnnotation)] = []
+
     /// Lo único observado: el cartelito de resultado. Cambia una vez por sincronía.
     public private(set) var aviso: Aviso?
 
@@ -60,17 +77,86 @@ public final class Sincronia {
 
     public init() {}
 
+    // MARK: - SyncTeX
+
+    /// Pinta las cajas que produjeron las líneas seleccionadas. `false` si no hay mapa
+    /// o si esas líneas no dejaron nada en el PDF.
+    private func marcarConSyncTeX(en doc: PDFDocument, vista: PDFView) -> Bool {
+        guard let lineas = lineasEditor, !archivoEditor.isEmpty,
+              let pdf = doc.documentURL else { return false }
+
+        // Releer solo si cambió: comparar la fecha es más barato que volver a inflar y
+        // parsear un megabyte en cada click.
+        let base = pdf.deletingPathExtension()
+        let candidatos = [base.appendingPathExtension("synctex.gz"),
+                          base.appendingPathExtension("synctex")]
+        let fechaEnDisco = candidatos.compactMap {
+            (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate
+        }.max()
+        if mapaDe != pdf || mapa?.modificado != fechaEnDisco {
+            mapa = SyncTeX.leer(alLadoDe: pdf)
+            mapaDe = pdf
+        }
+        guard let mapa else { return false }
+
+        let cajas = mapa.cajas(archivo: URL(fileURLWithPath: archivoEditor),
+                               lineas: lineas) { i in
+            doc.page(at: i).map { Double($0.bounds(for: .mediaBox).height) } ?? 842
+        }
+        guard !cajas.isEmpty else { return false }
+
+        limpiar()
+        for caja in cajas {
+            guard let pagina = doc.page(at: caja.pagina) else { continue }
+            // Una anotación de resaltado y no una `PDFSelection`: la selección solo
+            // sabe envolver texto, y acá hay que pintar el rectángulo de una ecuación,
+            // que no tiene texto adentro.
+            let marca = PDFAnnotation(bounds: caja.rect, forType: .highlight,
+                                      withProperties: nil)
+            marca.color = NSColor.systemYellow
+            pagina.addAnnotation(marca)
+            marcas.append((pagina, marca))
+        }
+        if let primera = cajas.first, let pagina = doc.page(at: primera.pagina) {
+            vista.go(to: primera.rect, on: pagina)
+        }
+        let cuantas = cajas.count
+        avisar(cuantas == 1 ? "Resaltado en el PDF"
+                            : "Resaltados \(cuantas) bloques en el PDF", bien: true)
+        return true
+    }
+
+    /// De qué archivo y línea salió un punto del PDF. Lo usa el doble click del visor.
+    public func fuenteDe(pagina: PDFPage, punto: CGPoint) -> (archivo: String, linea: Int)? {
+        guard let doc = vista?.document, let pdf = doc.documentURL else { return nil }
+        if mapaDe != pdf || mapa == nil {
+            mapa = SyncTeX.leer(alLadoDe: pdf)
+            mapaDe = pdf
+        }
+        return mapa?.fuente(pagina: doc.index(for: pagina), punto: punto,
+                            altoDePagina: Double(pagina.bounds(for: .mediaBox).height))
+    }
+
     // MARK: - Editor -> PDF
 
-    /// Busca en el PDF el texto que se seleccionó en el editor y lo pinta de amarillo.
+    /// Marca en el PDF lo que se seleccionó en el editor. Devuelve `true` si encontró.
     ///
-    /// Devuelve `true` si encontró algo.
+    /// **Primero SyncTeX**, que es el mapa que deja el propio motor de LaTeX: sabe de
+    /// qué línea del fuente salió cada caja del PDF, así que marca *todo* lo que
+    /// seleccionaste —una ecuación, una tabla, un esquemático— y no solo la prosa.
+    ///
+    /// La búsqueda por texto queda de respaldo, para cuando no hay mapa: un proyecto
+    /// compilado con una versión anterior de Xtal, o un `.tex` externo compilado a mano.
+    /// Es menos completa (una fórmula no imprime texto que se pueda buscar) pero no
+    /// necesita que el motor haya dejado nada al lado del PDF.
     @discardableResult
     public func alPdf(desde latex: String) -> Bool {
         guard let vista, let doc = vista.document else {
             avisar("No hay PDF compilado todavía", bien: false)
             return false
         }
+        if marcarConSyncTeX(en: doc, vista: vista) { return true }
         let frase = Self.textoPlano(de: latex)
         guard Self.buscable(frase) else {
             avisar("Esa selección no tiene texto que buscar en el PDF", bien: false)
@@ -99,6 +185,18 @@ public final class Sincronia {
     }
 
     // MARK: - PDF -> editor
+
+    /// De qué archivo y línea salió lo que está seleccionado en el PDF.
+    ///
+    /// Es la vuelta exacta, y por eso se prueba antes que buscar el texto en los
+    /// fuentes: acá no hay que adivinar por parecido, el motor lo anotó.
+    public func fuenteDeLaSeleccion() -> (archivo: String, linea: Int)? {
+        guard let sel = vista?.currentSelection, let pagina = sel.pages.first else {
+            return nil
+        }
+        let caja = sel.bounds(for: pagina)
+        return fuenteDe(pagina: pagina, punto: CGPoint(x: caja.midX, y: caja.midY))
+    }
 
     /// Lo que hay seleccionado en el PDF ahora mismo, ya normalizado.
     public func seleccionDelPdf() -> String? {
@@ -139,6 +237,8 @@ public final class Sincronia {
     /// viejas ya no significan nada.
     public func limpiar() {
         vista?.highlightedSelections = nil
+        for (pagina, marca) in marcas { pagina.removeAnnotation(marca) }
+        marcas.removeAll()
     }
 
     public func avisar(_ texto: String, bien: Bool) {

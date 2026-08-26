@@ -207,30 +207,53 @@ de la misma idea es hacerle elegir a la persona algo que el programa ya sabe.
 El botón está en el borde entre los dos paneles, porque es de los dos y de ninguno.
 También está en el menú *Ver* (⇧⌘J).
 
-- **Del editor al PDF**: el texto seleccionado se resalta **en amarillo** en el PDF y la
-  página salta ahí.
-- **Del PDF al editor**: se busca de qué archivo salió ese texto, se abre y se marca. Si
-  estabas en modo agente, te lleva al editor.
+- **Del editor al PDF**: lo seleccionado se resalta **en amarillo** en el PDF y la página
+  salta ahí. Se resalta todo, no solo la prosa: las ecuaciones, las tablas y los
+  esquemáticos también.
+- **Del PDF al editor**: se abre el archivo que produjo eso y el cursor queda en la línea.
+  Si estabas en modo agente, te lleva al editor. **Doble click en el PDF hace lo mismo.**
 
-### Por qué por texto y no con SyncTeX
+### SyncTeX primero, el texto de respaldo
 
-SyncTeX es el mecanismo canónico: el motor de LaTeX anota, mientras compone, en qué línea
-del fuente nació cada caja del PDF. Da la ubicación exacta de cualquier cosa, incluso de
-una ecuación o una tabla, que no tienen texto buscable. **No se usa acá**, y es a
-propósito:
+**SyncTeX** es el mapa que deja el propio motor de LaTeX: mientras compone, anota en qué
+línea del fuente nació cada caja del PDF. Xtal lo pide siempre (`--synctex` a Tectonic,
+`-synctex=1` a pdflatex): cuesta un archivo al lado del PDF y nada de tiempo, y que esté
+o no esté no puede depender de un flag que nadie se acuerda de pasar.
 
-- **Lo que se quiere es resaltar el texto**, no la línea. SyncTeX devuelve el rectángulo
-  de una caja: da un bloque, no las palabras.
-- Habría que pasarle `--synctex` al motor, parsear un formato propio comprimido y
-  mantener ese parser. Son cientos de líneas para llegar a algo menos preciso en el caso
-  que importa.
-- El texto que uno selecciona en un informe es prosa el 90% de las veces, y la prosa
-  **está** en el PDF: se puede buscar.
+Es lo que hace que se resalte **todo** lo que seleccionaste y no solo la prosa. Una
+ecuación, una tabla, un esquemático de `circuitikz`, un gráfico de PGFPlots: nada de eso
+imprime texto que se pueda buscar, pero todo salió de una línea, y eso SyncTeX lo sabe.
 
-El precio: una selección que es pura matemática o puros comandos no tiene texto que
-buscar, y ahí el botón no encuentra nada — y lo dice, en vez de quedarse mudo.
+La búsqueda por texto quedó de respaldo, para cuando no hay mapa —un proyecto compilado
+con una versión anterior, o un `.tex` externo compilado a mano—. Es menos completa pero
+no necesita que el motor haya dejado nada.
 
-### Las dos traducciones
+El parser está en `Editor/SyncTeX.swift` y hay tres cosas del formato que conviene saber
+antes de tocarlo: las coordenadas van en *scaled points* (65536 por punto), **el eje Y
+crece hacia abajo** al revés que en PDFKit, y los `Input:` que nombran cada archivo **no
+están todos en el encabezado** — aparecen intercalados en el contenido, a medida que el
+motor abre cada archivo.
+
+Una línea de LaTeX produce un árbol de cajas anidadas: la ecuación entera, cada fracción,
+cada subíndice. Se pintan **solo las maximales** —lo que está adentro de otra ya elegida
+se descarta— y queda un rectángulo por línea impresa en vez de la misma zona pintada
+quince veces.
+
+### Doble click en el PDF
+
+Con el mapa, la vuelta también es exacta: **doble click en cualquier lado del PDF abre el
+archivo que lo produjo y deja el cursor en esa línea**. Es lo que hacen Overleaf y Skim, y
+es la mitad más útil de todo esto: mirás el PDF, ves algo para corregir, hacés doble click
+ahí y ya estás parado donde se arregla.
+
+Se llama a `super` igual, así que el doble click sigue seleccionando la palabra como en
+cualquier visor de Mac: se le agrega un efecto, no se lo reemplaza.
+
+Lo que sale del `main.tex` generado —la carátula, los títulos, el índice— no lleva a
+ningún lado a propósito: ese archivo lo rehace Xtal en cada compilación y mandar a alguien
+a editarlo es mandarlo a perder el trabajo.
+
+### Las dos traducciones, para cuando no hay mapa
 
 El LaTeX que uno selecciona no es el texto que sale impreso, así que hay que traducir en
 los dos sentidos (`Editor/Sincronia.swift`):

@@ -48,7 +48,9 @@ public enum Desarrollo {
 
     /// `XTAL_SYNC="un texto"` — hace de cuenta que eso está seleccionado en el editor
     /// y aprieta el botón de sincronizar, apenas termina de compilar. Con el prefijo
-    /// `pdf:` la selección se simula del otro lado, para probar la vuelta.
+    /// `pdf:` la selección se simula del otro lado, para probar la vuelta; con
+    /// `lineas:<archivo>:<desde>-<hasta>` se simula por líneas, que es lo que necesita
+    /// SyncTeX (una ecuación no tiene texto que pasarle).
     ///
     /// Existe por lo mismo que `XTAL_DEV`: una sesión sin manos no puede seleccionar
     /// texto ni apretar un botón, y sin poder dispararla no hay forma de mirar si la

@@ -252,6 +252,44 @@ app hace y la CLI no le quedaba afuera. Terminaba diciendo «apretá vos tal cos
   la vista; si falla, `xtal app ver errores` señala el problema en pantalla en vez de
   pegar un log en el chat.
 
+### SyncTeX: que se resalte todo, no solo la prosa — HECHO (2026-08-26), pedido de Manu
+Manu seleccionó un bloque con dos `align` adentro y en el PDF se resaltó **una sola
+línea**: la de prosa. Las ecuaciones no imprimen texto que se pueda buscar. Eso es
+exactamente el agujero que tapa SyncTeX, y ahora está.
+- **El motor lo genera siempre**: `--synctex` a Tectonic y `-synctex=1` a pdflatex, en
+  `xtal-compile`. Cuesta un archivo al lado del PDF y nada de tiempo; que esté o no esté
+  no puede depender de un flag que nadie se acuerda de pasar.
+- **`Editor/SyncTeX.swift`** es el parser, escrito de cero. Tres cosas del formato que
+  costaron y están anotadas:
+  1. **Los `Input:` NO están todos en el encabezado.** Aparecen intercalados en el
+     contenido, a medida que el motor abre cada archivo. Parseando solo el encabezado, el
+     mapa sale con un archivo (el `main.tex`) y ninguna sección.
+  2. **El eje Y crece hacia abajo** y la `y` de una caja es su línea base, así que el
+     rectángulo va de `y - alto` a `y + profundidad`, y hay que darlo vuelta con el alto
+     de la página para PDFKit.
+  3. Todo en *scaled points*: 65536 por punto.
+- **Foundation no trae gunzip.** `Compression` sí sabe inflar, pero **raw deflate**, sin
+  el envoltorio de gzip: hay que saltear su encabezado a mano (10 bytes fijos más los
+  campos opcionales que anuncian los flags). Está en `descomprimir`.
+- **Se pintan solo las cajas maximales.** Una línea de LaTeX produce un árbol de cajas
+  anidadas —la ecuación entera, cada fracción, cada subíndice—: sin filtrar, se pinta la
+  misma zona quince veces. Descartando lo que está adentro de otra ya elegida queda un
+  rectángulo por línea impresa. Y se tira lo que ocupa más del 45% de la página, que es
+  la vbox del cuerpo del documento.
+- **El resaltado va por `PDFAnnotation(.highlight)` y no por `PDFSelection`**: una
+  selección solo sabe envolver texto, y acá hay que pintar el rectángulo de una ecuación.
+  Se guardan para poder sacarlas.
+- **Doble click en el PDF lleva al fuente** (`VistaPDF` en `VisorPDF.swift`), llamando a
+  `super` igual para no romper el doble click que selecciona la palabra. Lo que sale del
+  `main.tex` generado no lleva a ningún lado a propósito.
+- La búsqueda por texto **no se tiró**: quedó de respaldo para cuando no hay mapa (un
+  proyecto compilado con una versión anterior, un `.tex` externo).
+- **`main.synctex.gz` del ejemplo va commiteado**, con el mismo criterio que el PDF: sin
+  él, los tres tests de SyncTeX se saltean solos en cualquier máquina que no haya
+  compilado el ejemplo, que es justo la de otro.
+- Gancho nuevo: `XTAL_SYNC="lineas:<archivo>:<desde>-<hasta>"`, porque SyncTeX trabaja
+  con archivo y línea y una ecuación no tiene texto que pasarle.
+
 ### La flecha entre el editor y el PDF — HECHO (2026-08-26), pedido de Manu
 Overleaf pone dos flechas entre el editor y el compilado, una por sentido. Manu pidió
 **una sola, bidireccional**: seleccionás texto de un lado, apretás, y se resalta del otro.
