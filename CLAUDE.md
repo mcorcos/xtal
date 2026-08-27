@@ -412,6 +412,38 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
   ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
   va a advertir la primera vez.
 
+### Que las dos apps no se separen solas — HECHO (2026-08-27), pedido de Manu
+Hay **dos apps de escritorio en lenguajes distintos** que se publican con el **mismo
+número de version**. Si la de Windows queda atrás, el que la instala recibe una app que
+dice 0.6.0 y no hace lo que la de Mac hace con ese número, y **no tiene cómo enterarse**.
+Ya se separaron una vez —25 divergencias, encontradas mirando un retrato de la pantalla y
+no leyendo el código— y nada lo impedía. Ver `docs/RELEASING.md` («Que las dos apps no se
+separen»).
+- **`paridad.toml`** en la raíz: qué archivo de Mac se corresponde con cuáles de Windows,
+  y qué es esa pieza en una línea. 30 pares. Antes esa relación estaba escrita **en prosa,
+  en 8 archivos**, y una máquina no la podía leer.
+- **`dev/paridad.py`** la compara contra la historia de git. Solo biblioteca estándar
+  (`tomllib`, Python 3.11+): meter una dependencia para leer un archivo de config sería
+  peor que el problema.
+- **Los dos chequeos son distintos a propósito, y esa es la decisión de diseño:**
+  - **En cada PR: que el mapa apunte a archivos que existen. Frena el merge.** Si alguien
+    renombra un archivo y no toca el mapa, ese par deja de vigilar y **se ve exactamente
+    igual que uno que funciona**. Mismo criterio que el logo declarado que no está en un
+    theme: lo que se declara tiene que existir.
+  - **En el release: si cambió el lado de Mac y el de Windows no. NO frena.** Que la de
+    Mac se adelante mientras se trabaja está bien —se prueba primero en la máquina que
+    uno tiene adelante— y frenar cada PR obligaría a portar en el momento, que termina en
+    dos ports a medias en vez de uno bueno. Un chequeo que frena por una diferencia que ya
+    se conocía se termina salteando siempre. Lo que no puede pasar es que la diferencia
+    sea **invisible al publicar**.
+- **El informe va a las notas de la Release**, arriba de las que genera GitHub (`body` +
+  `generate_release_notes: true` **suman**, no se pisan), y además deja un `::warning::`
+  amarillo en Actions: las notas las lee quien las busca, el warning lo ve el que publica.
+- **Encontró deriva de verdad el primer día**: entre `v0.3.2` y `main`, `Estado.swift` y
+  `ProyectoNuevo.swift` se habían movido sin su contraparte.
+- El job hace `fetch-depth: 0`. Con el checkout de un solo commit no hay tag anterior
+  contra qué comparar y el paso se salteaba sin decir por qué.
+
 ### La app de Mac se instala con un comando — HECHO (2026-08-27), pedido de Manu
 La app existía desde hacía meses y **no se publicaba en ningún lado**. Para tenerla había
 que clonar el repo y abrir Xcode. Windows tenía instalador y Mac no: la única forma de

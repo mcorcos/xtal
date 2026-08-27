@@ -413,11 +413,72 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # 3b. ¿Quedó la app de Windows atrás de la de Mac?
+  # ---------------------------------------------------------------------------
+  #
+  # Xtal tiene dos apps de escritorio escritas en lenguajes distintos que se publican con
+  # el MISMO número de version. Si la de Windows quedó atrás, el que la instala recibe una
+  # app que dice 0.6.0 y no hace lo que la de Mac hace con ese número, y no tiene forma de
+  # enterarse. Ya se separaron una vez —25 divergencias, descubiertas mirando un retrato de
+  # la pantalla y no leyendo el código— y nada lo impedía.
+  #
+  # **No frena el release, y es a propósito.** Que la app de Mac se adelante mientras se
+  # trabaja está bien: se prueba primero en la máquina que uno tiene adelante. Lo que no
+  # puede pasar es que la diferencia sea invisible al publicar. Por eso esto es un informe
+  # que va a las notas de la Release, no un portón: un chequeo que frena por una diferencia
+  # que ya se conocía se termina salteando siempre.
+  #
+  # El mapa de qué archivo corresponde a cuál está en `paridad.toml`.
+  paridad:
+    name: paridad entre las dos apps
+    needs: check
+    runs-on: ubuntu-latest
+    outputs:
+      informe: ${{ steps.p.outputs.informe }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # El informe compara contra el tag ANTERIOR, así que hace falta la historia
+          # entera y los tags. Con el checkout de un solo commit no hay contra qué
+          # comparar y el paso se saltea sin decir por qué.
+          fetch-depth: 0
+
+      - id: p
+        name: Comparar contra el tag anterior
+        run: |
+          set -euo pipefail
+          # El tag anterior a este, por fecha. En el primer release no hay ninguno y no
+          # hay nada que comparar: el informe queda vacío y la Release sale igual.
+          ANTERIOR="$(git tag --sort=-creatordate | grep -v "^${GITHUB_REF_NAME}$" | head -1 || true)"
+          if [ -z "$ANTERIOR" ]; then
+            echo "No hay un tag anterior: es el primer release. No hay paridad que medir."
+            python3 dev/paridad.py --lista
+            echo "informe=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Comparando $ANTERIOR con ${GITHUB_REF_NAME}"
+          python3 dev/paridad.py "$ANTERIOR" "${GITHUB_REF_NAME}" | tee /tmp/paridad.md
+
+          # Si encontró deriva, además queda amarillo en la pestaña Actions: las notas de
+          # la Release las lee quien las busca, y el warning lo ve el que publica.
+          if grep -q "quedó atrás" /tmp/paridad.md; then
+            echo "::warning::La app de Windows quedó atrás de la de Mac. El detalle está en las notas de la Release."
+          fi
+
+          # A la salida del job, escapado: un output multilínea necesita delimitador.
+          {
+            echo "informe<<PARIDAD_EOF"
+            cat /tmp/paridad.md
+            echo "PARIDAD_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
   # 4. Publicar la Release
   # ---------------------------------------------------------------------------
   release:
     name: publicar release
-    needs: [check, build, app, app-mac]
+    needs: [check, build, app, app-mac, paridad]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -468,6 +529,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Xtal v${{ needs.check.outputs.version }}
+          # `body` va ARRIBA de las notas que GitHub genera solo (los commits y los PRs),
+          # no en lugar de ellas. Acá va el informe de paridad: si la app de Windows quedó
+          # atrás, se lee en la misma página desde donde se baja.
+          body: ${{ needs.paridad.outputs.informe }}
           generate_release_notes: true
           files: |
             dist/*.tar.gz
