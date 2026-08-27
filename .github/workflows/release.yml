@@ -355,7 +355,24 @@ jobs:
     # (`ARCHS = arm64 x86_64`): el xcframework de libghostty trae la slice
     # `macos-arm64_x86_64`, así que una sola app anda en Apple Silicon y en Intel y no
     # hay que publicar dos zips ni que el cask adivine cuál bajar.
-    runs-on: macos-15
+    #
+    # **`macos-26` y no `macos-15`, y esto NO es cosmético.** El Xcode más nuevo de
+    # `macos-15` es el 26.3, y el 26.3 **crashea** armando el grafo de paquetes de este
+    # proyecto:
+    #
+    #     INTERNAL ERROR: Uncaught exception
+    #     -[NSMutableArray insertObjects:atIndexes:]: count of array (15) differs
+    #     from count of index set (14)
+    #     … IDESPMWorkspaceDelegate.registerDependencyFileReferences
+    #
+    # Es un bug de Xcode, no del proyecto: el stack es todo suyo y no menciona nada
+    # nuestro. Apareció al pasar de 14 a 15 paquetes, que fue cuando entraron
+    # `mlx-swift-lm` y `swift-transformers` para el autocomplete. `macos-26` trae Xcode
+    # 26.6, donde no pasa — es el mismo con el que la app compila a mano en una Mac.
+    #
+    # Si algún día hay que volver a `macos-15`, el síntoma es ese `Abort trap: 6` con
+    # exit 134, y lo primero que hay que mirar es la version de Xcode del runner.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
 
@@ -393,22 +410,11 @@ jobs:
 
       # Resolver los paquetes ANTES de compilar, y en su propio paso.
       #
-      # **Esto es lo que arregla el crash de la 0.6.0.** Sin este paso, `xcodebuild`
-      # resuelve el grafo de paquetes *mientras* compila, y al terminar Xcode intenta
-      # registrar las referencias en el navegador del proyecto. Ahí revienta:
-      #
-      #     INTERNAL ERROR: Uncaught exception
-      #     -[NSMutableArray insertObjects:atIndexes:]: count of array (15) differs
-      #     from count of index set (14)
-      #     … IDESPMWorkspaceDelegate.registerDependencyFileReferences
-      #
-      # Es un bug de Xcode y el stack es todo suyo, así que no dice qué hacer. Con la
-      # resolución hecha aparte, el grafo ya está armado y estable cuando arranca el
-      # build, y el camino que crashea no se recorre. Los 15 paquetes aparecieron al
-      # sumar `mlx-swift-lm` y `swift-transformers` para el autocomplete.
-      #
-      # De paso: si la resolución falla —un repo caído, un checksum que no da— el error
-      # dice eso, en vez de salir como un fallo del build treinta líneas más adelante.
+      # **Esto no arregla el crash de Xcode 26.3** —lo probamos y crashea igual, solo que
+      # en este paso en vez del de al lado—; eso lo arregla el runner, ver arriba. Queda
+      # porque hace otra cosa que sí vale: si la resolución falla —un repo caído, un
+      # checksum que no da, una etiqueta que se movió— el error dice eso, en vez de salir
+      # como un fallo del build treinta líneas más adelante y con otro nombre.
       - name: Resolver las dependencias de SwiftPM
         working-directory: app
         run: |
