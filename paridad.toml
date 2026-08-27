@@ -295,3 +295,45 @@ mac = "app/XtalPackage/Sources/XtalFeature/Revision/Resaltado.swift"
 win = ["app-win/src/editor/EditorCodigo.tsx"]
 por_que = "el coloreado del código adentro del diff"
 
+# Autocomplete: el modelo que corre adentro de la máquina
+# ---------------------------------------------------------------------------
+#
+# Las dos apps hacen lo mismo con **motores distintos**, y esa es la única parte del
+# producto donde el motor no se comparte:
+#
+#   Mac      MLX (`mlx-swift-lm`), in-process, pesos en `.safetensors`
+#   Windows  llama.cpp, en un subproceso, el mismo modelo en `.gguf`
+#
+# MLX es de Apple y aprovecha la memoria unificada de Apple Silicon; en Windows no
+# existe. El modelo es el mismo —Qwen2.5-Coder 1.5B, cuantizado a 4 bits— y las
+# decisiones de producto son las mismas, que es lo que estos pares vigilan.
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/Autocomplete.swift"
+win = ["app-win/src/editor/autocomplete.ts"]
+por_que = "el control del autocomplete: prender, apagar, pedir la sugerencia y aceptarla. Acá vive la promesa de que apagado no carga nada"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/ModeloLocal.swift"
+win = ["app-win/src-tauri/src/modelo.rs"]
+por_que = "dónde vive el modelo, si está entero y cuánto ocupa"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/DescargaModelo.swift"
+win = ["app-win/src-tauri/src/modelo.rs"]
+por_que = "la bajada de los ~876 MB, con progreso de verdad y con cancelar"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/MotorLocal.swift"
+win = ["app-win/src-tauri/src/motor.rs"]
+por_que = "el que corre el modelo, con fill-in-the-middle. El único archivo de cada app que toca su framework de inferencia"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/Fantasma.swift"
+win = ["app-win/src/editor/fantasma.ts"]
+por_que = "el texto gris a la derecha del cursor. Se dibuja encima, nunca se inserta en el documento"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Autocomplete/PanelAutocomplete.swift"
+win = ["app-win/src/settings/Ajustes.tsx"]
+por_que = "la pestaña de Ajustes: el interruptor, la descarga y el borrado. En Windows es una sección de la pantalla de ajustes"

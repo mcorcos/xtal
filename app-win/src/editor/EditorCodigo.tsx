@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
+import { autocompletion, closeBrackets, completionStatus } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { StreamLanguage, bracketMatching, indentUnit } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
@@ -35,6 +35,8 @@ import {
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { extensionDe } from "../core/api";
+import { campoFantasma, temaFantasma } from "./fantasma";
+import * as autocomplete from "./autocomplete";
 
 export interface Insercion {
   /**
@@ -192,6 +194,33 @@ export function EditorCodigo({
           closeBrackets(),
           autocompletion(),
           highlightSelectionMatches(),
+          // El fantasma del autocomplete. El campo guarda la sugerencia adentro del
+          // estado del editor; el tema le pone el gris.
+          campoFantasma,
+          temaFantasma,
+          // El fantasma va **antes** que todo lo demás, y ése es el punto: CodeMirror
+          // recorre los keymaps en orden y se queda con el primero que devuelve `true`.
+          // Con fantasma en pantalla, Tab lo acepta; sin fantasma, `aceptar` devuelve
+          // `false` y la tecla sigue de largo hasta `indentWithTab`, que es lo que tiene
+          // que pasar. Lo mismo con Escape: solo se come la tecla si había algo.
+          keymap.of([
+            {
+              key: "Tab",
+              // Con la lista de `\omega` abierta, Tab es de ella. Es la misma regla que
+              // en Mac, donde el editor mira `autocompletado.visible`: acá el equivalente
+              // es `completionStatus`, que devuelve `null` cuando no hay lista.
+              run: (v) => (completionStatus(v.state) ? false : autocomplete.aceptar(v)),
+            },
+            {
+              key: "Escape",
+              run: (v) => {
+                const habia = v.state.field(campoFantasma, false)?.size ?? 0;
+                if (!habia) return false;
+                autocomplete.descartar(v);
+                return true;
+              },
+            },
+          ]),
           // Tab indenta en vez de mover el foco: en un editor eso es lo que uno espera,
           // y sin esto no hay forma de indentar con el teclado.
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
@@ -206,6 +235,14 @@ export function EditorCodigo({
               const s = u.state.doc.toString();
               propio.current = s;
               alCambiarRef.current(s);
+              // Pedir la sugerencia. Apagado, esto no hace nada — el guard está en la
+              // primera línea de `pedir`.
+              autocomplete.pedir(u.view, completionStatus(u.state) !== null);
+            }
+            // Mover el cursor invalida la sugerencia: fue calculada para el lugar donde
+            // estaba antes.
+            if (u.selectionSet && !u.docChanged) {
+              autocomplete.descartar(u.view);
             }
             if (u.selectionSet || u.docChanged) {
               const r = u.state.selection.main;

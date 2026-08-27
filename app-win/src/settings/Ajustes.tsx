@@ -15,11 +15,14 @@
 import { useEffect, useState } from "react";
 import { Icono } from "../design/Icono";
 import { CLAVES, useAjuste } from "../core/ajustes";
-import { xtal, type Doctor } from "../core/api";
+import { xtal, modelo, type Doctor, type EstadoModelo } from "../core/api";
+import { listen } from "@tauri-apps/api/event";
+import * as autocomplete from "../editor/autocomplete";
 
 const PANELES = [
   { id: "general", nombre: "General", icono: "ajuste" },
   { id: "editor", nombre: "Editor", icono: "editor" },
+  { id: "autocomplete", nombre: "Autocomplete", icono: "agente" },
   { id: "herramientas", nombre: "Herramientas", icono: "codigo" },
   { id: "agentes", nombre: "Agentes", icono: "agente" },
   { id: "cuentas", nombre: "Cuentas", icono: "informe" },
@@ -67,6 +70,7 @@ export function Ajustes({ cerrar }: { cerrar: () => void }) {
 
             {panel === "general" && <General />}
             {panel === "editor" && <Editor />}
+            {panel === "autocomplete" && <Autocomplete />}
             {panel === "herramientas" && <Herramientas />}
             {panel === "agentes" && <Agentes />}
             {panel === "cuentas" && <Cuentas />}
@@ -139,6 +143,169 @@ function Editor() {
       <FilaAjuste titulo="Colorear la sintaxis" detalle="Comandos, comentarios, strings y fórmulas.">
         <Interruptor prendido={colores} cambiar={setColores} />
       </FilaAjuste>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Autocomplete
+// ---------------------------------------------------------------------------
+//
+// La pantalla tiene que contestar tres preguntas sin que haya que probar nada: qué hace
+// esto, si algo mío sale de la máquina, y cuánto ocupa. Un interruptor llamado
+// «Autocomplete» y nada más obliga a prenderlo para averiguarlo, y acá lo que se prende
+// baja casi un giga.
+//
+// Contraparte: `app/…/Autocomplete/PanelAutocomplete.swift`.
+
+/** «986 MB», para la pantalla. */
+function legible(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  return `${Math.round(bytes / 1e6)} MB`;
+}
+
+function Autocomplete() {
+  const [activo, setActivo] = useAjuste(CLAVES.autocomplete, false);
+  const [info, setInfo] = useState<EstadoModelo | null>(null);
+  const [bajando, setBajando] = useState(false);
+  const [progreso, setProgreso] = useState({ hechos: 0, total: 0 });
+  const [error, setError] = useState("");
+  const [estado, setEstado] = useState(autocomplete.verEstado());
+
+  const refrescar = () => {
+    void modelo.estado().then(setInfo).catch(() => setInfo(null));
+  };
+
+  useEffect(refrescar, []);
+  useEffect(() => autocomplete.suscribir(() => setEstado(autocomplete.verEstado())), []);
+
+  // El progreso llega por evento y no como retorno de la llamada: la bajada son varios
+  // minutos, y una barra que no se mueve se lee igual que un cuelgue.
+  useEffect(() => {
+    const p = listen<{ hechos: number; total: number }>("modelo:progreso", (e) =>
+      setProgreso(e.payload),
+    );
+    return () => {
+      void p.then((f) => f());
+    };
+  }, []);
+
+  const descargar = async () => {
+    setError("");
+    setBajando(true);
+    setProgreso({ hechos: 0, total: info?.peso ?? 0 });
+    try {
+      await modelo.descargar();
+      refrescar();
+      // Si el interruptor ya estaba prendido esperando al modelo, arrancar solo.
+      void autocomplete.sincronizar();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBajando(false);
+    }
+  };
+
+  // Borrar apaga primero. Sacarle el archivo de abajo a un `llama-server` prendido lo
+  // deja andando desde memoria hasta que alguien cierre la app, y el panel diría que no
+  // está instalado mientras sigue sugiriendo.
+  const borrar = async () => {
+    setActivo(false);
+    await autocomplete.apagar();
+    await modelo.borrar().catch((e) => setError(String(e)));
+    refrescar();
+  };
+
+  const hay = info?.completo ?? false;
+  const fraccion = progreso.total > 0 ? Math.min(1, progreso.hechos / progreso.total) : 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-xxl)" }}>
+      <div className="grupo">
+        <FilaAjuste
+          titulo="Autocomplete"
+          detalle="Mientras escribís, aparece en gris lo que seguiría. Con Tab lo aceptás; con Esc lo descartás."
+        >
+          <Interruptor
+            prendido={activo}
+            cambiar={(v) => {
+              setActivo(v);
+              void autocomplete.sincronizar();
+            }}
+          />
+        </FilaAjuste>
+      </div>
+
+      <Seccion titulo="El modelo">
+        <div className="grupo">
+        <FilaAjuste
+          titulo={info?.nombre ?? "Qwen2.5 Coder 1.5B"}
+          detalle={
+            bajando
+              ? "Bajando…"
+              : hay
+                ? `Ocupa ${legible(info?.ocupado ?? 0)} en disco.`
+                : `Ocupa ${legible(info?.peso ?? 0)} en disco. Se baja una sola vez.`
+          }
+        >
+          {bajando ? (
+            <button className="boton" onClick={() => void modelo.cancelar()}>
+              Cancelar
+            </button>
+          ) : !hay ? (
+            <button className="boton primario" onClick={() => void descargar()}>
+              Descargar
+            </button>
+          ) : (
+            <div className="fila-h" style={{ gap: "var(--s-md)" }}>
+              <span
+                className={`chip ${estado === "listo" ? "verde" : estado === "error" ? "rojo" : ""}`}
+              >
+                {estado === "listo" && <Icono nombre="ok" tam={11} />}
+                {estado === "listo"
+                  ? "Andando"
+                  : estado === "cargando"
+                    ? "Cargando…"
+                    : estado === "error"
+                      ? "Falló"
+                      : "Instalado"}
+              </span>
+              <button className="boton" onClick={() => void borrar()}>
+                Borrar
+              </button>
+            </div>
+          )}
+        </FilaAjuste>
+        </div>
+      </Seccion>
+
+      {bajando && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-xs)" }}>
+          <progress value={fraccion} max={1} style={{ width: "100%" }} />
+          <span className="label" style={{ color: "var(--texto-3)" }}>
+            {legible(progreso.hechos)} de {legible(progreso.total)}
+          </span>
+        </div>
+      )}
+
+      {(error || autocomplete.verMensaje()) && (
+        <span className="label" style={{ color: "var(--rojo-deep)" }}>
+          {error || autocomplete.verMensaje()}
+        </span>
+      )}
+
+      {/* Lo que la gente de verdad quiere saber, y va escrito y no implícito. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-xs)" }}>
+        <span className="label" style={{ color: "var(--texto-2)" }}>
+          Corre adentro de tu máquina
+        </span>
+        <span className="label" style={{ color: "var(--texto-3)" }}>
+          No hay servidor, ni cuenta, ni clave que pegar. El modelo se baja una vez y a
+          partir de ahí trabaja sin internet: lo que escribís no sale de esta computadora.
+          Con el interruptor apagado el modelo ni se carga — podés verlo en el
+          Administrador de tareas: no queda ningún proceso.
+        </span>
+      </div>
     </div>
   );
 }

@@ -128,6 +128,40 @@ export const xtal = {
 };
 
 // ---------------------------------------------------------------------------
+// El autocomplete de la línea
+// ---------------------------------------------------------------------------
+
+export interface EstadoModelo {
+  nombre: string;
+  completo: boolean;
+  peso: number;
+  ocupado: number;
+  ruta: string;
+}
+
+/**
+ * El modelo que corre adentro de la máquina, y el proceso que lo corre.
+ *
+ * Están separados a propósito: `modelo` es el archivo en disco —bajarlo, borrarlo— y
+ * `motor` es `llama-server`. Con el interruptor apagado, `motor` nunca se llama y no hay
+ * ningún proceso. Ver `app-win/src-tauri/src/motor.rs`.
+ */
+export const modelo = {
+  estado: () => invoke<EstadoModelo>("modelo_estado"),
+  descargar: () => invoke<void>("modelo_descargar"),
+  cancelar: () => invoke<void>("modelo_cancelar"),
+  borrar: () => invoke<void>("modelo_borrar"),
+};
+
+export const motor = {
+  prender: () => invoke<void>("motor_prender"),
+  apagar: () => invoke<void>("motor_apagar"),
+  prendido: () => invoke<boolean>("motor_prendido"),
+  completar: (prefijo: string, sufijo: string) =>
+    invoke<string>("motor_completar", { prefijo, sufijo }),
+};
+
+// ---------------------------------------------------------------------------
 // La carpeta
 // ---------------------------------------------------------------------------
 

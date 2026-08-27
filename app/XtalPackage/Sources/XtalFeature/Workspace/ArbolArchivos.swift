@@ -162,7 +162,8 @@ struct VisorArchivo: View {
                 }
                 EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion,
                              sincronia: sincronia, revelar: $revelar,
-                             autocompletado: autocompletado)
+                             autocompletado: autocompletado,
+                             autocomplete: .compartido)
             }
         case .imagen:
             imagen

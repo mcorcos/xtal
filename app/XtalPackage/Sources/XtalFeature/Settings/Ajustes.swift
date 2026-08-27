@@ -10,6 +10,7 @@ public struct Ajustes: View {
     enum Panel: String, CaseIterable, Identifiable {
         case general = "General"
         case editor = "Editor"
+        case autocomplete = "Autocomplete"
         case herramientas = "Herramientas"
         case agentes = "Agentes"
         case cuentas = "Cuentas"
@@ -19,6 +20,7 @@ public struct Ajustes: View {
             switch self {
             case .general: return "gearshape"
             case .editor: return "text.cursor"
+            case .autocomplete: return "wand.and.stars"
             case .herramientas: return "wrench.and.screwdriver"
             case .agentes: return "sparkles"
             case .cuentas: return "person.crop.circle"
@@ -60,6 +62,7 @@ public struct Ajustes: View {
                 switch panel {
                 case .general: PanelGeneral()
                 case .editor: PanelEditor()
+                case .autocomplete: PanelAutocomplete()
                 case .herramientas: PanelHerramientas()
                 case .agentes: PanelAgentes()
                 case .cuentas: PanelCuentas()

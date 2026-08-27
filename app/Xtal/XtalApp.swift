@@ -11,6 +11,11 @@ struct XtalApp: App {
                 .onAppear {
                     Desarrollo.escucharOrdenes()
                     Desarrollo.retratarSiCorresponde()
+                    // El autocomplete lee su interruptor acá y no en el editor: si
+                    // cargara el modelo al abrir un `.tex`, la primera vez que alguien
+                    // toca un archivo la app se quedaría unos segundos sin decir por qué.
+                    // Apagado —que es lo de fábrica— esto no hace nada.
+                    Autocomplete.compartido.sincronizar()
                 }
                 // La puerta de la app: `xtal://…`, que es lo que dispara `xtal app`.
                 // Es la única forma que tiene un agente de manejar la ventana — apretar
