@@ -158,9 +158,15 @@ su espacio vertical.
 Verificado compilando el ejemplo con `theme = generico` en los dos formatos: los dos
 dan PDF, sin la línea de institución y sin hueco donde estaba.
 
-Queda afuera de este punto lo de los **logos**: el `theme.toml` de ITBA tiene la sección
-`[logos]` comentada y el motor todavía no la lee. Cuando se implemente, el theme genérico
-es el que prueba el caso "no hay logo".
+**Los logos ya no quedan afuera** (27 de agosto de 2026). El motor lee `[logos]`: el
+archivo se copia a `salida/theme/` y la carátula del formato `facultad` lo trae con
+`\includegraphics`. En monocromo usa el logo B/N y no cae al de color. El primero con
+logos es `themes/uca`; `generico` es el que prueba el caso "no hay logo", como estaba
+previsto. Un logo declarado que no está en la carpeta **hace fallar la carga del theme**:
+ignorarlo haría que un typo se viera igual que un theme sin logo. Ver `docs/THEMES.md`.
+
+Lo que sigue afuera: `compacto` (el logo chico para el header de cada página) y el logo
+en el formato `paper`, que no lleva membrete a propósito.
 
 ### 7. Windows — HECHO, pero nadie lo corrió todavía (26 de agosto de 2026)
 

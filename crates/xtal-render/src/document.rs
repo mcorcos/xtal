@@ -182,7 +182,15 @@ pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta, format: Doc
 }
 
 /// Construye la carátula según el formato.
-pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> String {
+///
+/// `monochrome` decide **cuál** de los logos del theme se usa, no si hay logo: ver
+/// [`Theme::logo_for`].
+pub fn build_cover(
+    project: &Project,
+    theme: &Theme,
+    format: DocFormat,
+    monochrome: bool,
+) -> String {
     let doc = &project.document;
     let title = doc
         .title
@@ -198,6 +206,19 @@ pub fn build_cover(project: &Project, theme: &Theme, format: DocFormat) -> Strin
         DocFormat::Facultad => {
             let mut c = String::new();
             c.push_str("\\begin{titlepage}\n\\centering\n");
+            // El logo del theme, arriba de todo: es donde va el membrete de cualquier
+            // carátula. El ancho es fijo y no un porcentaje de la página para que el
+            // sello mida lo mismo en A4 y en carta.
+            //
+            // El archivo lo escribe quien renderiza, en `salida/theme/`; el
+            // `\graphicspath` del preámbulo ya incluye `./`, así que la ruta relativa
+            // alcanza. Un theme sin logo no deja ningún espacio de más.
+            if let Some(logo) = theme.logo_for(monochrome) {
+                c.push_str(&format!(
+                    "\\includegraphics[width=3.2cm]{{{DIR_THEME}/{}}}\\\\[0.6cm]\n",
+                    logo.filename
+                ));
+            }
             // Un theme sin institución (el `generico`) no dibuja la línea. Antes salía
             // en blanco: un `{\large }` que igual se comía su espacio vertical.
             if !theme.institution_name.is_empty() {
@@ -515,7 +536,7 @@ pub fn assemble_parts(
     let rendered = render_used_plots(project, plots, measurements, resolved.monochrome, format)?;
     Ok(DocumentParts {
         preamble: build_preamble(theme, &project.document, format),
-        cover: build_cover(project, theme, format),
+        cover: build_cover(project, theme, format, resolved.monochrome),
         body: build_body(&project.sections, &rendered),
         show_toc: show_toc(format, &project.sections),
     })
@@ -529,6 +550,12 @@ pub fn assemble_parts(
 /// una sea cambiar una línea.
 pub const DIR_DATA: &str = "datos";
 pub const DIR_PLOTS: &str = "graficos";
+/// Donde se copian los archivos que aporta el theme (hoy, el logo de la carátula).
+///
+/// Va en una carpeta propia y generada, no suelto en `salida/`: así se limpia con las
+/// otras en cada corrida y el logo de un theme viejo no queda tirado al cambiar de
+/// institución.
+pub const DIR_THEME: &str = "theme";
 
 /// La definición de `\xtalGrafico`, que va en el preámbulo.
 ///
@@ -601,7 +628,7 @@ pub fn assemble_split(
     Ok(SplitDocument {
         parts: DocumentParts {
             preamble,
-            cover: build_cover(project, theme, format),
+            cover: build_cover(project, theme, format, resolved.monochrome),
             body,
             show_toc: show_toc(format, &project.sections),
         },

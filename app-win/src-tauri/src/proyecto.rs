@@ -264,7 +264,7 @@ pub struct Theme {
 #[tauri::command]
 pub fn themes() -> Vec<Theme> {
     let dir = carpeta_themes();
-    let mut ids: Vec<String> = vec!["itba".into(), "generico".into()];
+    let mut ids: Vec<String> = vec!["itba".into(), "uca".into(), "generico".into()];
     if let Ok(entradas) = std::fs::read_dir(&dir) {
         for e in entradas.flatten() {
             let n = e.file_name().to_string_lossy().into_owned();

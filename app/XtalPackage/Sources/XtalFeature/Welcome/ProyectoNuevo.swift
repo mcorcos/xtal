@@ -268,7 +268,7 @@ struct ProyectoNuevo: View {
     static func disponibles() -> [Theme] {
         let dir = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".config/xtal/themes")
-        let ids = Set(["itba", "generico"]).union(
+        let ids = Set(["itba", "uca", "generico"]).union(
             ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
                 .filter { !$0.hasPrefix(".") })
 

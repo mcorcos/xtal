@@ -202,6 +202,53 @@ El núcleo es análisis de circuitos + consolidación de datos.
   producto, las decisiones ya tomadas para no re-discutirlas, y las trampas conocidas.
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
+### El theme de la UCA, y los logos que nunca se habían implementado — HECHO (2026-08-27), pedido de Manu → `docs/THEMES.md`
+Tercer theme: **`themes/uca`**, Pontificia Universidad Católica Argentina. Empezó siendo
+una carpeta con `theme.toml` y `preamble.tex` —el motor sin tocar, que es la prueba de
+que "institución como paquete" aguanta— y terminó destapando que **el motor nunca había
+leído `[logos]`**: la sección estaba comentada en el `theme.toml` de ITBA desde el
+principio y `docs/PENDIENTES.md` la tenía anotada como pendiente.
+- **El azul es `003A73`**, de la hoja de estilos de `uca.edu.ar` (títulos, cuerpo y pie).
+  **No sale de un manual de marca**: el `manual_de_identidad_UCA.pdf` que aparece en las
+  búsquedas ya no está en el sitio (devuelve la home) y no hay copia en Wayback.
+- **Los logos son PDF vectoriales**, `logo-azul.pdf` y `logo-bn.pdf`, 31 KB cada uno. El
+  dibujo es el sello vectorial de Wikipedia; **Wikipedia lo publica como fair use, es
+  marca registrada de la UCA**. Está con el criterio de cualquier plantilla LaTeX de
+  facultad, pero si la universidad lo pide, se saca.
+  - La receta para convertirlo está en `docs/THEMES.md`: **Chrome `--print-to-pdf` con
+    `@page { size }` del tamaño exacto del dibujo**, así no hay que recortar después. Se
+    verifica con `pdfimages -list`, que **no tiene que listar nada** — si lista algo se
+    rasterizó y se perdió la ventaja. Mismo Chrome que ya usa `app-win/packaging`.
+- **El motor ahora lleva el archivo, no la ruta.** `Theme` guarda los **bytes** del logo
+  (`ThemeAsset`), porque el theme puede venir embebido en el binario y ahí no hay ninguna
+  ruta que darle a LaTeX. `RenderedProject` suma `assets` —los binarios van aparte de
+  `files`, que son String— y el escritor los copia a **`salida/theme/`**, que es carpeta
+  generada: se limpia sola en cada corrida, así que el logo de un theme viejo no queda
+  tirado al cambiar de institución. `GENERATED_DIRS` pasó de 2 a 3.
+- **Un logo declarado que no está hace fallar la carga del theme.** Ignorarlo y seguir
+  deja que un typo en el nombre se vea **exactamente igual** que un theme sin logo. Lo
+  que no se declara no se busca; lo que se declara tiene que existir.
+- **En monocromo se usa el logo B/N y NO se cae al de color** (`Theme::logo_for`): un
+  logo a color en un informe que se pidió en blanco y negro es peor que ninguno.
+- **El logo va solo en `facultad`.** Un paper a dos columnas no lleva membrete, y el
+  encabezado de `authblk` ya nombra la institución como afiliación.
+- **`--monochrome` sigue sin ennegrecer `xtalPrimary`**: el título de la carátula queda
+  azul aunque el logo salga en negro. Es de antes (el flag solo toca los gráficos,
+  `color=black`) y cambiarlo le mueve el aspecto a todos los proyectos que ya existen:
+  **es decisión de Manu, no un arreglo al pasar.**
+- **En la carátula va el nombre corto**, "Pontificia Universidad Católica Argentina". El
+  oficial completo lleva «Santa María de los Buenos Aires» y entra a dos renglones.
+- **Los themes embebidos están escritos a mano en cuatro lugares** y hay que tocar los
+  cuatro: `Estado.disponibles()` y `ProyectoNuevo.disponibles()` en la app de Mac,
+  `themes()` en `app-win/src-tauri/src/proyecto.rs` y `capturar.mjs` del retratista. La
+  razón está anotada en cada uno: **la CLI no tiene un `xtal theme list`**, y quien
+  instaló Xtal antes no tiene el theme nuevo en disco aunque el binario sí lo traiga. El
+  día que exista ese comando, las cuatro listas se borran.
+- Verificado compilando el ejemplo con `theme = "uca"` **en los dos formatos** y en los
+  dos modos, mirando el PDF: el sello sale azul en la carátula normal y negro con
+  `--monochrome`. El nombre se muestra solo en el desplegable de "Informe nuevo": sale
+  del `theme.toml`, no de una tabla en el código.
+
 ### La integración con agentes, como la de Supacode — HECHO (2026-08-23) → `docs/AGENTES.md`
 Se copió la disciplina del panel de integraciones de Supacode: **una tabla de agentes**
 en `crates/xtal-cli/src/agents.rs` (Claude Code, Claude Desktop, Codex, Copilot CLI,

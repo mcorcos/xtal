@@ -29,7 +29,8 @@ pub use theme::{embedded_theme_names, export_embedded_themes, Theme};
 /// Están acá para que el que escribe a disco pueda limpiarlas sin adivinar nombres.
 /// **Ojo**: `graficos` se llama igual que la carpeta de recetas del proyecto. Limpiar
 /// esto en cualquier lado que no sea `salida/` te borra las recetas.
-pub const GENERATED_DIRS: [&str; 2] = [document::DIR_DATA, document::DIR_PLOTS];
+pub const GENERATED_DIRS: [&str; 3] =
+    [document::DIR_DATA, document::DIR_PLOTS, document::DIR_THEME];
 
 // Templates embebidos en tiempo de compilación.
 const FACULTAD_TPL: &str = include_str!("../templates/facultad.tex.j2");
@@ -103,6 +104,9 @@ pub struct RenderedProject {
     /// El resto de los archivos, con su ruta relativa a `salida/` como clave:
     /// `secciones/01-objetivo.tex`, `graficos/bode.tex`, `datos/bode-teorica.dat`.
     pub files: IndexMap<String, String>,
+    /// Los archivos binarios, con la misma clave. Van aparte de `files` porque un PDF
+    /// no es un `String`: el logo del theme llega hasta acá como bytes.
+    pub assets: IndexMap<String, Vec<u8>>,
 }
 
 /// Renderiza el informe partido en archivos.
@@ -137,9 +141,21 @@ pub fn render_split(
             template: tpl_name.to_string(),
             source: e,
         })?;
+    // El logo que efectivamente usa la carátula, copiado al lado del `.tex`. Se elige
+    // acá y no en `document`: es lo único del render que tiene que terminar en disco
+    // como bytes, y el ensamblado del LaTeX no escribe archivos.
+    let mut assets = IndexMap::new();
+    if let Some(logo) = theme.logo_for(resolved.monochrome) {
+        assets.insert(
+            format!("{}/{}", document::DIR_THEME, logo.filename),
+            logo.bytes.clone(),
+        );
+    }
+
     Ok(RenderedProject {
         main,
         files: split.files,
+        assets,
     })
 }
 
@@ -410,5 +426,56 @@ mod tests {
         let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
         // Sin esto, `\xtalGrafico{...}` en el documento es un comando que no existe.
         assert!(r.main.contains("\\newcommand{\\xtalGrafico}"), "{}", r.main);
+    }
+
+    // --- El logo del theme ---
+    //
+    // El `.tex` y el archivo son una sola cosa: un `\includegraphics` que apunta a un
+    // archivo que nadie escribió es un error de LaTeX, y un archivo escrito que el
+    // `.tex` no nombra es basura adentro de `salida/`. Por eso los tests miran los dos.
+
+    #[test]
+    fn el_logo_del_theme_va_en_la_caratula_y_al_lado_del_tex() {
+        let (project, resolved, _t, measurements, plots) = fixture();
+        let theme = Theme::load("uca", None).unwrap();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        assert!(
+            r.main
+                .contains("\\includegraphics[width=3.2cm]{theme/logo-azul.pdf}"),
+            "la carátula no trae el logo:\n{}",
+            r.main
+        );
+        let bytes = r
+            .assets
+            .get("theme/logo-azul.pdf")
+            .expect("el logo no se escribe al lado del .tex");
+        assert!(bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn en_monocromo_la_caratula_pide_el_logo_bn() {
+        let (project, mut resolved, _t, measurements, plots) = fixture();
+        resolved.monochrome = true;
+        let theme = Theme::load("uca", None).unwrap();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        assert!(r.main.contains("theme/logo-bn.pdf"), "{}", r.main);
+        assert!(!r.main.contains("logo-azul.pdf"));
+        assert!(r.assets.contains_key("theme/logo-bn.pdf"));
+        assert!(!r.assets.contains_key("theme/logo-azul.pdf"));
+    }
+
+    #[test]
+    fn un_theme_sin_logo_no_deja_ni_el_comando_ni_el_archivo() {
+        // El caso que prueba que el logo es opcional de verdad: ni un `\includegraphics`
+        // vacío ni una carpeta `theme/` que no sirve para nada.
+        let (project, resolved, _t, measurements, plots) = fixture();
+        let theme = Theme::load("generico", None).unwrap();
+        let r = render_split(&project, &resolved, &theme, &measurements, &plots).unwrap();
+        assert!(
+            !r.main.contains("includegraphics[width=3.2cm]"),
+            "{}",
+            r.main
+        );
+        assert!(r.assets.is_empty());
     }
 }
