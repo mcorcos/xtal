@@ -176,9 +176,14 @@ pub fn render_standalone_plot(
     doc.push_str("\\pgfplotsset{compat=1.18}\n");
     doc.push_str("\\usepgfplotslibrary{groupplots}\n");
     doc.push_str(&pgfplots::color_preamble());
+    // Igual que en `build_preamble`: en monocromo el color institucional vale negro.
     doc.push_str(&format!(
         "\\definecolor{{xtalPrimary}}{{HTML}}{{{}}}\n",
-        theme.primary_hex
+        if monochrome {
+            "000000"
+        } else {
+            &theme.primary_hex
+        }
     ));
     doc.push_str("\\begin{document}\n");
     doc.push_str(&tikz);
@@ -203,7 +208,7 @@ mod tests {
         // `float` habilita `\begin{figure}[H]` — «acá y no donde vos quieras», que es
         // lo que uno quiere en un informe. Sin él: «Unknown float option `H'».
         let theme = Theme::load("generico", None).unwrap();
-        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad);
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad, false);
         assert!(p.contains("\\usepackage{float}"), "falta float:\n{p}");
         // Sin graphicspath, una imagen en la carpeta del proyecto no se encuentra: el
         // .tex se genera adentro de `salida/` y ahí no hay ninguna foto.
@@ -219,7 +224,7 @@ mod tests {
         let theme = Theme::load("generico", None).unwrap();
         let mut doc = doc_vacio();
         doc.packages = vec!["booktabs".into(), "[version=4]{mhchem}".into()];
-        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad);
+        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad, false);
         assert!(p.contains("\\usepackage{booktabs}"));
         // Si ya trae llaves se escribe tal cual: obligar a una sola forma es hacer que
         // alguien tenga que adivinar cuál.
@@ -232,7 +237,7 @@ mod tests {
         // Un paper a dos columnas no perdona lo que un informe a una columna sí: la
         // línea mide la mitad. Estos cuatro son los que se notan.
         let theme = Theme::load("generico", None).unwrap();
-        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Paper);
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Paper, false);
         for paquete in ["microtype", "flushend", "booktabs", "newtxtext,newtxmath"] {
             assert!(
                 p.contains(&format!("\\usepackage{{{paquete}}}")),
@@ -257,7 +262,7 @@ mod tests {
         // balanceadas, y cada paquete de más es uno que puede chocar con lo que el
         // alumno agregue en `[document] packages`.
         let theme = Theme::load("generico", None).unwrap();
-        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad);
+        let p = document::build_preamble(&theme, &doc_vacio(), DocFormat::Facultad, false);
         for paquete in ["microtype", "flushend", "newtxtext", "cleveref", "authblk"] {
             assert!(!p.contains(paquete), "{paquete} se coló en facultad:\n{p}");
         }
@@ -272,7 +277,7 @@ mod tests {
         let mut doc = doc_vacio();
         doc.packages = vec!["booktabs".into()];
         doc.preamble = Some("\\newcommand{\\vin}{V}".into());
-        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad);
+        let p = document::build_preamble(&theme, &doc, DocFormat::Facultad, false);
         let base = p.find("Preámbulo base").unwrap();
         let paquetes = p.find("Paquetes que pide el informe").unwrap();
         let propio = p.find("Preámbulo del informe").unwrap();
