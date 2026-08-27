@@ -132,6 +132,48 @@ public struct SyncTeX: Sendable {
     /// 65536 scaled points por punto. Es la unidad de TeX y no cambia.
     private static let sp = 65536.0
 
+    /// La ruta de un archivo, siempre escrita de la misma manera.
+    ///
+    /// Se resuelven los symlinks de los dos lados. Es la misma trampa que ya está
+    /// anotada en `Git.swift`: en macOS `/var/folders/…` es un symlink a
+    /// `/private/var/…`, así que dos rutas del mismo archivo no se parecen en nada como
+    /// texto y la comparación falla sin decir por qué.
+    static func normalizar(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
+    /// Vuelve a anclar en ESTE proyecto una ruta que el synctex trae de otro lado.
+    ///
+    /// **El `.synctex.gz` guarda las rutas absolutas de la máquina que compiló.** Con
+    /// eso alcanza mientras el proyecto no se mueva; en cuanto se copia a otra carpeta,
+    /// se clona en otra máquina o se abre desde un worktree, esas rutas apuntan a un
+    /// lugar que no tiene nada que ver. Y entonces no matchea ningún archivo, no se
+    /// resalta nada, y **la sincronía "no anda" sin dar ningún error**: es exactamente
+    /// el síntoma más difícil de diagnosticar que hay.
+    ///
+    /// La regla es «si no es de este proyecto, buscá la cola adentro de este proyecto».
+    /// Se prueba con dos componentes (`secciones/03-modelo.tex`, `salida/main.tex`) y
+    /// después con uno. **No alcanza con preguntar si el archivo existe**: la carpeta
+    /// original puede seguir existiendo en la misma máquina, y ahí se elegiría el
+    /// archivo equivocado — el de la otra copia del proyecto.
+    ///
+    /// Lo que no aparece adentro del proyecto se deja como está: son los archivos de la
+    /// distribución de LaTeX (clases, paquetes), que no son de nadie y no se abren.
+    static func reanclar(_ ruta: String, proyecto: URL) -> String {
+        let raiz = normalizar(proyecto)
+        if ruta == raiz || ruta.hasPrefix(raiz + "/") { return ruta }
+
+        let partes = URL(fileURLWithPath: ruta).pathComponents.filter { $0 != "/" }
+        for cuantas in [2, 1] where partes.count >= cuantas {
+            let cola = partes.suffix(cuantas).joined(separator: "/")
+            let candidato = proyecto.appendingPathComponent(cola).standardizedFileURL
+            if FileManager.default.fileExists(atPath: candidato.path) {
+                return normalizar(candidato)
+            }
+        }
+        return ruta
+    }
+
     static func parsear(_ texto: String, base: URL, fecha: Date) -> SyncTeX {
         var archivos: [Int: String] = [:]
         var cajas: [Cruda] = []
@@ -149,8 +191,9 @@ public struct SyncTeX: Sendable {
                                                       omittingEmptySubsequences: false)
                 guard partes.count == 2, let tag = Int(partes[0]), !partes[1].isEmpty
                 else { continue }
-                archivos[tag] = URL(fileURLWithPath: String(partes[1]),
-                                    relativeTo: base).standardizedFileURL.path
+                let cruda = URL(fileURLWithPath: String(partes[1]), relativeTo: base)
+                archivos[tag] = reanclar(normalizar(cruda),
+                                         proyecto: base.deletingLastPathComponent())
                 continue
             }
             if linea.hasPrefix("Unit:") {
@@ -207,7 +250,7 @@ public struct SyncTeX: Sendable {
     /// otra ya elegida, y queda un rectángulo por línea impresa.
     public func cajas(archivo: URL, lineas: ClosedRange<Int>,
                       altoDePagina: (Int) -> Double) -> [Caja] {
-        let ruta = archivo.standardizedFileURL.path
+        let ruta = Self.normalizar(archivo)
         let tags = archivos.filter { $0.value == ruta }.map(\.key)
         guard !tags.isEmpty else { return [] }
         let buscados = Set(tags)

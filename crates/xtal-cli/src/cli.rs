@@ -642,6 +642,17 @@ pub struct UpdateArgs {
     /// Solo informa si hay version nueva; no ofrece ni ejecuta nada.
     #[arg(long)]
     pub check: bool,
+    /// No pregunta: si hay una version nueva, la instala.
+    ///
+    /// Existe porque hay quien llama a este comando sin una terminal adelante: la app
+    /// de escritorio, cuando actualiza el motor junto con ella misma. Sin esto, la
+    /// pregunta de confirmación queda esperando una respuesta que nunca llega.
+    #[arg(long)]
+    pub yes: bool,
+    /// Qué versiones mirar: `estable` (la última Release publicada) o `beta`, que
+    /// incluye también las de prueba.
+    #[arg(long, value_name = "CANAL", default_value = "estable")]
+    pub channel: String,
 }
 
 // ===========================================================================

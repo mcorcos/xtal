@@ -86,7 +86,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Config(cmd) => commands::cmd_config(cmd, &project),
         Command::Doctor(a) => commands::cmd_doctor(a, json),
         Command::Example(a) => example::cmd_example(a),
-        Command::Update(a) => update::cmd_update(a),
+        Command::Update(a) => update::cmd_update(a, json),
         Command::Setup(a) => setup::cmd_setup(a),
         Command::Uninstall(a) => uninstall::cmd_uninstall(a),
         Command::App(a) => app::cmd_app(a, &project, json),

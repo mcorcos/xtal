@@ -375,6 +375,17 @@ crece hacia abajo** al revés que en PDFKit, y los `Input:` que nombran cada arc
 están todos en el encabezado** — aparecen intercalados en el contenido, a medida que el
 motor abre cada archivo.
 
+**Y una cuarta, que se descubrió tarde: el `.synctex.gz` guarda las rutas absolutas de
+la máquina que compiló.** Con eso alcanza mientras el informe no se mueva; en cuanto se
+copia a otra carpeta, se clona en otra máquina o se abre desde un worktree, esas rutas
+apuntan a un lugar que no tiene nada que ver, no matchea ningún archivo y **la sincronía
+deja de andar sin dar ningún error**. Ahora las rutas se vuelven a anclar en el proyecto
+que se está mirando: si la ruta no cae adentro de esta carpeta, se busca su cola
+(`secciones/03-modelo.tex`) acá. No alcanza con preguntar si el archivo existe — la
+carpeta original puede seguir existiendo en la misma máquina, y ahí se elegiría el
+archivo de la otra copia. Es el primo del problema de rutas que ya estaba anotado para
+el historial (los symlinks de `/var/folders`) y para Windows.
+
 Una línea de LaTeX produce un árbol de cajas anidadas: la ecuación entera, cada fracción,
 cada subíndice. Se pintan **solo las maximales** —lo que está adentro de otra ya elegida
 se descarta— y queda un rectángulo por línea impresa en vez de la misma zona pintada
@@ -481,6 +492,81 @@ La idea de fondo: cada cosa difícil de LaTeX tiene que tener adelante algo fác
   barra quedó el sello, que es para mirar.
 
 El LaTeX sigue estando abajo, entero, para el que lo quiera tocar.
+
+## Que se actualice sola
+
+Xtal se instala con un comando y después nunca más. El que lo instaló en marzo tiene la
+de marzo y **no tiene forma de enterarse** de que se arregló el bug que lo está
+molestando: mirar la página de Releases del repo no es algo que alguien haga. La CLI
+tenía `xtal update` desde el principio; la app no tenía nada.
+
+Ahora hay un panel **Actualizaciones** en Ajustes, con la forma que tiene esto en
+cualquier app de Mac —canal arriba, «Buscar actualizaciones ahora», y lo automático
+abajo— y esa forma se copió a propósito: quien abre esa pantalla ya sabe qué esperar.
+
+**El botón hace todo.** «Buscar actualizaciones ahora» busca y, si hay algo, sigue solo:
+baja, verifica y deja la version nueva lista. Recién ahí pregunta, y lo único que
+pregunta es cuándo reiniciar. Un botón que contesta «hay una version nueva» y se queda
+esperando otro click no resolvió nada — el que apretó ya dijo lo que quería. La pregunta
+del final sí hace falta, porque reiniciar interrumpe lo que estás escribiendo.
+
+**De fábrica revisa solo y no instala solo.** Revisar es una consulta cada seis horas y
+es lo único que hace que enterarse no dependa de acordarse. Reemplazar el programa de
+alguien sin que lo haya pedido es otra cosa, y por eso ese interruptor arranca apagado.
+
+### Quién sabe qué
+
+- **Qué hay publicado lo contesta la CLI**, con `xtal --json update --check`. No se le
+  pregunta a GitHub desde Swift. El nombre del repositorio, la comparación de versiones
+  y cómo se llama cada asset de una Release ya viven en `crates/xtal-cli/src/update.rs`:
+  una segunda copia sería una segunda verdad, y el día que cambie el nombre de un
+  archivo una de las dos estaría mal sin avisar. Por eso ese JSON trae las URLs armadas
+  y no solo el número.
+- **Comparar contra la version de la APP es de la app.** La app y el comando salen con
+  el mismo número (el job `check` del release no publica si no coinciden), pero se
+  instalan por separado y uno puede quedar atrás del otro.
+- **Bajar el `.app`, verificarlo y reemplazarlo** también, porque es específico de un
+  bundle de macOS.
+
+### Las dos formas de actualizar
+
+- **Si la instaló Homebrew** (el cask `xtal-app`), se corre `brew upgrade --cask`.
+  Pisarle el bundle por atrás le rompe la contabilidad a Homebrew. Es el mismo argumento
+  que ya usaba `update.rs` para el binario.
+- **Si la puso alguien a mano**, se baja el zip de la Release, se verifica el SHA256
+  contra el `SHA256SUMS` de esa misma Release —igual que hace `install.sh`—, se
+  desempaqueta con `ditto` y se comprueba que adentro esté la version que se pidió y que
+  la firma esté sana.
+
+Y en los dos casos **el comando `xtal` se actualiza también**, con `xtal update --yes`,
+que sabe solo cómo se instaló él. La app le habla al binario todo el tiempo: dejar una
+app nueva hablándole a un comando viejo es la clase de desajuste que produce errores que
+no se entienden.
+
+**Una copia compilada en el momento no se toca.** Si el bundle está en `DerivedData`, el
+actualizador dice que no y no hace nada: sin esa rama, probar esto desde Xcode se lleva
+puesta la build.
+
+### El reemplazo no lo hace la app
+
+Un programa no puede pisarse a sí mismo mientras corre —o mejor dicho, puede, pero el
+resultado depende de qué páginas del binario le falte cargar—. Así que el que reemplaza
+es un `sh` que queda dando vueltas esperando a que este proceso termine, y recién ahí
+mueve la carpeta y vuelve a abrir la app. Los hijos de un proceso que muere no mueren con
+él. Es lo mismo que hace Sparkle con su helper.
+
+**No hay Sparkle**, justamente. Es el framework estándar para esto, pero pide un appcast
+publicado aparte y un par de claves EdDSA cuya mitad privada habría que guardar como
+secret. Todo lo que hace falta acá —bajar, verificar un hash, reemplazar un bundle— ya
+estaba resuelto en el repo para la CLI, con las mismas herramientas.
+
+**Solo en Mac.** En Windows todavía no está, y está anotado en `paridad.toml` con su
+`pendiente`, así que sale en el informe de cada release hasta que se cierre.
+
+Gancho de desarrollo: **`XTAL_UPDATE_FAKE=0.9.9`** hace de cuenta que esa es la última
+version publicada, sin salir a la red, y revisa una vez sin levantar ningún cartel. Sin
+eso, la única forma de mirar el panel diciendo «hay una version nueva» es esperar a que
+salga una version nueva.
 
 ## Plataformas
 

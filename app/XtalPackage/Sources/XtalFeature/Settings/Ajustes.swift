@@ -13,6 +13,7 @@ public struct Ajustes: View {
         case autocomplete = "Autocomplete"
         case herramientas = "Herramientas"
         case agentes = "Agentes"
+        case actualizaciones = "Actualizaciones"
         case cuentas = "Cuentas"
 
         var id: String { rawValue }
@@ -23,6 +24,7 @@ public struct Ajustes: View {
             case .autocomplete: return "wand.and.stars"
             case .herramientas: return "wrench.and.screwdriver"
             case .agentes: return "sparkles"
+            case .actualizaciones: return "arrow.down.circle"
             case .cuentas: return "person.crop.circle"
             }
         }
@@ -65,6 +67,7 @@ public struct Ajustes: View {
                 case .autocomplete: PanelAutocomplete()
                 case .herramientas: PanelHerramientas()
                 case .agentes: PanelAgentes()
+                case .actualizaciones: PanelActualizaciones()
                 case .cuentas: PanelCuentas()
                 }
             }
@@ -219,6 +222,180 @@ private struct PanelHerramientas: View {
             doctor = try? await XtalCLI.json(Doctor.self, ["doctor"])
             cargando = false
         }
+    }
+}
+
+// MARK: - Actualizaciones
+
+/// El panel de actualizaciones: el canal, el botón de buscar, y lo automático abajo.
+///
+/// Es la forma que tiene esto en cualquier app de Mac, y la copiamos a propósito: quien
+/// abre esta pantalla ya sabe qué esperar. Lo único distinto es que acá una version es
+/// **dos programas** —la app y el comando `xtal`—, y el botón se ocupa de los dos.
+///
+/// El motor está en `Actualizador`. Esta vista no baja ni instala nada: mira el estado y
+/// aprieta.
+private struct PanelActualizaciones: View {
+    // Se accede al compartido y no a una copia: la revisión de fondo y esta pantalla
+    // tienen que estar mirando el mismo estado. Con `@Observable` alcanza con leer sus
+    // propiedades adentro del `body` para que la vista se redibuje sola.
+    private var act: Actualizador { .compartido }
+
+    // Los ajustes se leen con `@AppStorage` y no por el objeto: son las mismas claves,
+    // pero `@AppStorage` es lo que hace que el interruptor se dibuje prendido apenas
+    // abrís la pantalla y que el cambio se guarde sin escribir una línea.
+    @AppStorage(Actualizador.claveCanal) private var canal = "estable"
+    @AppStorage(Actualizador.claveAuto) private var revisarSolo = true
+    @AppStorage(Actualizador.claveAutoInstalar) private var instalarSolo = false
+
+    private var canalElegido: Actualizador.Canal {
+        Actualizador.Canal(rawValue: canal) ?? .estable
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tok.S.xxl) {
+            GrupoAjustes {
+                FilaAjuste(titulo: "Canal", detalle: canalElegido.detalle) {
+                    Picker("", selection: $canal) {
+                        ForEach(Actualizador.Canal.allCases) { c in
+                            Text(c.titulo).tag(c.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+
+                BotonAncho(titulo: tituloDelBoton, trabajando: trabajando) { apretar() }
+
+                if let linea = renglonDeEstado {
+                    HStack(spacing: Tok.S.sm) {
+                        Text(linea.texto)
+                            .font(Tok.F.label)
+                            .foregroundStyle(linea.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if case .disponible = act.estado, let notas = act.notas {
+                            Link("Ver qué cambió", destination: notas).font(Tok.F.label)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Tok.S.lg)
+                    .padding(.bottom, Tok.S.lg)
+                }
+
+                if case .bajando(let p) = act.estado {
+                    ProgressView(value: p)
+                        .padding(.horizontal, Tok.S.lg)
+                        .padding(.bottom, Tok.S.lg)
+                }
+            }
+
+            GrupoAjustes(titulo: "Actualizaciones automáticas") {
+                FilaAjuste(titulo: "Buscar actualizaciones automáticamente",
+                           detalle: "Revisa cada tanto mientras Xtal está abierto, y te avisa si salió una version nueva.") {
+                    Toggle("", isOn: $revisarSolo).toggleStyle(.switch)
+                }
+
+                FilaAjuste(titulo: "Bajar e instalar las actualizaciones solo",
+                           detalle: "Las baja en segundo plano. Te va a pedir que reinicies para aplicarlas.",
+                           conSeparador: false) {
+                    Toggle("", isOn: $instalarSolo).toggleStyle(.switch)
+                }
+            }
+
+            // Qué pasa cuando apretás, escrito antes de apretar. Se está por reemplazar
+            // un programa de la máquina de alguien: que se entere después no sirve.
+            VStack(alignment: .leading, spacing: Tok.S.xs) {
+                Text("Qué actualiza")
+                    .font(Tok.F.label)
+                    .foregroundStyle(Tok.textSecondary)
+                Text("La app y el comando `xtal`, que salen con el mismo número de version. Si la instalaste con Homebrew, se actualiza con Homebrew; si bajaste el zip, Xtal lo baja de la Release y verifica el checksum antes de reemplazar nada. Tus informes no se tocan: son carpetas tuyas.")
+                    .font(Tok.F.label)
+                    .foregroundStyle(Tok.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Qué dice el botón
+
+    private var trabajando: Bool {
+        switch act.estado {
+        case .revisando, .bajando, .instalando: return true
+        default: return false
+        }
+    }
+
+    private var tituloDelBoton: String {
+        switch act.estado {
+        case .revisando: return "Buscando…"
+        case .bajando(let p): return "Bajando… \(Int(p * 100))%"
+        case .instalando: return "Instalando…"
+        case .disponible(let v): return "Bajar e instalar la \(v)"
+        case .listaParaAplicar: return "Reiniciar para aplicar"
+        default: return "Buscar actualizaciones ahora"
+        }
+    }
+
+    private func apretar() {
+        switch act.estado {
+        // `.disponible` se llega desde la revisión de fondo, cuando alguien contestó
+        // «ahora no» al cartel y después vino a apretar acá.
+        case .disponible: Task { await act.actualizar() }
+        case .listaParaAplicar: act.aplicar()
+        // Buscar y, si hay algo, seguir solo hasta el final. No hay un segundo click.
+        default: Task { await act.buscarYActualizar() }
+        }
+    }
+
+    /// La línea de abajo del botón. **Solo aparece cuando hay algo que decir**: sin
+    /// revisar todavía, el panel se ve como en la captura y no como una pantalla de
+    /// diagnóstico.
+    private var renglonDeEstado: (texto: String, color: Color)? {
+        switch act.estado {
+        case .quieto, .revisando:
+            return nil
+        case .alDia:
+            return ("Estás en la última version (\(act.versionApp)).", Tok.textSecondary)
+        case .disponible(let v):
+            return ("Salió la \(v). Tenés la \(act.versionApp).", Tok.textSecondary)
+        case .bajando, .instalando:
+            return ("No cierres Xtal hasta que termine.", Tok.textSecondary)
+        case .listaParaAplicar(let v):
+            return ("La \(v) ya está en tu disco. Se aplica al reiniciar la app.", Tok.textSecondary)
+        case .falla(let m):
+            return (m, Tok.rojo.deep)
+        }
+    }
+}
+
+/// Un botón que ocupa todo el ancho de la tarjeta.
+///
+/// Existe solo para este panel: es la acción principal de la pantalla y no el control de
+/// una fila, así que no entra en `FilaAjuste`, que pone el control a la derecha de un
+/// texto. Acá no hay texto a la izquierda — el botón **es** la fila.
+private struct BotonAncho: View {
+    let titulo: String
+    var trabajando: Bool = false
+    let accion: () -> Void
+
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: accion) {
+            HStack(spacing: Tok.S.sm) {
+                if trabajando { ProgressView().controlSize(.small).scaleEffect(0.7) }
+                Text(titulo).font(Tok.F.valor).foregroundStyle(Tok.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: Tok.H.fila)
+            .background(hover && !trabajando ? Tok.bgHover : Tok.bgActive,
+                        in: RoundedRectangle(cornerRadius: Tok.R.boton, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(trabajando)
+        .onHover { hover = $0 }
+        .padding(Tok.S.lg)
     }
 }
 
