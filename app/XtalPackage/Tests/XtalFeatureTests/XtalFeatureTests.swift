@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import PDFKit
+import SwiftUI
 import Testing
 @testable import XtalFeature
 
@@ -767,4 +768,379 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     // error: la sección que agregaste ayer no está en la version de anteayer.
     let otro = dir.appendingPathComponent("no-existia.tex")
     #expect(await g.contenido(de: otro, en: versiones.last!.id) == nil)
+}
+
+// MARK: - El diff
+//
+// Se testea el parser y no la pantalla: el parser es lo que puede romperse en silencio
+// —un número de línea corrido no se ve, se lee mal— y la pantalla se mira con
+// `XTAL_REVISION` y un retrato.
+
+@Test func el_diff_numera_las_lineas_de_los_dos_lados() {
+    let salida = """
+    diff --git a/hola.txt b/hola.txt
+    index 111..222 100644
+    --- a/hola.txt
+    +++ b/hola.txt
+    @@ -20,4 +20,5 @@ func algo()
+     contexto uno
+    -se fue
+    +llegó una
+    +llegó otra
+     contexto dos
+    """
+    let d = Diff.parsear(salida)
+    #expect(d.archivos.count == 1)
+    let a = d.archivos[0]
+    #expect(a.ruta == "hola.txt")
+    #expect(a.mas == 2)
+    #expect(a.menos == 1)
+
+    let l = a.trozos[0].lineas
+    #expect(l.count == 5)
+    // La primera de contexto es la 20 de los dos lados.
+    #expect(l[0].viejo == 20 && l[0].nuevo == 20)
+    // Una borrada no tiene número del lado nuevo: ya no existe ahí.
+    #expect(l[1].clase == .borrada && l[1].viejo == 21 && l[1].nuevo == nil)
+    // Y una agregada no lo tiene del lado viejo.
+    #expect(l[2].clase == .agregada && l[2].viejo == nil && l[2].nuevo == 21)
+    #expect(l[3].nuevo == 22)
+    // La de contexto del final: el viejo avanzó una y el nuevo dos.
+    #expect(l[4].viejo == 22 && l[4].nuevo == 23)
+}
+
+@Test func el_diff_distingue_nuevo_borrado_renombrado_y_binario() {
+    let salida = """
+    diff --git a/nuevo.tex b/nuevo.tex
+    new file mode 100644
+    --- /dev/null
+    +++ b/nuevo.tex
+    @@ -0,0 +1,1 @@
+    +hola
+    diff --git a/viejo.tex b/viejo.tex
+    deleted file mode 100644
+    --- a/viejo.tex
+    +++ /dev/null
+    @@ -1,1 +0,0 @@
+    -chau
+    diff --git a/de.tex b/a.tex
+    similarity index 98%
+    rename from de.tex
+    rename to a.tex
+    diff --git a/foto.png b/foto.png
+    index 333..444 100644
+    Binary files a/foto.png and b/foto.png differ
+    """
+    let d = Diff.parsear(salida)
+    #expect(d.archivos.count == 4)
+    #expect(d.archivos[0].clase == .nuevo)
+    #expect(d.archivos[1].clase == .borrado)
+    #expect(d.archivos[1].ruta == "viejo.tex")
+    #expect(d.archivos[2].clase == .renombrado)
+    #expect(d.archivos[2].rutaVieja == "de.tex" && d.archivos[2].ruta == "a.tex")
+    #expect(d.archivos[3].binario)
+}
+
+@Test func un_trozo_de_una_sola_linea_no_lleva_coma() {
+    // `@@ -1 +1 @@` es válido y significa una línea de cada lado. Sin contemplarlo, el
+    // parser lee cero líneas y el archivo sale sin cambios.
+    let t = Diff.cabecera("@@ -1 +1 @@")
+    #expect(t?.viejoDesde == 1 && t?.viejoCant == 1)
+    #expect(t?.nuevoDesde == 1 && t?.nuevoCant == 1)
+}
+
+@Test func una_ruta_con_espacios_no_se_parte_al_medio() {
+    // Partir el `diff --git` por espacios corta «mi informe.tex» en dos.
+    #expect(Diff.rutaDe("diff --git a/mi informe.tex b/mi informe.tex") == "mi informe.tex")
+}
+
+@Test func los_agujeros_salen_de_restar_entre_trozos() {
+    let salida = """
+    diff --git a/x.rs b/x.rs
+    --- a/x.rs
+    +++ b/x.rs
+    @@ -20,2 +20,2 @@
+     uno
+    -dos
+    +DOS
+    @@ -180,2 +180,2 @@
+     tres
+    -cuatro
+    +CUATRO
+    """
+    let a = Diff.parsear(salida).archivos[0]
+    let bloques = a.bloques
+    // hueco (1..19) · trozo · hueco (22..179) · trozo
+    #expect(bloques.count == 4)
+    guard case .hueco(let primero) = bloques[0] else { Issue.record("falta el hueco"); return }
+    #expect(primero.desdeNuevo == 1 && primero.hastaNuevo == 19 && primero.cuantas == 19)
+    // No tiene trozo arriba: es el principio del archivo.
+    #expect(primero.arriba == false && primero.abajo == true)
+
+    guard case .hueco(let medio) = bloques[2] else { Issue.record("falta el del medio"); return }
+    #expect(medio.desdeNuevo == 22 && medio.hastaNuevo == 179)
+    #expect(medio.arriba && medio.abajo)
+    // El delta entre los dos lados es cero acá: los trozos no corrieron nada.
+    #expect(medio.delta == 0)
+}
+
+@Test func el_delta_de_un_agujero_sirve_para_numerar_el_lado_viejo() {
+    // Un trozo que agrega dos líneas corre todo lo que sigue: la línea 100 del archivo
+    // nuevo es la 98 del viejo. Es lo que hace que abrir un agujero sea leer el archivo
+    // nuevo y restar, sin pedirle nada más a git.
+    let salida = """
+    diff --git a/x.rs b/x.rs
+    --- a/x.rs
+    +++ b/x.rs
+    @@ -10,1 +10,3 @@
+     uno
+    +dos
+    +tres
+    @@ -100,1 +102,1 @@
+    -viejo
+    +nuevo
+    """
+    let a = Diff.parsear(salida).archivos[0]
+    guard case .hueco(let h) = a.bloques[2] else { Issue.record("falta el hueco"); return }
+    #expect(h.delta == 2)
+}
+
+@Test func la_vista_partida_aparea_borradas_con_agregadas() {
+    let lineas: [Diff.Linea] = [
+        .init(clase: .contexto, texto: "a", viejo: 1, nuevo: 1),
+        .init(clase: .borrada, texto: "b", viejo: 2, nuevo: nil),
+        .init(clase: .borrada, texto: "c", viejo: 3, nuevo: nil),
+        .init(clase: .agregada, texto: "B", viejo: nil, nuevo: 2),
+    ]
+    let pares = Diff.aparear(lineas)
+    #expect(pares.count == 3)
+    // El contexto va de los dos lados: es la misma línea.
+    #expect(pares[0].izquierda?.texto == "a" && pares[0].derecha?.texto == "a")
+    #expect(pares[1].izquierda?.texto == "b" && pares[1].derecha?.texto == "B")
+    // La que sobra queda sin contraparte, y la vista la dibuja rayada.
+    #expect(pares[2].izquierda?.texto == "c" && pares[2].derecha == nil)
+}
+
+@Test func se_marcan_las_palabras_que_cambiaron_y_no_la_linea_entera() {
+    let (viejo, nuevo) = PalabrasDiff.comparar(
+        "const VALID_ROLES = [\"jefe\", \"referente\"];",
+        "const VALID_ROLES = [\"referente\"];") ?? ([], [])
+    #expect(!viejo.isEmpty)
+    // Lo que cambió está en la parte de los roles, no al principio de la línea.
+    #expect(viejo.first!.lowerBound > 10)
+    #expect(nuevo.isEmpty || nuevo.first!.lowerBound > 10)
+}
+
+@Test func dos_lineas_que_no_se_parecen_se_pintan_enteras() {
+    // Marcar palabras sueltas entre dos líneas que no tienen nada que ver deja un
+    // salpicado que se lee peor que la línea pintada entera.
+    #expect(PalabrasDiff.comparar("import Foundation", "let x = 42 + y * 3") == nil)
+}
+
+@Test func una_linea_igual_a_la_otra_no_marca_nada() {
+    #expect(PalabrasDiff.comparar("igual", "igual") == nil)
+}
+
+// MARK: - Ramas y commits
+
+@MainActor
+@Test func las_ramas_se_leen_con_su_upstream_y_su_ultimo_commit() {
+    let salida = """
+    diff\torigin/diff\t[ahead 2, behind 1]\t*\tManuel Corcos\t2026-08-27T13:21:20+02:00\tLo último
+    main\torigin/main\t\t \tManuel Corcos\t2026-08-27T13:18:28+02:00\tMerge pull request #21
+    origin\t\t\t \tManuel Corcos\t2026-08-27T13:18:28+02:00\tMerge pull request #21
+    origin/main\t\t\t \tManuel Corcos\t2026-08-27T13:18:28+02:00\tMerge pull request #21
+    """
+    let r = Git.parsearRamas(salida, mergeadas: ["main"])
+
+    // `origin` pelado es el puntero a la rama por default del remoto, NO una rama:
+    // listarlo duplica `origin/main` con otro nombre. Este repo lo devuelve así.
+    #expect(r.count == 3)
+    #expect(r.map(\.nombre) == ["diff", "main", "origin/main"])
+
+    #expect(r[0].esActual)
+    #expect(r[0].adelante == 2 && r[0].atras == 1)
+    #expect(r[0].upstream == "origin/diff")
+    #expect(r[0].asunto == "Lo último")
+    #expect(r[0].remota == false)
+
+    #expect(r[1].mergeada)
+    #expect(r[2].remota)
+    #expect(r[2].corto == "main")
+}
+
+@MainActor
+@Test func una_rama_local_con_barra_no_es_una_rama_remota() {
+    // `manu/arreglo-del-bode` tiene una barra y es local. Con la heurística de «tiene
+    // barra» quedaba abajo, en el grupo del remoto, y no se podía tocar.
+    let salida = "manu/arreglo\t\t\t \tYo\t2026-08-27T13:00:00+02:00\tAlgo\n"
+    let r = Git.parsearRamas(salida, mergeadas: [])
+    #expect(r.count == 1)
+    #expect(r[0].remota == false)
+}
+
+@MainActor
+@Test func un_upstream_que_ya_no_esta_se_dice() {
+    let (a, b, perdido) = Git.leerTrack("[gone]")
+    #expect(perdido && a == 0 && b == 0)
+    let (c, d, no) = Git.leerTrack("[behind 3]")
+    #expect(!no && c == 0 && d == 3)
+}
+
+@MainActor
+@Test func un_merge_se_conoce_por_los_padres_y_no_por_el_mensaje() {
+    let salida = [
+        "aaa111\taaa111\tbbb ccc\tManuel\t2026-08-27T13:18:28+02:00\tHEAD -> diff, origin/diff"
+            + "\tMerge pull request #21 from mcorcos/panel",
+        "bbb222\tbbb222\tccc\tManuel\t2026-08-27T12:00:00+02:00\ttag: v0.3.2\tArreglo suelto",
+    ].joined(separator: "\n")
+    let h = Git.parsearHistorial(salida)
+    #expect(h.count == 2)
+    #expect(h[0].esMerge)          // dos padres
+    #expect(h[1].esMerge == false) // uno solo, aunque el asunto no diga nada
+    #expect(h[0].refs == ["HEAD -> diff", "origin/diff"])
+    #expect(h[1].refs == ["tag: v0.3.2"])
+}
+
+@Test func del_mensaje_de_un_merge_sale_el_nombre_de_la_rama() {
+    #expect(FilaCommit.ramaDe("Merge pull request #20 from mcorcos/barra-y-referencias")
+            == "barra-y-referencias")
+    #expect(FilaCommit.ramaDe("Merge branch 'arreglo' into main") == "arreglo")
+    // Un commit común no tiene rama que sacar, y eso no es un error: el chip dice
+    // «merge» a secas y listo.
+    #expect(FilaCommit.ramaDe("Arreglar el Bode") == nil)
+}
+
+@MainActor
+@Test func el_remoto_de_ssh_se_puede_abrir_en_el_navegador() {
+    // Las dos formas del remoto llevan al mismo lugar, y la de SSH no se puede abrir.
+    #expect(Git.urlWeb(de: "git@github.com:mcorcos/xtal.git")?.absoluteString
+            == "https://github.com/mcorcos/xtal")
+    #expect(Git.urlWeb(de: "https://github.com/mcorcos/xtal.git")?.absoluteString
+            == "https://github.com/mcorcos/xtal")
+    #expect(Git.urlWeb(de: "/un/repo/local") == nil)
+}
+
+@MainActor
+@Test func un_nombre_de_rama_escrito_por_una_persona_se_vuelve_valido() {
+    // Alguien escribe «Arreglo del Bode», no «arreglo-del-bode». Se traduce en vez de
+    // rechazarlo. Las tildes se van: el nombre viaja a un remoto y a una URL.
+    #expect(Git.nombreDeRama("Arreglo del Bode") == "arreglo-del-bode")
+    #expect(Git.nombreDeRama("Corrección  del   informe") == "correccion-del-informe")
+    #expect(Git.nombreDeRama("manu/tp-4") == "manu/tp-4")
+    #expect(Git.nombreDeRama("  ¡¿che?!  ") == "che")
+}
+
+// MARK: - Los colores del pull request
+//
+// Es la tabla que pidió Manu, y está testeada entera: violeta con tilde verde si entra
+// limpio, violeta con cruz roja si hay conflictos, verde si ya se mergeó, rojo si se
+// cerró sin mergear.
+
+@MainActor
+@Test func el_estado_de_un_pr_decide_el_color() {
+    func pr(_ f: (inout GitHub.PR) -> Void) -> GitHub.PR {
+        var p = GitHub.PR(); p.numero = 7; f(&p); return p
+    }
+    #expect(GitHub.estado(de: nil) == .sinPr)
+    #expect(GitHub.estado(de: pr { $0.mergeable = .limpio }) == .listo(7))
+    #expect(GitHub.estado(de: pr { $0.mergeable = .conflictos }) == .conflictos(7))
+    #expect(GitHub.estado(de: pr { $0.estado = .mergeado }) == .mergeado(7))
+    #expect(GitHub.estado(de: pr { $0.estado = .cerrado }) == .cerrado(7))
+    #expect(GitHub.estado(de: pr { $0.borrador = true }) == .borrador(7))
+
+    // 🛑 **El conflicto le gana a los checks en verde.** Un PR que choca con la base no
+    // entra por más que el CI esté todo verde, y mostrarlo con el tilde sería mentir.
+    #expect(GitHub.estado(de: pr { $0.mergeable = .conflictos; $0.checks = .verde })
+            == .conflictos(7))
+    // Y un merge ya hecho le gana a todo: no importa cómo quedaron los checks.
+    #expect(GitHub.estado(de: pr { $0.estado = .mergeado; $0.checks = .rojo }) == .mergeado(7))
+}
+
+@MainActor
+@Test func el_estado_de_un_pr_siempre_se_escribe_ademas_de_pintarse() {
+    // Un color sin texto no le dice nada a quien no distingue esos dos colores.
+    for e: GitHub.EstadoRama in [.sinPr, .borrador(1), .listo(1), .conflictos(1),
+                                 .chequeando(1), .fallando(1), .mergeado(1), .cerrado(1)] {
+        #expect(!e.texto.isEmpty)
+        #expect(!e.ayuda.isEmpty)
+        #expect(!e.icono.isEmpty)
+    }
+}
+
+@MainActor
+@Test func los_checks_se_resumen_con_el_peor() {
+    // Uno rojo pinta todo de rojo: con un check fallando el PR no entra.
+    #expect(GitHub.checks(de: [["conclusion": "SUCCESS"], ["conclusion": "FAILURE"]]) == .rojo)
+    // Mientras quede uno sin terminar, está corriendo. Un CheckRun en curso trae
+    // `conclusion` VACÍA y el estado en `status`: leer solo `conclusion` lo daría por
+    // bueno. Es lo que devuelve GitHub de verdad, verificado contra este repositorio.
+    #expect(GitHub.checks(de: [["conclusion": "SUCCESS"],
+                               ["conclusion": "", "status": "IN_PROGRESS"]]) == .corriendo)
+    #expect(GitHub.checks(de: [["conclusion": "SUCCESS"], ["conclusion": "SKIPPED"]]) == .verde)
+    // Un status clásico no tiene `conclusion` en ningún lado: guarda el resultado en
+    // `state`. Mirar solo uno de los dos campos deja media GitHub sin color.
+    #expect(GitHub.checks(de: [["state": "SUCCESS"]]) == .verde)
+    #expect(GitHub.checks(de: []) == .ninguno)
+    #expect(GitHub.checks(de: nil) == .ninguno)
+}
+
+@MainActor
+@Test func el_json_de_gh_se_lee_entero() {
+    let json = """
+    [{"number":22,"title":"Un arreglo","headRefName":"popup","baseRefName":"main",
+      "state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","url":"https://x/22",
+      "author":{"login":"mcorcos"},"additions":70,"deletions":20,"reviewDecision":"",
+      "statusCheckRollup":[{"conclusion":"SUCCESS"}]}]
+    """
+    let prs = GitHub.parsear(json)
+    #expect(prs.count == 1)
+    #expect(prs[0].numero == 22 && prs[0].rama == "popup" && prs[0].autor == "mcorcos")
+    #expect(prs[0].mergeable == .limpio && prs[0].checks == .verde)
+    #expect(GitHub.estado(de: prs[0]) == .listo(22))
+}
+
+@MainActor
+@Test func cuando_gh_falla_se_dice_cual_de_los_tres_problemas_es() {
+    // El texto de `gh` es largo y en inglés. Lo que hace falta es saber cuál de los
+    // problemas conocidos es, para poder decir qué hacer.
+    #expect(GitHub.leerFalla("To get started with GitHub CLI, please run: gh auth login")
+            == .sinSesion)
+    #expect(GitHub.leerFalla("none of the git remotes configured for this repository")
+            == .sinRemoto)
+}
+
+// MARK: - El coloreado del diff
+
+@Test func el_resaltado_reconoce_lo_que_dice_que_reconoce() {
+    func colores(_ s: String, _ l: Resaltado.Lenguaje) -> [Color?] {
+        Resaltado.colorear(Array(s), lenguaje: l)
+    }
+    // Un comentario se come el resto de la línea.
+    let c = colores("let x = 1 // esto no", .llaves)
+    #expect(c[c.count - 1] == Tok.Sint.comentario)
+    #expect(c[0] == Tok.Sint.clave)   // `let`
+
+    // Un string entero, comillas incluidas.
+    let s = colores("\"hola\"", .llaves)
+    #expect(s.allSatisfy { $0 == Tok.Sint.texto })
+
+    // Un `\comando` de LaTeX.
+    let t = colores("\\section{Hola}", .latex)
+    #expect(t[0] == Tok.Sint.comando && t[7] == Tok.Sint.comando)
+    #expect(t[9] != Tok.Sint.comando)   // «Hola» no es parte del comando
+}
+
+@Test func un_porcentaje_escapado_no_es_un_comentario_de_latex() {
+    // «una caída del 3\%» es de lo más común en un informe. Tratándolo como comentario,
+    // media línea del diff sale gris.
+    let c = Resaltado.colorear(Array("del 3\\% total"), lenguaje: .latex)
+    #expect(c[c.count - 1] != Tok.Sint.comentario)
+}
+
+@Test func los_tabuladores_se_expanden_a_espacios() {
+    // Un `\t` adentro de un `Text` de SwiftUI no cae en una parada de tabulación: cae
+    // donde el layout diga, y desalinea todo el bloque indentado.
+    #expect(Resaltado.expandirTabs("\tif x {") == "    if x {")
+    #expect(Resaltado.expandirTabs("sin tabs") == "sin tabs")
 }

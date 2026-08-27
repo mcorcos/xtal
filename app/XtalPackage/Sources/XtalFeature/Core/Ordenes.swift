@@ -22,7 +22,7 @@ import SwiftUI
 /// xtal://abrir?carpeta=/ruta         abrir ese proyecto
 /// xtal://compilar                    guardar y compilar (lo mismo que ⌘S)
 /// xtal://modo/agente|editor          cambiar de modo
-/// xtal://ver/pdf|errores             qué se mira en el panel derecho
+/// xtal://ver/pdf|errores|versiones|revision|terminal   qué se mira a la derecha
 /// xtal://panel/pdf|informe|terminal|archivos?ver=1|0
 /// xtal://terminal/nueva              otra terminal en el panel del agente
 /// ```
@@ -71,7 +71,11 @@ public enum Ordenes {
             UserDefaults.standard.set(modo, forKey: "xtal.modo")
 
         case "ver":
-            guard let que = resto.first, ["pdf", "errores"].contains(que) else { return false }
+            let solapas = ["pdf", "errores", "versiones", "revision", "terminal"]
+            guard let que = resto.first, solapas.contains(que) else { return false }
+            // **Con el panel derecho apagado no se ve nada**, y una orden que no hace
+            // nada visible se lee como que la app la ignoró. Se prende primero.
+            UserDefaults.standard.set(true, forKey: "xtal.panel.pdf")
             NotificationCenter.default.post(name: .xtalVerSolapa, object: que)
 
         case "panel":
@@ -119,7 +123,7 @@ public enum Ordenes {
 public extension Notification.Name {
     /// Abrir otro proyecto. La escucha `Raiz`, que es la que sabe qué carpeta hay abierta.
     static let xtalAbrirCarpeta = Notification.Name("xtal.abrirCarpeta")
-    /// Qué solapa se mira en el panel derecho: `pdf` o `errores`.
+    /// Qué solapa se mira en el panel derecho. Los cinco valores de `Workspace.Salida`.
     static let xtalVerSolapa = Notification.Name("xtal.verSolapa")
     /// Una terminal más en el panel del agente.
     static let xtalTerminalNueva = Notification.Name("xtal.terminalNueva")

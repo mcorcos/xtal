@@ -65,6 +65,9 @@ pub fn cmd_app(args: AppArgs, project: &Option<PathBuf>, json: bool) -> Result<(
             let v = match a.que {
                 VistaAppArg::Pdf => "pdf",
                 VistaAppArg::Errores => "errores",
+                VistaAppArg::Versiones => "versiones",
+                VistaAppArg::Revision => "revision",
+                VistaAppArg::Terminal => "terminal",
             };
             (format!("ver/{v}"), format!("mostrar {v}"))
         }

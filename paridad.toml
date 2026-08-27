@@ -237,3 +237,61 @@ por_que = "la terminal integrada. En Mac la dibuja libghostty; en Windows, ConPT
 mac = "app/XtalPackage/Sources/XtalFeature/Terminal/Sesiones.swift"
 win = ["app-win/src/terminal/sesiones.ts"]
 por_que = "las sesiones de terminal, que no se mueren al cambiar de pantalla"
+
+# ---------------------------------------------------------------------------
+# La revisión: git, GitHub y el diff
+#
+# Todo esto es de Mac por ahora. En Windows no hay nada equivalente: `BarraGit.tsx`
+# existe y muestra el estado, pero no hay diff, ni ramas, ni pull requests. Cada
+# entrada dice qué falta, y sale en el informe de cada release hasta que se cierre.
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Diff.swift"
+win = []
+por_que = "el parser del diff unificado: trozos, números de línea, agujeros y apareo"
+pendiente = "el parser. Es lógica pura y sin pantalla, así que se porta tal cual a TypeScript o a Rust; conviene Rust, del lado de Tauri, para que la vista reciba el diff ya armado"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Historia.swift"
+win = []
+por_que = "leer ramas, historial y el diff de un alcance"
+pendiente = "los comandos de git de solo lectura (`for-each-ref`, `log`, `diff --merge-base`) y su parseo"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/GitHub.swift"
+win = []
+por_que = "los pull requests vía `gh`, y el estado que decide el color de una rama"
+pendiente = "el shell-out a `gh pr list --json` y la traducción a `EstadoRama`. La tabla de colores está en el docstring de `ChipPR`"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/Revision.swift"
+win = []
+por_que = "qué se compara, qué agujeros se abrieron y qué archivos se marcaron vistos"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/VistaDiff.swift"
+win = []
+por_que = "el diff dibujado: unificado, partido, los agujeros que se abren"
+pendiente = "la vista. En Windows CodeMirror 6 ya está instalado y trae `@codemirror/merge`, que resuelve la vista partida"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/PanelRevision.swift"
+win = []
+por_que = "la pantalla de revisión entera: las dos barras, el diff y el pull request"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/Ramas.swift"
+win = []
+por_que = "la lista de ramas y el chip de pull request con sus colores"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/Historial.swift"
+win = []
+por_que = "el historial con los merges marcados"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Revision/Resaltado.swift"
+win = ["app-win/src/editor/EditorCodigo.tsx"]
+por_que = "el coloreado del código adentro del diff"
+

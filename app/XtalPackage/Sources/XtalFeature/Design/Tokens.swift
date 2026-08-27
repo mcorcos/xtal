@@ -62,6 +62,79 @@ public enum Tok {
     public static let azul = Familia(bg: .hex("e5eeff"), tint: .hex("d6e5ff"), deep: .hex("215bc4"))
     public static let gris = Familia(bg: .hex("f6f7f7"), tint: .hex("eeeff1"), deep: .hex("505155"))
 
+    /// El violeta del pull request.
+    ///
+    /// **Es el de GitHub y no se elige.** Quien trabaja con esto ya tiene aprendido, de
+    /// mirar github.com todos los días, que violeta es «hay un pull request» y verde es
+    /// «entró». Usar otros dos colores para lo mismo obliga a aprender un idioma nuevo
+    /// para decir algo que la persona ya sabía decir.
+    public static let violeta = Familia(bg: .hex("f3eefc"), tint: .hex("e5d9fb"), deep: .hex("6f42c1"))
+
+    // MARK: - El diff
+    //
+    // 🛑 **Estos SÍ se dan vuelta en modo oscuro, y los chips de arriba no.**
+    //
+    // No es una inconsistencia: es que hacen dos cosas distintas. Un chip es una pieza
+    // chica sobre el fondo de la app, y una pastilla clara sobre oscuro se lee bien.
+    // Una línea de diff pinta **el renglón entero, de punta a punta**, adentro de una
+    // superficie de código: un `#e6ffec` a todo lo ancho arriba de un editor oscuro es
+    // una banda de luz, y treinta de esas seguidas encandilan.
+    //
+    // Los valores del modo claro son los de GitHub tal cual. Los del oscuro son los
+    // mismos colores mezclados contra `bgBase` en oscuro (`171c20`), no los de GitHub
+    // —que están calculados contra su propio fondo, más azulado— porque un verde
+    // pensado para otro fondo se ve sucio arriba de este.
+
+    public enum Dif {
+        /// El renglón agregado, entero.
+        public static let masFondo = dyn("e6ffec", "15291d")
+        /// La columna del número, un tono más saturada: separa el margen del texto.
+        public static let masCanaleta = dyn("ccffd8", "1b3b26")
+        /// Las palabras que de verdad cambiaron adentro del renglón.
+        public static let masPalabra = dyn("abf2bc", "2a6b3b")
+        /// La barrita de la izquierda. Es lo único de color pleno, y es lo que se ve
+        /// primero cuando uno pasa el ojo por una pantalla llena de código.
+        public static let masBarra = dyn("1f883d", "3fb950")
+
+        public static let menosFondo = dyn("ffebe9", "2a181b")
+        public static let menosCanaleta = dyn("ffd7d5", "47222a")
+        public static let menosPalabra = dyn("ffc0bf", "7a2b30")
+        public static let menosBarra = dyn("cf222e", "f85149")
+
+        /// La franja de «153 líneas sin cambios».
+        public static let huecoFondo = dyn("f6f8fa", "1d2328")
+        public static let huecoTexto = dyn("57606a", "8b949e")
+
+        /// En la vista partida, el lado que no tiene contraparte. **No es blanco**: un
+        /// blanco ahí se lee como «una línea vacía», que es otra cosa. Va rayado.
+        public static let vacio = dyn("fafbfc", "1a1f24")
+        public static let raya = dyn("00000010", "ffffff0c")
+
+        /// El número de línea.
+        public static let numero = dyn("8c959f", "6e7681")
+        /// El fondo de la canaleta en una línea sin cambios.
+        public static let canaleta = dyn("ffffff", "171c20")
+    }
+
+    // MARK: - Sintaxis
+    //
+    // El coloreado del código, **deliberadamente tonto**: comentarios, strings, números,
+    // palabras clave y comandos de LaTeX. No es un parser de nada.
+    //
+    // Son los mismos seis colores que usa el editor (`EditorCodigo`), y viven acá por lo
+    // de siempre: un hex escrito en otro archivo es un color que nadie va a volver a
+    // encontrar. No se dan vuelta en oscuro — son tonos medios, elegidos para leerse
+    // sobre los dos fondos.
+
+    public enum Sint {
+        public static let comentario = Color.hex("8a8f98")
+        public static let comando = Color.hex("9d4edd")
+        public static let clave = Color.hex("215bc4")
+        public static let texto = Color.hex("007d53")
+        public static let numero = Color.hex("874d00")
+        public static let simbolo = Color.hex("ba2525")
+    }
+
     // MARK: - Terminal
     //
     // La terminal se configura con **texto**, no con `Color`: adentro corre libghostty,

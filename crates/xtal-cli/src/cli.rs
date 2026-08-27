@@ -1162,8 +1162,16 @@ pub enum ModoAppArg {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum VistaAppArg {
+    /// El PDF compilado.
     Pdf,
+    /// Los errores de la última compilación.
     Errores,
+    /// Las versiones guardadas del archivo abierto.
+    Versiones,
+    /// El diff: qué cambió en la carpeta, archivo por archivo.
+    Revision,
+    /// La terminal, en el panel de la derecha.
+    Terminal,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

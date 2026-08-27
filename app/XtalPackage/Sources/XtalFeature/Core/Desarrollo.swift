@@ -38,7 +38,8 @@ public enum Desarrollo {
         return v.isEmpty ? nil : v
     }
 
-    /// `XTAL_SOLAPA=pdf|errores|versiones` — con qué solapa del panel derecho arranca.
+    /// `XTAL_SOLAPA=pdf|errores|versiones|revision|terminal` — con qué solapa del panel
+    /// derecho arranca. Los valores son los `rawValue` de `Workspace.Salida`.
     ///
     /// Existe por lo mismo que el resto: una sesión sin manos no puede hacer click en
     /// «Versiones», y sin poder abrirla no hay forma de mirar si el panel dibuja.
@@ -100,6 +101,18 @@ public enum Desarrollo {
     /// que probar es justamente que tipear dispare, no que la lista sepa dibujarse.
     public static var textoAAutocompletar: String? {
         let v = ProcessInfo.processInfo.environment["XTAL_AUTOCOMPLETAR"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
+    /// `XTAL_REVISION=1|partida|lista|historial|ramas` — abre el panel de revisión al
+    /// arrancar, y en la vista que se le pida.
+    ///
+    /// Existe por lo mismo que `XTAL_SYNC` y `XTAL_SIMBOLOS`: una sesión sin manos no
+    /// puede tocar una solapa, y sin poder abrirla no hay forma de mirar si el diff
+    /// dibuja. La vista partida y la lista de archivos son dos pantallas distintas que
+    /// hay que poder retratar por separado.
+    public static var revisionInicial: String? {
+        let v = ProcessInfo.processInfo.environment["XTAL_REVISION"] ?? ""
         return v.isEmpty ? nil : v
     }
 
@@ -190,8 +203,13 @@ public enum Desarrollo {
             // se dibuja adentro de la ventana principal, así que de otro modo no sale en
             // ningún retrato. Va primero porque cuando la app no tiene el foco (que es lo
             // normal lanzándola con `open` desde una sesión sin manos) `keyWindow` es nil.
+            // **El tooltip queda afuera.** Si el mouse quedó parado arriba de un
+            // botón, macOS abre un `NSToolTipPanel`, que es un `NSPanel` visible como
+            // cualquier otro: el retrato salía siendo una foto de 324x38 del texto de
+            // ayuda. Pasó, y el PNG de 4 KB no dice por qué.
             let panel = NSApp.windows.first {
                 $0.isVisible && $0 is NSPanel && $0.contentView != nil
+                    && !$0.className.contains("ToolTip")
             }
             let candidata = panel
                 ?? NSApp.keyWindow

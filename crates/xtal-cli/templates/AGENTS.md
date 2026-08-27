@@ -178,6 +178,7 @@ Xtal también es una app de Mac. Si estás corriendo adentro de su terminal, ten
 xtal app compilar       # guardar y compilar (lo mismo que ⌘S)
 xtal app ver errores    # mostrarle el error en pantalla
 xtal app ver pdf        # volver al PDF
+xtal app ver revision   # mostrarle el diff de lo que tocaste
 xtal app abrir          # abrir este proyecto en la app
 ```
 

@@ -19,6 +19,7 @@
 > | Las secciones del informe | `app/…/Core/Secciones.swift` | `app-win/src-tauri/src/secciones.rs` |
 > | Los ajustes | `app/…/Settings/Ajustes.swift` | `app-win/src/settings/Ajustes.tsx` |
 > | Los atajos y el menú | `app/Xtal/XtalApp.swift` | el `keydown` de `Workspace.tsx` |
+| El diff, las ramas y los PR | `app/…/Revision/` y `app/…/Core/{Diff,Historia,GitHub}.swift` | *todavía no existe* |
 >
 > Lo que todavía es **idea y no está construido** va marcado con «*(idea)*». Si no dice
 > eso, está hecho.
@@ -118,7 +119,7 @@ La puerta es un esquema de URL, `xtal://`, y quien la usa es `xtal app`:
 xtal app abrir [carpeta]     abrir un proyecto (sin carpeta: el actual)
 xtal app compilar            guardar y compilar (⌘S)
 xtal app modo editor|agente
-xtal app ver pdf|errores     qué se mira en el panel derecho
+xtal app ver pdf|errores|versiones|revision|terminal   qué se mira a la derecha
 xtal app panel <cual> [--on|--off]    pdf · archivos · terminal · informe
 xtal app terminal            otra terminal en el panel del agente
 xtal app frente              traer la app adelante
@@ -185,9 +186,35 @@ abajo con la rama y símbolos de color con su número.
 Cada símbolo escribe su número y dice su nombre al pasar el mouse: un color solo no le
 comunica nada a quien no distingue esos dos colores.
 
-Los botones que aparecen son los del día a día — guardar cambios, traer, subir — y solo
-cuando hay algo que hacer. **No es un cliente de git**: no hay historial, ni diffs, ni
-ramas. Para eso está la terminal, que la app ya tiene adentro.
+Los botones que aparecen son los del día a día — guardar cambios, traer, subir, publicar
+la rama — y solo cuando hay algo que hacer. Al lado de la rama va el chip del pull
+request, con el color de GitHub.
+
+**Cada símbolo se puede tocar y lleva a la revisión.** El símbolo dice cuántos; el panel
+dice cuáles. Un «4 modificados» que no se puede tocar deja a la persona con la pregunta a
+la mitad.
+
+## La revisión: el diff, las ramas y los pull requests
+
+→ **`docs/GIT.md` lo cuenta entero.** Acá va lo justo para ubicarlo.
+
+El panel de la derecha tiene cinco solapas: **main.pdf · Errores · Versiones · Revisión ·
+Terminal**. La de Revisión es la pantalla de GitHub adentro de la app: qué cambió archivo
+por archivo,
+con los números de línea de los dos lados, los agujeros que se abren, las palabras
+marcadas, la vista partida, el historial con los merges, la lista de ramas con el estado
+de su pull request, y el botón de crear uno.
+
+**En modo agente abre ahí sola**, si hay algo que revisar. Es la pregunta que uno tiene
+cuando trabaja hablándole a un agente —«¿qué tocó?»— y era la que la app no contestaba.
+
+**Versiones y Revisión no son la misma pantalla**, aunque las dos lean git: Versiones es
+«volver a como estaba ayer» sobre el archivo que tenés abierto, sin que la palabra
+«commit» aparezca nunca; Revisión es el diff, las ramas y los pull requests.
+
+Lo que **no** hace, a propósito: `reset --hard`, `push --force`, rebase interactivo, ni
+borrar ramas. Eso existe, se hace en la terminal que la app ya tiene adentro, y ahí el que
+lo escribe sabe lo que está escribiendo.
 
 ## Los tres extremos, todos al mismo tiempo
 
@@ -217,6 +244,9 @@ Que un TP viva en git tiene que ser natural, no un trámite aparte:
 
 - Un **mini control de git** adentro: ver qué cambió, commitear, pushear. **Hecho** — es
   la barra de abajo.
+- **Ver el diff**, con calidad de GitHub. **Hecho** — la solapa Revisión. Ver `docs/GIT.md`.
+- **Historial, ramas, merge y rebase.** **Hecho** — adentro del mismo panel.
+- **Pull requests**: verlos, crearlos, mergearlos. **Hecho**, vía `gh`.
 - **Empezar a versionar** una carpeta que todavía no está en git. **Hecho** — el botón
   aparece cuando no hay repo.
 - **Clonar** un TP desde git y abrirlo. *(idea)*

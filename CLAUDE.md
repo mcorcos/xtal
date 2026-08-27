@@ -256,6 +256,97 @@ principio y `docs/PENDIENTES.md` la tenía anotada como pendiente.
   `--monochrome`. El nombre se muestra solo en el desplegable de "Informe nuevo": sale
   del `theme.toml`, no de una tabla en el código.
 
+### GitHub adentro de la app: el diff, las ramas y los PR — HECHO (2026-08-27), pedido de Manu → `docs/GIT.md`
+Adentro de la app corre un agente que escribe archivos, y abajo había una barra que decía
+«4 modificados». Entre esas dos cosas faltaba la única que importa: **ver qué escribió**.
+Revisarlo era abrir la terminal y leer un `git diff` en texto, que es lo que la app venía
+a evitar. Ahora el panel de la derecha tiene cinco solapas —**main.pdf · Errores ·
+Versiones · Revisión · Terminal**— y la de Revisión es GitHub adentro de la app.
+- **Versiones y Revisión no son la misma pantalla**, y conviven a propósito: Versiones
+  (que entró en el PR #21) es «volver a como estaba ayer» sobre el archivo abierto, sin
+  que la palabra «commit» aparezca nunca; Revisión es el diff, las ramas y los PR.
+  Quedó una **deuda anotada**: `Git.Version` y `Git.Commit` son dos tipos para lo mismo
+  —`Version` es un subconjunto de `Commit`— y se pueden juntar. No se hizo al resolver el
+  rebase para no tocar el panel de Versiones recién publicado. Por eso mi propiedad se
+  llama `commits` y no `historial`: `Git.historial(de:)` ya existía y es otra cosa.
+- **`XTAL_SOLAPA` ahora resuelve con el `rawValue` del enum y no con un `switch` a mano.**
+  El `switch` viejo mandaba al PDF todo lo que no conociera, así que las dos solapas
+  nuevas caían ahí. Con el `rawValue` no se puede volver a olvidar ninguna.
+- **La forma es la de GitHub y no se inventó nada.** Dos filas arriba (qué se compara, y
+  de qué rama a qué rama), la lista de archivos abajo, el pull request a la derecha. Quien
+  revisa código ya tiene esa pantalla aprendida; reordenarla por gusto propio obliga a
+  aprender de nuevo algo que ya se sabía. Vale igual para los colores.
+- **Tres alcances**: «Sin guardar», «La rama» (contra la base) y «un commit». **El default
+  no es siempre el mismo**: en una rama que no es la base abre en «La rama» —es lo que va
+  a decir el pull request—; parado en la base, en «Sin guardar».
+- **En modo agente el panel abre en Revisión** si hay algo que revisar. Con la carpeta
+  limpia gana el PDF: un panel vacío de arranque se lee como que la función no anda.
+- **`--merge-base` y no la punta de la base.** Sin eso, todo lo que entró a `main`
+  mientras trabajabas aparece como si lo hubieras borrado vos. Y `-M`, que sin él mover un
+  archivo sale como borrar 200 líneas y agregar las mismas 200.
+- **Un merge commit se compara contra su PRIMER padre.** El diff combinado de un merge
+  sale vacío salvo que haya habido conflictos, y un panel vacío se lee como un bug.
+- **Los archivos nuevos que git todavía no sigue se muestran**, con
+  `git diff --no-index /dev/null <archivo>`. Es un agujero de verdad: una sección recién
+  creada por el agente es justo lo que uno quiere revisar. **No se usa `git add -N`**, que
+  es el otro camino: ese toca el índice de la persona, y tocar el índice de alguien para
+  dibujar una pantalla es lo que un visor no tiene que hacer.
+- **Los agujeros se abren** («153 líneas sin cambios»). Lo que lo hace barato: adentro de
+  un agujero el delta entre el número viejo y el nuevo es **constante** —es texto que
+  nadie tocó—, así que abrirlo es leer el archivo nuevo y restar, sin otro `git diff`. De
+  dónde se lee depende del alcance: el disco para «sin guardar», el blob para un commit.
+- **Se marcan las palabras que cambiaron**, no la línea entera. Por palabras y no por
+  caracteres (por carácter, `usuario`→`cuenta` deja un cebrado ilegible), y si las dos
+  líneas se parecen menos del 35% **no se marca nada**: son dos líneas distintas, no una
+  editada.
+- **La barrita: verde llena y roja rayada.** El rayado distingue agregado de borrado sin
+  depender de ver la diferencia entre rojo y verde, que es el par que más gente confunde.
+  En la vista partida, el lado sin contraparte va rayado y **no en blanco**: un blanco se
+  lee como «acá había una línea vacía», que es otra cosa.
+- **Los colores del PR son los de GitHub, y están testeados**: violeta con tilde verde si
+  entra limpio, violeta con cruz roja si hay conflictos, verde si se mergeó, rojo si se
+  cerró. **El violeta dice «hay un PR» y el símbolo dice si está bien**: son dos datos, y
+  por eso dos señales. **El conflicto le gana a los checks en verde** — un PR que choca no
+  entra por más que el CI esté verde. Siempre está el número escrito (`#22`).
+- **`gh` y no la API.** Hablarle a la API querría decir pedir un token y guardarlo; `gh`
+  ya está autenticado y **la app no ve ninguna credencial**. Misma decisión que ngspice y
+  Tectonic. Sin `gh`, se dice con el comando para instalarlo.
+  - **Trampa de los checks, verificada contra este repo**: los Actions guardan el
+    resultado en `conclusion` y los status clásicos en `state`, y un check **en curso**
+    trae `conclusion` **vacía** con el estado en `status`. Mirando solo uno, media GitHub
+    queda sin color y un check corriendo se da por bueno.
+- **El historial NO es `git log --graph`**, a propósito: un grafo de seis carriles en un
+  panel de 300 puntos es un plato de fideos. Marca lo único que se pierde en una lista
+  plana: cuál es un merge y de dónde vino. **Que sea un merge lo dicen los padres, no el
+  mensaje** — «Merge pull request #20 from…» es una convención que cualquiera escribe a
+  mano. Tocar un commit cambia el alcance a ese commit: mirás la historia, ves «acá se
+  rompió», tocás, y estás viendo lo que ese commit cambió.
+- **Lo peligroso no está**: no hay `reset --hard`, ni `push --force`, ni rebase
+  interactivo, ni borrar ramas. Eso se hace en la terminal que la app ya tiene adentro,
+  donde el que lo escribe sabe lo que escribe. Lo único que se pregunta antes es **mergear
+  un PR**, que es lo único que le cambia algo a otra gente.
+- **`GIT_EDITOR=true` además de `GIT_TERMINAL_PROMPT=0`**: `merge` y `rebase` abren un
+  editor y el proceso queda colgado para siempre esperando que alguien lo cierre.
+- **La terminal vive en un solo lugar a la vez.** La vista de AppKit se la guarda la
+  sesión, así que montarla en la solapa y en el cajón la sacaría de uno para ponerla en el
+  otro. Elegir la solapa cierra el cajón, y abrir el cajón vuelve al PDF.
+- **Los símbolos de la barra de abajo ahora se tocan** y llevan a la revisión. Un «4
+  modificados» que no se puede tocar deja la pregunta a la mitad.
+- `xtal app ver revision|terminal`, ⌘3 en el menú, y `XTAL_REVISION=1|partida|lista|historial|ramas`
+  para retratarlo sin manos.
+- **Dos bugs salieron de mirar los retratos, ninguno de leer el código**: (1) el
+  desplegable de ramas mostraba **una sola rama** —un `LazyVStack` adentro de un popover
+  materializa una fila y el popover se mide por eso—; (2) el retrato **fotografiaba un
+  tooltip**, porque un `NSToolTipPanel` es un `NSPanel` visible y `Desarrollo` prefiere
+  los paneles. Los dos arreglados, el segundo en el arnés.
+- **La rama actual NO va con `.disabled`**: apaga el texto, el ícono y el chip, y la única
+  rama que importa salía siendo la más pálida. Es la trampa de `ItemNav`, del revés.
+- **En Windows no está, y es a propósito**: nueve entradas en `paridad.toml` con su
+  `pendiente`, así que sale en el informe de cada release.
+- **Hallazgo aparte**: los dos tests de SyncTeX
+  (`synctex_encuentra_la_ecuacion…`, `synctex_vuelve_del_pdf…`) **ya fallaban en
+  `origin/main`** antes de esta tanda — verificado en un worktree limpio. No se tocaron.
+
 ### La integración con agentes, como la de Supacode — HECHO (2026-08-23) → `docs/AGENTES.md`
 Se copió la disciplina del panel de integraciones de Supacode: **una tabla de agentes**
 en `crates/xtal-cli/src/agents.rs` (Claude Code, Claude Desktop, Codex, Copilot CLI,
@@ -1011,7 +1102,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update` · `setup` · `agents [install|uninstall|add|remove]` ·
-`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `latex [consulta]` · `refs` · `uninstall` ·
+`app [abrir|compilar|modo|ver|panel|terminal|frente]` (`ver pdf|errores|revision|terminal`) · `latex [consulta]` · `refs` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
