@@ -114,7 +114,10 @@ struct Progreso {
 /// son varios minutos: una llamada que contesta al final deja la pantalla sin nada que
 /// mostrar mientras tanto, y una barra que no se mueve se lee igual que un cuelgue.
 #[tauri::command]
-pub async fn modelo_descargar(app: AppHandle, cancelar: tauri::State<'_, Cancelar>) -> Result<(), String> {
+pub async fn modelo_descargar(
+    app: AppHandle,
+    cancelar: tauri::State<'_, Cancelar>,
+) -> Result<(), String> {
     let bandera = cancelar.0.clone();
     bandera.store(false, Ordering::SeqCst);
 
@@ -125,7 +128,10 @@ pub async fn modelo_descargar(app: AppHandle, cancelar: tauri::State<'_, Cancela
         .await
         .map_err(|e| explicar(&e.to_string()))?;
     if !respuesta.status().is_success() {
-        return Err(format!("El servidor contestó {}.", respuesta.status().as_u16()));
+        return Err(format!(
+            "El servidor contestó {}.",
+            respuesta.status().as_u16()
+        ));
     }
     let total = respuesta.content_length().unwrap_or(PESO);
 
@@ -183,7 +189,13 @@ pub async fn modelo_descargar(app: AppHandle, cancelar: tauri::State<'_, Cancela
     let _ = std::fs::remove_file(&destino);
     std::fs::rename(&parcial, &destino).map_err(|e| format!("No pude guardar el modelo: {e}"))?;
 
-    let _ = app.emit("modelo:progreso", Progreso { hechos: total, total });
+    let _ = app.emit(
+        "modelo:progreso",
+        Progreso {
+            hechos: total,
+            total,
+        },
+    );
     Ok(())
 }
 
@@ -226,7 +238,13 @@ mod tests {
     fn el_peso_declarado_es_el_del_modelo_de_verdad() {
         // Casi un giga. Si alguien cambia el modelo y se olvida de la constante, la barra
         // de progreso miente y `esta_completo` da por bueno un archivo cortado.
-        assert!(PESO > 900_000_000, "el peso declarado quedó viejo: {PESO}");
+        //
+        // Va en un `const` block y no en un `assert!` suelto porque las dos cosas que
+        // compara son constantes: así **falla al compilar** en vez de al correr los
+        // tests, que para un descuido de este tipo es antes y es mejor. (Es además lo que
+        // pide clippy: un `assert!` sobre constantes es siempre el mismo resultado.)
+        const { assert!(PESO > 900_000_000) };
+        const { assert!(!ARCHIVO.is_empty()) };
         assert!(ARCHIVO.ends_with(".gguf"));
         // El **base**, no el `-Instruct`: es el que sabe rellenar el medio.
         assert!(!ARCHIVO.contains("Instruct"));
@@ -252,11 +270,8 @@ mod tests {
         // único comprobable sin efectos: que una ruta que no existe no cuente como
         // instalada. Es el caso que importa — el que decide si el motor arranca.
         assert!(!std::path::Path::new("/no/existe/xtal-modelo.gguf").exists());
-        assert_eq!(
-            std::fs::metadata("/no/existe/xtal-modelo.gguf")
-                .map(|m| m.len() >= PESO / 2)
-                .unwrap_or(false),
-            false
-        );
+        assert!(!std::fs::metadata("/no/existe/xtal-modelo.gguf")
+            .map(|m| m.len() >= PESO / 2)
+            .unwrap_or(false));
     }
 }
