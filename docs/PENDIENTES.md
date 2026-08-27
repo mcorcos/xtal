@@ -192,7 +192,11 @@ Dejó de ser "no existe". Lo que hay ahora:
 
 - **El instalador trae la CLI adentro**, así que bajar el `.exe` alcanza.
 - **scoop y winget**, los dos gestores de paquetes de Windows, con sus manifiestos
-  generados por `packaging/` y viajando adentro de la Release.
+  generados por `packaging/` y viajando adentro de la Release. **Generados, no
+  publicados**: al 27 de agosto de 2026 `mcorcos/scoop-xtal` no existe y `UNIT.Xtal` no
+  está en `microsoft/winget-pkgs`, así que los dos comandos fallan. Falta crear el bucket
+  (`packaging/scoop/bucket/LEEME-COMO-CREARLO.md`) y mandar el PR a Microsoft desde una
+  máquina con Windows. El README ya no los ofrece hasta entonces.
 - **El CI arma el instalador** y verifica que pese: un `.exe` truncado también existe.
 
 **Lo que sigue abierto, y es lo mismo que el punto 2**: nadie con una máquina con Windows

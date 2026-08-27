@@ -53,21 +53,23 @@ xtal doctor
 
 ## Instalación
 
-**Windows** — tres caminos, todos **sin permisos de administrador**:
+**Windows** — dos caminos, los dos **sin permisos de administrador**:
 
 ```powershell
 # 1. El instalador de la app: bajás el .exe de la Release y listo.
 #    Trae el comando `xtal` adentro, así que con eso solo ya funciona todo.
 
-# 2. winget, que viene de fábrica en Windows 11:
-winget install UNIT.Xtal
-
-# 3. Una línea, que deja la CLI y la app:
+# 2. Una línea, que deja la CLI y la app:
 irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex
 ```
 
-Solo la CLI, sin la app: `scoop install xtal` (después de agregar el bucket, ver más
-abajo), o `install.ps1 -SinApp`.
+Solo la CLI, sin la app: `install.ps1 -SinApp`.
+
+> **Todavía no por winget ni por scoop.** Los manifiestos de los dos se generan solos en
+> cada release y viajan adentro de `manifiestos-<version>.tar.gz`, pero falta el paso de
+> publicarlos: winget se publica por pull request en el repo de Microsoft, y el bucket de
+> scoop todavía no está creado. Hasta entonces `winget install UNIT.Xtal` y
+> `scoop install xtal` no existen.
 
 `install.ps1` baja el binario, verifica el checksum, lo deja en
 `%LOCALAPPDATA%\Programs\xtal` y lo agrega al PATH del usuario.
