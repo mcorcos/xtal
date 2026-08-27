@@ -67,6 +67,25 @@ public final class Autocompletado: ObservableObject {
     /// Cuánto aire va entre el renglón que estás escribiendo y la lista.
     private static let aire: CGFloat = 12
 
+    /// Alto de una fila y cuántas se ven de una. El alto de la caja sale de acá.
+    private static let altoFila: CGFloat = 34
+    private static let filasALaVista = 8
+    private static let ancho: CGFloat = 380
+
+    /// El alto que ocupa la lista **llena**. Es el que se usa para decidir si va arriba o
+    /// abajo, y se usa siempre, aunque en ese momento haya dos sugerencias: si la
+    /// decisión dependiera de cuántas hay, filtrar cambiaría de lado la lista.
+    private static var altoMaximo: CGFloat { CGFloat(filasALaVista) * altoFila + 12 }
+
+    /// Dónde se paró la lista cuando se abrió, y para qué lado creció.
+    ///
+    /// **La posición se decide UNA VEZ, al abrir, y no se vuelve a calcular mientras la
+    /// lista siga abierta.** Antes se recalculaba en cada tecla: al filtrar quedaban menos
+    /// sugerencias, la caja se achicaba, y la lista saltaba sola mientras uno escribía.
+    /// Con el ancla fija, al achicarse desaparecen filas **del extremo de abajo** si está
+    /// abajo, o de arriba si está arriba, y el borde que uno está mirando no se mueve.
+    private var ancla: (x: CGFloat, y: CGFloat, haciaAbajo: Bool)?
+
     public init() {}
 
     // -----------------------------------------------------------------------
@@ -186,6 +205,7 @@ public final class Autocompletado: ObservableObject {
         // detector también matchearía —hay una `\ref` ahí atrás— y ofrecería comandos de
         // LaTeX justo donde lo único válido es una etiqueta del documento.
         if let (rango, consulta) = Self.referencia(en: s, cursor: sel.location) {
+            soltarAnclaSiEsOtroLugar(rango)
             rangoPrefijo = rango
             Task { await referencias.refrescar() }
             let encontrado = referencias.buscar(consulta)
@@ -201,6 +221,7 @@ public final class Autocompletado: ObservableObject {
             return
         }
 
+        soltarAnclaSiEsOtroLugar(rango)
         rangoPrefijo = rango
         // Con la `\` recién escrita y nada más, se muestra el historial: es el momento
         // exacto en el que uno no se acuerda del comando, y lo que usaste hace un rato es
@@ -216,6 +237,14 @@ public final class Autocompletado: ObservableObject {
         mostrar(cerca: rango, en: tv)
     }
 
+    /// El ancla vale para **una** sesión de completado, y la sesión es «dónde arranca lo
+    /// que estás escribiendo». Si el prefijo empezó en otro lado —clickeaste en otro
+    /// párrafo y escribiste otra `\`— la lista tiene que pararse ahí y no quedarse donde
+    /// estaba, que se vería como que apunta a cualquier lado.
+    private func soltarAnclaSiEsOtroLugar(_ rango: NSRange) {
+        if rangoPrefijo.location != rango.location { ancla = nil }
+    }
+
     public func bajar() { if visible { elegido = (elegido + 1) % sugerencias.count } }
     public func subir() { if visible { elegido = (elegido - 1 + sugerencias.count) % sugerencias.count } }
 
@@ -223,6 +252,7 @@ public final class Autocompletado: ObservableObject {
         guard visible || panel != nil else { return }
         visible = false
         sugerencias = []
+        ancla = nil
         panel?.orderOut(nil)
         panel = nil
     }
@@ -261,8 +291,32 @@ public final class Autocompletado: ObservableObject {
             tv.window?.makeFirstResponder(tv)
         }
 
-        let alto = min(CGFloat(sugerencias.count), 8) * 34 + 12
-        let tamano = NSSize(width: 380, height: alto)
+        let alto = min(CGFloat(sugerencias.count), CGFloat(Self.filasALaVista)) * Self.altoFila + 12
+        let tamano = NSSize(width: Self.ancho, height: alto)
+
+        // El ancla se calcula **una sola vez**, cuando la lista se abre.
+        //
+        // Es el arreglo del salto: antes esto se recalculaba en cada tecla, y como la caja
+        // se achica al filtrar, la lista se movía sola mientras uno escribía. Y la
+        // decisión de arriba o abajo se toma con el alto de la lista LLENA, no con el que
+        // tiene en ese momento: si dependiera de cuántas sugerencias hay, filtrar podría
+        // cambiarla de lado.
+        if ancla == nil, let ventana = tv.window {
+            let r = tv.firstRect(forCharacterRange: NSRange(location: rango.location, length: 0),
+                                 actualRange: nil)
+            // El aire se mide desde `minY`, que es el pie de la línea. Con poco, la lista
+            // queda pegada al renglón que estás escribiendo y se lee como si lo tapara,
+            // aunque técnicamente esté abajo.
+            let abajo = r.minY - Self.aire
+            let entraAbajo = (ventana.screen?.visibleFrame.minY).map {
+                abajo - Self.altoMaximo >= $0
+            } ?? true
+            // Si no entra abajo va arriba, y ahí lo que se fija es **el pie** de la caja:
+            // al achicarse tiene que seguir arrancando arriba del renglón y no despegarse.
+            ancla = entraAbajo
+                ? (r.minX, abajo, true)
+                : (r.minX, r.maxY + Self.aire, false)
+        }
 
         if panel == nil {
             // `.nonactivatingPanel` es lo que hace que el editor no pierda el foco. Sin
@@ -288,23 +342,15 @@ public final class Autocompletado: ObservableObject {
         panel?.contentView = NSHostingView(rootView: contenido)
         panel?.setContentSize(tamano)
 
-        // Debajo de la línea del cursor. `firstRect(forCharacterRange:)` ya viene en
+        // Desde el ancla, que ya no cambia. `firstRect(forCharacterRange:)` viene en
         // coordenadas de pantalla, que es lo que quiere `setFrameTopLeftPoint`.
-        var origen = NSPoint(x: 0, y: 0)
-        if let ventana = tv.window {
-            let r = tv.firstRect(forCharacterRange: NSRange(location: rango.location, length: 0),
-                                 actualRange: nil)
-            // El aire se mide desde `minY`, que es el pie de la línea. Con poco, la lista
-            // queda pegada al renglón que estás escribiendo y se lee como si lo tapara,
-            // aunque técnicamente esté abajo.
-            origen = NSPoint(x: r.minX, y: r.minY - Self.aire)
-            // Si no entra abajo, va arriba del cursor. Una lista que se sale de la
-            // pantalla se ve como que el autocompletado "no anda".
-            if let pantalla = ventana.screen, origen.y - alto < pantalla.visibleFrame.minY {
-                origen.y = r.maxY + alto + Self.aire
-            }
+        //
+        // Abajo se fija la esquina de arriba: al achicarse desaparecen filas del pie y el
+        // borde que uno está mirando no se mueve. Arriba se fija el pie, así que la
+        // esquina de arriba se calcula sumando el alto de ahora.
+        if let a = ancla {
+            panel?.setFrameTopLeftPoint(NSPoint(x: a.x, y: a.haciaAbajo ? a.y : a.y + alto))
         }
-        panel?.setFrameTopLeftPoint(origen)
 
         if panel?.isVisible != true {
             // `orderFront` y no `makeKeyAndOrderFront`: la clave se queda en el editor.

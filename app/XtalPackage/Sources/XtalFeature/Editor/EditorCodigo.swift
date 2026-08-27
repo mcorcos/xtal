@@ -153,9 +153,13 @@ struct EditorCodigo: NSViewRepresentable {
         func textViewDidChangeSelection(_ n: Notification) {
             guard let tv = n.object as? NSTextView else { return }
             let r = tv.selectedRange()
-            // Seleccionar con el mouse en otro lado abandona lo que se venía escribiendo.
-            // Sin esto, la lista queda flotando arriba de un cursor que ya no está ahí.
-            if r.length > 0 { padre.autocompletado.cerrar() }
+            // Mover el cursor con el mouse abandona lo que se venía escribiendo.
+            //
+            // Se re-evalúa en vez de cerrar a secas: si clickeaste adentro de otro `\ref{`
+            // la lista tiene que seguir, pero parada **ahí**. Antes esto solo miraba
+            // `r.length > 0`, así que un click simple dejaba la lista flotando arriba de
+            // un cursor que ya no estaba ahí.
+            if padre.autocompletado.visible { padre.autocompletado.revisar(tv) }
             let s = tv.string as NSString
             padre.sincronia.seleccionEditor = r.length > 0 ? s.substring(with: r) : ""
             // Las líneas son lo que entiende SyncTeX: el mapa que deja LaTeX habla de
