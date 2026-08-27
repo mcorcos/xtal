@@ -64,7 +64,11 @@ impl Motor {
     }
 }
 
-const BIN: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+const BIN: &str = if cfg!(windows) {
+    "llama-server.exe"
+} else {
+    "llama-server"
+};
 
 /// Dónde buscar el ejecutable.
 ///
