@@ -9,6 +9,16 @@ es subir la version y pushear el tag.
    Todos los crates la heredan con `version.workspace = true`, así que se toca en un
    solo lugar. Actualizá también el `Cargo.lock` (`cargo check` alcanza).
 
+   **Las dos apps de escritorio tienen la suya y hay que subirlas igual**, porque son
+   proyectos aparte. El job `check` no publica si alguna no coincide:
+
+   | Archivo | Clave |
+   |---|---|
+   | `app/Config/Shared.xcconfig` | `MARKETING_VERSION` |
+   | `app-win/src-tauri/Cargo.toml` | `version` |
+   | `app-win/src-tauri/tauri.conf.json` | `version` |
+   | `app-win/package.json` | `version` |
+
 2. **Commitear** el cambio de version en `main`, con `main` verde en CI.
 
 3. **Taggear y pushear**:
@@ -25,10 +35,11 @@ es subir la version y pushear el tag.
 
 | Job | Qué produce |
 |---|---|
-| `check` | Valida que `vX.Y.Z` coincida con la version del workspace **y con las tres de la app** |
+| `check` | Valida que `vX.Y.Z` coincida con la version del workspace **y con las de las dos apps** |
 | `assets` | Completions y man pages, una sola vez |
 | `build` | Un paquete por plataforma (5 targets, runners nativos salvo Mac Intel) |
 | `app` | Los instaladores de Windows de la app de escritorio (`.exe` de NSIS y `.msi`) |
+| `app-mac` | La app de escritorio de macOS, universal y comprimida (`Xtal-<version>-macos.zip`) |
 | `release` | `SHA256SUMS` + la GitHub Release con todos los assets |
 
 El de Windows va en **zip** y no en tar.gz: `tar` existe en Windows 10 desde 2018, pero
@@ -70,10 +81,20 @@ La fórmula vive en un repo aparte: **[`mcorcos/homebrew-xtal`](https://github.c
 El nombre tiene que empezar con `homebrew-` para que `brew install mcorcos/xtal/xtal` lo
 resuelva solo.
 
+El tap publica **dos cosas**: la fórmula `xtal` (la CLI) y el cask `xtal-app` (la app de
+escritorio de macOS). Homebrew las separa a propósito — una fórmula deja binarios en su
+prefijo, un cask deja una `.app` en `/Applications`, que es donde Launchpad y Spotlight
+la buscan.
+
 **No hay nada que hacer al publicar.** El tap se actualiza a sí mismo: tiene un workflow
 que cada hora mira la última Release de este repo, se baja su `SHA256SUMS` y regenera
-`Formula/xtal.rb` con la plantilla de `packaging/homebrew/render-formula.sh` — o sea,
-con la de acá, bajada por HTTP. La plantilla está en un solo lugar.
+`Formula/xtal.rb` y `Casks/xtal-app.rb` con las plantillas de
+`packaging/homebrew/render-formula.sh` y `render-cask.sh` — o sea, con las de acá,
+bajadas por HTTP. Las plantillas están en un solo lugar.
+
+Si la Release no publica el zip de la app, el cask se saltea con un warning y la fórmula
+se actualiza igual: la CLI es lo que instala casi todo el mundo y no puede quedar vieja
+porque falló otra cosa.
 
 Se hace así, y no pusheando la fórmula desde este repo, porque escribir en otro
 repositorio necesita un Personal Access Token guardado como secret. Un token con permiso
@@ -89,6 +110,8 @@ Para revisar cómo va a quedar la fórmula, en cualquiera de los dos modos:
 ```bash
 bash packaging/homebrew/render-formula.sh 0.1.0 dist/            # desde tarballs locales
 bash packaging/homebrew/render-formula.sh 0.1.0 --from-release   # desde la Release
+bash packaging/homebrew/render-cask.sh    0.1.0 dist/            # el cask, igual
+bash packaging/homebrew/render-cask.sh    0.1.0 --from-release
 ```
 
 ## El instalador por curl
@@ -115,9 +138,14 @@ Tauri los nombra `Xtal_0.3.1_x64-setup.exe` y `Xtal_0.3.1_x64_en-US.msi`; el job
 renombra al esquema de arriba para que `install.ps1` pueda armar la URL sin adivinar el
 idioma del MSI.
 
-**El binario `xtal` no va adentro.** La app le habla al que está instalado en la máquina.
-Meterlo adentro daría dos copias con versiones que se separan solas, y ninguna de las dos
-sería la que el usuario corre en la terminal.
+**El binario `xtal` va adentro del instalador.** Sin eso, bajar el `.exe` deja una app que
+no puede hacer nada: le habla al comando `xtal` y sin él no compila ni simula. En Windows
+no hay un gestor de paquetes de fábrica que lo resuelva, y «bajá el instalador y además
+abrí PowerShell y pegá un comando» no es un instalador.
+
+No hay dos copias peleando: la app **prefiere la CLI instalada en el sistema** y solo cae
+a la de adentro si no hay ninguna, así que la app y la terminal nunca corren versiones
+distintas. Ver `bundled()` en `app-win/src-tauri/src/xtal_cli.rs`.
 
 **Los dos instaladores entran al `SHA256SUMS`.** Es lo que más se baja a mano desde la
 página, y es justo donde un archivo cortado pasa inadvertido.
@@ -126,6 +154,51 @@ La app **no está firmada**: SmartScreen va a mostrar «Windows protegió su PC�
 vez. Firmarla necesita un certificado de firma de código, que se paga.
 
 Detalle completo del port en [`APP-WINDOWS.md`](APP-WINDOWS.md).
+
+## La app de escritorio de macOS
+
+La compila el job `app-mac` con `xcodebuild`, en un runner `macos-15`. El proyecto está
+en `app/` y es el mismo que se abre en Xcode: no hay una copia aparte para el CI.
+
+**Sale una sola app, universal.** Se compila con `ARCHS = "arm64 x86_64"` porque el
+xcframework de libghostty trae la slice `macos-arm64_x86_64`. Con eso, un zip solo anda
+en Apple Silicon y en Intel, y el cask no tiene que adivinar cuál bajar. El job verifica
+las dos arquitecturas con `lipo -info`: si el xcframework algún día deja de traer la de
+Intel, el build sigue andando y la app sale solo ARM — esto lo convierte en un error del
+CI en vez de en un bug de alguien.
+
+**Se comprime con `ditto`, no con `zip`.** Es lo que preserva los symlinks y los
+metadatos de un bundle de macOS. Un `.app` comprimido con `zip` llega roto del otro lado.
+
+**El binario `xtal` NO va adentro**, al revés que en Windows. Acá sí hay un gestor de
+paquetes: el cask declara `depends_on formula: "mcorcos/xtal/xtal"`, así que Homebrew
+instala la CLI primero y la app le habla a esa. Ver `XtalCLI.rutaBinario()`.
+
+### La firma, que es el punto flojo
+
+La app va firmada **ad-hoc** (`codesign --sign -`), no con un Developer ID de Apple. En
+Apple Silicon un binario sin ninguna firma directamente no corre, así que ad-hoc es el
+piso, no un lujo. Firmar de verdad necesita una cuenta de Apple Developer ($99 al año) y
+notarizar cada build; el certificado tendría que vivir como secret de este repo.
+
+Lo que cuesta: Homebrew le pone el atributo de cuarentena a todo lo que baja, y sobre una
+app sin Developer ID ese atributo hace que macOS diga «no se puede abrir» y **no** ofrezca
+el «Abrir igualmente» de Ajustes. Por eso el cask se lo saca en su `postflight`. Quien la
+baje a mano de la Release se come el bloqueo y tiene que correr:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Xtal.app
+```
+
+El día que haya un Developer ID, se borra el `postflight` del cask y se suma el paso de
+notarización al job. Nada más cambia.
+
+### La version
+
+`app/Config/Shared.xcconfig` declara `MARKETING_VERSION`, y el job `check` no publica si
+no coincide con la del workspace. Es la misma disciplina que ya tenían los tres archivos
+de la app de Windows, y hace falta por lo mismo: una app que dice 0.1.0 hablándole a una
+CLI 0.3.2 no se puede diagnosticar.
 
 ## Los gestores de paquetes de Windows
 

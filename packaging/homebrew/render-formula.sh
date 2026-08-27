@@ -100,9 +100,14 @@ class Xtal < Formula
     end
   end
 
-  # Tectonic es el motor LaTeX: sin él, \`xtal run\` no compila el PDF. Es la única
-  # dependencia obligatoria. ngspice (simulación) queda opcional a propósito: no
-  # todo el mundo simula, y es un paquete pesado. \`xtal doctor\` avisa si falta.
+  # Las dos dependencias externas de Xtal, y las dos van adentro de la fórmula a
+  # propósito: **un comando tiene que dejar todo andando**. Antes ngspice quedaba
+  # afuera "porque no todo el mundo simula", y el resultado era que el que sí simulaba
+  # se enteraba de que le faltaba recién cuando \`xtal sim\` fallaba, a mitad del TP.
+  #
+  #   tectonic — motor LaTeX. Sin él \`xtal run\` no compila el PDF.
+  #   ngspice  — simulador. Sin él \`xtal sim\` no corre.
+  depends_on "ngspice"
   depends_on "tectonic"
 
   def install
@@ -115,14 +120,14 @@ class Xtal < Formula
 
   def caveats
     <<~EOS
-      Para simular circuitos hace falta ngspice:
-        brew install ngspice
+      Ya está todo: el motor LaTeX (tectonic) y el simulador (ngspice) vinieron
+      con esta fórmula, y la configuración se escribe sola en el primer comando.
 
-      Configurá Xtal en esta máquina (theme, formato, warmup de Tectonic):
-        xtal setup
+      Empezá por acá:
+        xtal example --open
 
-      Para usarlo desde Claude Desktop o Codex:
-        xtal mcp install --client claude-desktop
+      ¿Querés la app de escritorio?
+        brew install --cask mcorcos/xtal/xtal-app
     EOS
   end
 

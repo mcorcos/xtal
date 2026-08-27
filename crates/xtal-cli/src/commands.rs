@@ -966,16 +966,20 @@ pub fn cmd_doctor(args: DoctorArgs, json: bool) -> Result<()> {
     println!("  {}", style("Dependencias del sistema").bold());
     for dep in &deps {
         let ok = crate::deps::is_available(dep.bin);
-        println!(
-            "    {} {:<10} {}",
-            if ok {
-                style("✓").green().bold()
-            } else {
-                style("✗").red().bold()
-            },
-            dep.bin,
-            style(dep.purpose).dim()
-        );
+        // Una dependencia opcional que falta va con punto gris, no con ✗ roja: la ✗
+        // roja se lee como "esto está roto" y manda a arreglar algo que no hace falta.
+        // Es lo que ya hacía LTspice unas líneas más abajo, que también es opcional; acá
+        // el campo `kind` existía pero esta línea no lo miraba, así que un pdflatex
+        // ausente salía igual de rojo que un tectonic ausente.
+        //
+        // Que falten los DOS motores de LaTeX sí es un problema, y de eso se encarga el
+        // resumen del final (`sin_latex`), que es donde se los puede mirar juntos.
+        let marca = match (ok, dep.kind) {
+            (true, _) => style("✓").green().bold(),
+            (false, crate::deps::DepKind::Core) => style("✗").red().bold(),
+            (false, crate::deps::DepKind::Optional) => style("·").dim(),
+        };
+        println!("    {} {:<10} {}", marca, dep.bin, style(dep.purpose).dim());
     }
     // LTspice no es un binario del PATH (en macOS es una .app), así que se detecta
     // aparte. Y solo tiene sentido nombrarlo si este binario trae el addon de
