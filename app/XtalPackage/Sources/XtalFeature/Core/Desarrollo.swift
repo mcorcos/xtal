@@ -116,6 +116,21 @@ public enum Desarrollo {
         return v.isEmpty ? nil : v
     }
 
+    /// `XTAL_UPDATE_FAKE=0.9.9` — hace de cuenta que esa es la última version
+    /// publicada, sin salir a la red.
+    ///
+    /// Existe por lo mismo que el resto: sin esto, la única forma de mirar el panel de
+    /// Actualizaciones diciendo «hay una version nueva» es esperar a que salga una
+    /// version nueva. Con esto, un `XTAL_SHOW=ajustes:actualizaciones` retrata el panel
+    /// en cualquiera de sus estados.
+    ///
+    /// **No baja nada**: la descarga sí sale a la red, y con una version inventada la
+    /// URL no existe. Sirve para mirar la pantalla, no para probar la instalación.
+    public static var versionPublicadaFalsa: String? {
+        let v = ProcessInfo.processInfo.environment["XTAL_UPDATE_FAKE"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
     /// `XTAL_COMPILAR=1` — compila apenas abre, sin esperar un ⌘R.
     public static var compilarAlAbrir: Bool {
         ProcessInfo.processInfo.environment["XTAL_COMPILAR"] == "1"

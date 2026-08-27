@@ -123,7 +123,7 @@ El núcleo es análisis de circuitos + consolidación de datos.
     en el binario** con rust-embed (excluyendo `salida/`). Resuelve el primer minuto.
   - `xtal watch` — recompila al cambiar algo. **Polling de mtime**, no inotify/FSEvents:
     no justifica la dependencia. Ignora `salida/` (si no, se recompila a sí mismo en loop).
-  - `xtal update [--check]` — compara con la última Release (vía `curl`) y ofrece correr
+  - `xtal update [--check] [--yes] [--channel]` — compara con la última Release (vía `curl`) y ofrece correr
     `brew upgrade` o el instalador, según dónde viva el binario. No se reemplaza solo.
 - **Verificado en la máquina de Manu (2026-08-14), con el binario instalado por brew:**
   `xtal example --run` compila el PDF (carátula ITBA + Bode de las tres fuentes),
@@ -253,6 +253,66 @@ en `Ajustes → Autocomplete`, que es una pestaña nueva.
 - **En Windows nadie lo corrió**: vale la misma advertencia que ya está anotada para toda
   la app de Windows. El backend compila y sus tests pasan, pero `llama-server` y el
   instalador solo se prueban ahí.
+
+### Que la app se entere sola de que quedó vieja — HECHO en Mac (2026-08-27), pedido de Manu
+Xtal se instala con un comando y después nunca más: el que lo instaló en marzo tiene la
+de marzo y **no tiene forma de enterarse** de que se arregló el bug que lo está
+molestando. La CLI tenía `xtal update` desde el primer día; la app no tenía nada. Ahora
+hay un panel **Actualizaciones** en Ajustes, con la misma forma que en cualquier app de
+Mac —canal, «Buscar actualizaciones ahora», y lo automático abajo—. Ver `docs/APP.md`
+(«Que se actualice sola»).
+- **El botón hace todo y no pide un segundo click.** Busca, y si hay algo baja, verifica
+  y deja la version lista; lo único que pregunta es cuándo reiniciar. Un botón que
+  contesta «hay una version nueva» y se queda esperando no resolvió nada. La pregunta del
+  final sí hace falta: reiniciar interrumpe lo que estás escribiendo.
+- **Qué hay publicado lo contesta la CLI**, con `xtal --json update --check`, y no
+  Swift preguntándole a GitHub. El nombre del repo, la comparación de versiones y **cómo
+  se llama cada asset de una Release** ya viven en `update.rs`: una segunda copia sería
+  una segunda verdad, y el día que cambie el nombre de un archivo una de las dos estaría
+  mal sin avisar. Por eso el JSON trae las URLs armadas (`macos_app_url`,
+  `checksums_url`) y no solo el número.
+- **Comparar sí es de la app**: se compara contra la version del **bundle**, no la del
+  comando. Salen con el mismo número (el job `check` no publica si no coinciden) pero se
+  instalan por separado, y uno puede quedar atrás del otro.
+- **Dos formas de actualizar, por la misma razón de siempre.** Si la instaló Homebrew
+  (el cask `xtal-app`), se corre `brew upgrade --cask`: pisarle el bundle por atrás le
+  rompe la contabilidad. Si la puso alguien a mano, se baja el zip, se verifica el
+  SHA256 contra el `SHA256SUMS` de esa misma Release —igual que `install.sh`—, se
+  desempaqueta con `ditto` y se comprueba que adentro esté la version que se pidió **y**
+  que la firma esté sana. Un asset mal nombrado se ve igual que uno bien nombrado hasta
+  que la app arranca diciendo el mismo número de antes.
+- **El comando `xtal` se actualiza junto con la app** (`xtal update --yes`, que sabe solo
+  cómo se instaló él). La app le habla al binario todo el tiempo: una app nueva
+  hablándole a un comando viejo produce errores que no se entienden.
+- **El reemplazo lo hace un `sh` que sobrevive a la app**, no la app. Un programa no
+  puede pisarse a sí mismo mientras corre; el script espera con `kill -0` a que el PID
+  muera, mueve la carpeta y vuelve a abrir. Es lo que hace Sparkle con su helper. **Hay
+  un test que lo corre de verdad** contra dos carpetas de mentira: es la única parte del
+  actualizador que, si está mal, borra algo.
+- **No hay Sparkle**, y es una decisión: pide un appcast publicado aparte y un par de
+  claves EdDSA cuya mitad privada habría que guardar como secret. Bajar, verificar un
+  hash y reemplazar un bundle ya estaba resuelto en el repo para la CLI.
+- **Una copia compilada en el momento no se toca**: si el bundle está en `DerivedData`,
+  el actualizador dice que no. Sin esa rama, probarlo desde Xcode se lleva puesta la
+  build. Y el camino de Homebrew pide además que la que corre sea la de `/Applications`:
+  con el cask instalado pero abriendo una copia de Descargas, brew actualizaría la otra
+  y al reiniciar volveríamos a abrir la vieja.
+- **El canal `beta` es de verdad**: `/releases/latest` de GitHub **excluye** las
+  prereleases —por eso sirve para el canal estable— y beta pide la lista entera y toma
+  la primera que no sea borrador. Hoy no hay ninguna prerelease publicada, así que
+  contesta lo mismo; el día que haya una, funciona sin tocar nada.
+- **Trampa que costó y no se ve leyendo el código**: la primera version bajaba con
+  `URLSession.bytes`, que entrega **un byte por iteración asíncrona**. Con un zip de
+  11 MB eso tarda minutos y se lee como que se colgó. Va con `download` y el progreso
+  por delegado.
+- Verificado bajando **la Release v0.5.0 de verdad**: 11 MB, checksum OK contra el
+  `SHA256SUMS` publicado, `ditto` la desempaqueta, la version de adentro coincide y
+  `codesign --verify --deep --strict` pasa. Un segundo y medio.
+- Gancho nuevo: **`XTAL_UPDATE_FAKE=0.9.9`** hace de cuenta que esa es la última
+  publicada, sin red, y revisa una vez **sin cartel** — un `NSAlert` es modal y se come
+  el hilo principal, así que el retrato no se dispararía nunca.
+- **En Windows no está, y es a propósito**: anotado en `paridad.toml` con su
+  `pendiente`, así que sale en el informe de cada release hasta que se cierre.
 
 ### El theme de la UCA, y los logos que nunca se habían implementado — HECHO (2026-08-27), pedido de Manu → `docs/THEMES.md`
 Tercer theme: **`themes/uca`**, Pontificia Universidad Católica Argentina. Empezó siendo
@@ -1153,7 +1213,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
-`example` · `update` · `setup` · `agents [install|uninstall|add|remove]` ·
+`example` · `update [--check] [--yes] [--channel estable|beta]` · `setup` · `agents [install|uninstall|add|remove]` ·
 `app [abrir|compilar|modo|ver|panel|terminal|frente]` (`ver pdf|errores|revision|terminal`) · `latex [consulta]` · `refs` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 

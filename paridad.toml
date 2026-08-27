@@ -215,6 +215,12 @@ win = ["app-win/src/welcome/ProyectoNuevo.tsx"]
 por_que = "crear un informe: nombre, carpeta, institución y formato"
 
 [[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Actualizador.swift"
+win = []
+pendiente = "que la app se entere sola de que quedó vieja y se actualice. En Windows el instalador es NSIS y hay manifiestos de scoop y winget: el reemplazo del bundle no se porta tal cual, y Tauri tiene su propio plugin de updater"
+por_que = "el actualizador de la app"
+
+[[par]]
 mac = "app/XtalPackage/Sources/XtalFeature/Settings/Ajustes.swift"
 win = ["app-win/src/settings/Ajustes.tsx"]
 por_que = "los ajustes"

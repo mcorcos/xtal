@@ -1239,3 +1239,139 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     #expect(ruta.contains("Application Support"))
     #expect(!ruta.contains("/Caches/"))
 }
+
+// MARK: - Actualizador
+//
+// Se testea lo que decide solo y no se ve: comparar dos versiones, encontrar un hash en
+// el SHA256SUMS de la Release, decidir si esta copia la instaló Homebrew, y armar el
+// script que reemplaza el bundle. Nada de eso deja rastro en pantalla cuando está mal:
+// una comparación al revés ofrece "actualizar" a una version vieja, y un script mal
+// citado borra la carpeta equivocada.
+//
+// Los tres primeros son **el espejo de los tests de `crates/xtal-cli/src/update.rs`**:
+// las dos implementaciones tienen que contestar lo mismo o la app y la CLI empiezan a
+// discutir sobre qué version hay publicada.
+
+@Test func compara_versiones_igual_que_la_cli() {
+    #expect(Actualizador.esMasNueva("0.2.0", que: "0.1.0"))
+    #expect(Actualizador.esMasNueva("1.0.0", que: "0.9.9"))
+    #expect(Actualizador.esMasNueva("0.1.1", que: "0.1.0"))
+    #expect(Actualizador.esMasNueva("0.1.0", que: "0.1.0") == false)
+    #expect(Actualizador.esMasNueva("0.1.0", que: "0.2.0") == false, "no debe sugerir bajar de version")
+}
+
+@Test func ante_una_version_rara_no_ofrece_actualizar() {
+    // Si el tag viene con una forma que no entendemos, mejor callarse que mandar a
+    // alguien a "actualizar" a cualquier lado.
+    #expect(Actualizador.esMasNueva("ultima", que: "0.1.0") == false)
+    #expect(Actualizador.esMasNueva("0.2.0", que: "raro") == false)
+    // Un sufijo de prerelease no cambia el número: 0.6.0-rc1 es más nueva que 0.5.0.
+    #expect(Actualizador.esMasNueva("0.6.0-rc1", que: "0.5.0"))
+}
+
+@Test func encuentra_el_hash_del_zip_de_la_app() {
+    // Es un pedazo del SHA256SUMS real de la v0.5.0. Adentro conviven el zip de la app
+    // de Mac y el de la CLI de Windows, y los dos empiezan parecido: si la búsqueda
+    // fuera por prefijo, verificaríamos el archivo equivocado y la descarga "fallaría"
+    // sin explicación.
+    let sums = """
+    80e9c686c20efb7f846fc580ebe29bb9678a410033c852a23bf7c88fce1263fe  Xtal-0.5.0-macos.zip
+    3af717950d2c01e83b9a23f1f2096d2f751d90b77cdfc3356a4ed806f57a20c1  xtal-0.5.0-x86_64-pc-windows-msvc.zip
+    """
+    #expect(Actualizador.hash(en: sums, de: "Xtal-0.5.0-macos.zip")
+            == "80e9c686c20efb7f846fc580ebe29bb9678a410033c852a23bf7c88fce1263fe")
+    #expect(Actualizador.hash(en: sums, de: "Xtal-0.6.0-macos.zip") == nil)
+}
+
+@Test func el_sha256_es_el_de_verdad() {
+    // El de "abc", que es el vector de prueba de toda la vida. Si esto se rompe, la
+    // verificación de la descarga rechazaría un archivo sano.
+    #expect(Actualizador.sha256(Data("abc".utf8))
+            == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+}
+
+@Test func una_copia_compilada_en_el_momento_no_se_actualiza_sola() {
+    // Si esto fallara, probar el actualizador desde Xcode se llevaría puesta la build.
+    let dev = "/Users/alguien/Library/Developer/Xcode/DerivedData/Xtal-abc/Build/Products/Debug/Xtal.app"
+    #expect(Actualizador.donde(bundle: dev) { _ in true } == .desarrollo)
+}
+
+@Test func la_del_cask_se_actualiza_con_brew_y_la_suelta_no() {
+    let conCask: (String) -> Bool = { $0.hasPrefix("/opt/homebrew") }
+    #expect(Actualizador.donde(bundle: "/Applications/Xtal.app", existe: conCask)
+            == .homebrew(brew: "/opt/homebrew/bin/brew"))
+
+    // Sin Caskroom, la misma ruta es una app que alguien arrastró a mano.
+    #expect(Actualizador.donde(bundle: "/Applications/Xtal.app") { _ in false } == .suelta)
+
+    // Con el cask instalado pero corriendo OTRA copia: brew actualizaría la de
+    // /Applications y al reiniciar volveríamos a abrir esta, que quedó vieja.
+    #expect(Actualizador.donde(bundle: "/Users/alguien/Descargas/Xtal.app", existe: conCask) == .suelta)
+}
+
+@Test func el_guion_reemplaza_el_bundle_y_lo_vuelve_a_abrir() {
+    let g = Actualizador.guionDeCambio(pid: 4242, nueva: "/tmp/nueva/Xtal.app",
+                                       destino: "/Applications/Xtal.app",
+                                       limpiar: "/tmp/nueva")
+    #expect(g.contains("kill -0 4242"))          // espera a que la app se cierre
+    #expect(g.contains("ditto '/tmp/nueva/Xtal.app' '/Applications/Xtal.app'"))
+    #expect(g.contains("open '/Applications/Xtal.app'"))
+}
+
+@Test func con_homebrew_el_guion_no_toca_nada_solo_reabre() {
+    // Homebrew ya dejó el bundle nuevo en su lugar. Un `rm -rf` acá borraría lo que brew
+    // acaba de instalar.
+    let g = Actualizador.guionDeCambio(pid: 7, nueva: nil,
+                                       destino: "/Applications/Xtal.app", limpiar: nil)
+    #expect(g.contains("rm -rf") == false)
+    #expect(g.contains("ditto") == false)
+    #expect(g.contains("open '/Applications/Xtal.app'"))
+}
+
+@Test func el_guion_de_verdad_reemplaza_la_carpeta() throws {
+    // Los tests de arriba miran el texto del script. Este lo **corre**: arma dos
+    // carpetas de mentira y verifica que la nueva termine donde estaba la vieja. Es la
+    // única parte del actualizador que no se puede probar en la máquina de uno sin
+    // reemplazar la app de verdad, y también la única que, si está mal, borra algo.
+    let base = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-test-\(UUID().uuidString)")
+    let nueva = base.appendingPathComponent("nueva/Xtal.app")
+    let destino = base.appendingPathComponent("Aplicaciones/Xtal.app")
+    let fm = FileManager.default
+    try fm.createDirectory(at: nueva, withIntermediateDirectories: true)
+    try fm.createDirectory(at: destino, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: base) }
+    try "la nueva".write(to: nueva.appendingPathComponent("quien.txt"), atomically: true, encoding: .utf8)
+    try "la vieja".write(to: destino.appendingPathComponent("quien.txt"), atomically: true, encoding: .utf8)
+
+    // PID 999999: no existe, así que el `kill -0` falla y la espera termina enseguida.
+    // Y se le saca la línea del `open`, que abriría una carpeta de mentira en el Finder.
+    let guion = Actualizador.guionDeCambio(pid: 999_999, nueva: nueva.path,
+                                           destino: destino.path,
+                                           limpiar: base.appendingPathComponent("nueva").path)
+    let sinAbrir = guion.split(separator: "\n")
+        .filter { !$0.contains("/usr/bin/open") }
+        .joined(separator: "\n")
+
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/sh")
+    p.arguments = ["-c", sinAbrir]
+    try p.run()
+    p.waitUntilExit()
+    #expect(p.terminationStatus == 0)
+
+    let quedo = try String(contentsOf: destino.appendingPathComponent("quien.txt"), encoding: .utf8)
+    #expect(quedo == "la nueva")
+    // Y la carpeta de trabajo se limpia: si no, cada actualización deja un .app entero
+    // en la caché del usuario.
+    #expect(fm.fileExists(atPath: base.appendingPathComponent("nueva").path) == false)
+}
+
+@Test func una_ruta_con_comillas_no_rompe_el_guion() {
+    // El script se arma con `sh -c` y una carpeta se puede llamar como quiera. Sin
+    // escapar, un apóstrofo en el nombre convierte el resto de la línea en otro comando.
+    let g = Actualizador.guionDeCambio(pid: 1, nueva: "/tmp/d'Alembert/Xtal.app",
+                                       destino: "/Applications/Mi App.app", limpiar: nil)
+    #expect(g.contains("'/tmp/d'\\''Alembert/Xtal.app'"))
+    #expect(g.contains("'/Applications/Mi App.app'"))
+}

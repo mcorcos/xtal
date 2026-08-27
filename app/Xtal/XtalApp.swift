@@ -16,6 +16,10 @@ struct XtalApp: App {
                     // toca un archivo la app se quedaría unos segundos sin decir por qué.
                     // Apagado —que es lo de fábrica— esto no hace nada.
                     Autocomplete.compartido.sincronizar()
+                    // Que la app se entere sola de que quedó vieja. Es una consulta
+                    // cada seis horas y arranca 15 segundos después de abrir: los
+                    // primeros segundos son para abrir el informe, no para GitHub.
+                    Actualizador.compartido.arrancar()
                 }
                 // La puerta de la app: `xtal://…`, que es lo que dispara `xtal app`.
                 // Es la única forma que tiene un agente de manejar la ventana — apretar

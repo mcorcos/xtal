@@ -357,7 +357,7 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
-`xtal example [nombre] [--run] [--open]` · `xtal update [--check]` ·
+`xtal example [nombre] [--run] [--open]` · `xtal update [--check] [--yes] [--channel ...]` ·
 `xtal agents [install|uninstall|add|remove]` · `xtal uninstall [--yes]` ·
 `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`

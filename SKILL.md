@@ -116,7 +116,8 @@ xtal run --open
 - `xtal example [nombre] [--run]` — crea un proyecto de ejemplo completo (filtro RC con
   las tres fuentes). Útil si el usuario quiere ver cómo se ve un proyecto armado.
 - `xtal watch` — recompila al vuelo. **No lo corras vos**: no termina nunca.
-- `xtal update [--check]` — avisa si hay version nueva.
+- `xtal update [--check] [--yes] [--channel estable|beta]` — avisa si hay version nueva.
+  Con `--json` contesta qué hay publicado y las URLs de los assets, sin tocar nada.
 - `xtal completions <zsh|bash|fish|...> [--out DIR]` — script de autocompletado.
 - `xtal man [--out DIR]` — man page en roff. Los dos son para instalar la herramienta,
   no para el flujo de un informe: rara vez los vas a necesitar.
