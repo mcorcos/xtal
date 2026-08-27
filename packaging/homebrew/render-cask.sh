@@ -72,7 +72,12 @@ cask "xtal-app" do
   # La app declara MACOSX_DEPLOYMENT_TARGET = 15.0 en app/Config/Shared.xcconfig.
   # Sin esta línea, en una Mac vieja el cask instala una app que no abre y el error
   # que da macOS no dice que el problema es la version del sistema.
-  depends_on macos: ">= :sequoia"
+  #
+  # El símbolo pelado ya significa "esta version o más nueva": en un cask,
+  # \`depends_on macos:\` parsea con el comparador \`>=\` (ver, en Homebrew,
+  # cask/dsl/depends_on.rb). La forma con el string \`">= :sequoia"\` hace lo mismo
+  # pero está deprecada y Homebrew tira un warning en cada \`brew info\`.
+  depends_on macos: :sequoia
 
   app "Xtal.app"
 
