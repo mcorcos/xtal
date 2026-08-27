@@ -202,6 +202,58 @@ El núcleo es análisis de circuitos + consolidación de datos.
   producto, las decisiones ya tomadas para no re-discutirlas, y las trampas conocidas.
   Plan original en `~/.claude/plans/cozy-snuggling-blum.md`.
 
+### El autocomplete de la línea, con el modelo adentro de tu máquina — HECHO (2026-08-27), pedido de Manu → `docs/AUTOCOMPLETE.md`
+Lo que hace Copilot, pero **sin API, sin clave y sin cuenta**: escribís y aparece en gris
+lo que seguiría; Tab lo acepta, Esc lo descarta. Viene **apagado de fábrica** y se prende
+en `Ajustes → Autocomplete`, que es una pestaña nueva.
+- **La promesa del interruptor es la regla que manda sobre todo el diseño**: apagado, el
+  modelo **no existe** —no se carga, no reserva memoria, no prende la GPU y no corre ni un
+  timer—. Son ~1,2 GB de RAM, y un modelo que sigue cargado no tiene nada en pantalla que
+  lo delate. En Mac eso es que el objeto del motor sea `nil`; en Windows, que **no haya
+  proceso**, y eso se puede *ver* en el Administrador de tareas. Hay tests que lo fijan.
+- **Motores distintos, mismo modelo.** Qwen2.5-Coder 1.5B a 4 bits: MLX in-process en Mac
+  (`.safetensors`, 876 MB), `llama-server` en un subproceso en Windows (`.gguf`, 986 MB).
+  Es la única parte del producto donde el motor no se comparte, y está en `paridad.toml`.
+- **El modelo base y no el `-Instruct`**: el que sabe *rellenar el medio* —lo de antes del
+  cursor y lo de después, que es lo que permite completar adentro de un `align` ya
+  cerrado— es el base. El Instruct contesta «Claro, acá tenés el código:».
+- **El modelo NO viaja adentro del instalador**, al revés que `xtal.exe` y que
+  `llama-server.exe` (18 MB, ése sí va): casi un giga se lo bajaría todo el que instala
+  Xtal para escribir un TP aunque nunca prenda esto. Se baja desde Ajustes, una vez.
+- **El fantasma se dibuja, no se inserta**: el editor guarda en cada tecla, así que texto
+  insertado terminaría en el `.tex`; además rompería el undo y lo leerían el coloreado, la
+  sincronía con el PDF y el propio autocomplete. En Mac es `draw(_:)` de una subclase de
+  `NSTextView`; en Windows, un widget de CodeMirror.
+- **Pierde contra la lista de `\omega`.** `Autocompletado` sabe exactamente qué comandos y
+  qué etiquetas existen y no se equivoca nunca; un modelo adivina. Con esa lista abierta,
+  acá no se pide nada y Tab es de ella. Y **Tab devuelve `false` si no hay fantasma**, así
+  la tecla sigue indentando.
+- **La penalización de repetición 1,15 es el número que más se nota**, y salió de probarlo
+  contra un informe de verdad. Sin ella, completar «…un factor de calidad» devuelve un
+  párrafo que se repite dos veces y gasta los 64 tokens; con ella devuelve « de 20.» y
+  para. **Medido con el modelo bajado en esta Mac**: carga en 1,2 s, y completa en 0,79 s
+  (prosa), 0,20 s (una ecuación adentro de un `align` ya cerrado) y 0,12 s (una línea de
+  comando). La tabla está en `docs/AUTOCOMPLETE.md`.
+- **Cuatro trampas que costaron una vuelta cada una**, todas en `docs/AUTOCOMPLETE.md`:
+  1. **La Metal Toolchain no viene con Xcode 26.** Sin ella `mlx-swift` no compila y el
+     error dice `cannot execute tool 'metal'`, que no menciona que falta un componente
+     descargable. Se baja con `xcodebuild -downloadComponent MetalToolchain` (688 MB).
+  2. **`mlx-swift` trae un build plugin (`CudaBuild`) que Xcode exige aprobar**, y en CI
+     eso frena el build en «Prepare packages», antes de compilar una línea. El release
+     ahora pasa `-skipPackagePluginValidation`.
+  3. **`swift-transformers` tiene que ser 1.3 o más.** El macro
+     `#huggingFaceTokenizerLoader()` genera código que usa `Tokenizers.AutoTokenizer`, y
+     en 0.1.x el protocolo `Tokenizer` no era `Sendable`. El error habla del macro y no de
+     la version. Ojo con `from: "0.1.0"`: resuelve a **0.1.15**, no a 1.3.
+  4. **`swift build` NO compila los shaders de MLX**, solo el de Xcode. Un ejecutable de
+     línea de comandos que use MLX muere con «Failed to load the default metallib», que no
+     dice que falta un bundle — está en `Xtal.app/Contents/Resources/mlx-swift_Cmlx.bundle`
+     y hay que copiárselo al lado. Por eso los tests de Swift **no cargan el modelo** a
+     propósito: fijan la promesa del interruptor y el recorte de la respuesta.
+- **En Windows nadie lo corrió**: vale la misma advertencia que ya está anotada para toda
+  la app de Windows. El backend compila y sus tests pasan, pero `llama-server` y el
+  instalador solo se prueban ahí.
+
 ### El theme de la UCA, y los logos que nunca se habían implementado — HECHO (2026-08-27), pedido de Manu → `docs/THEMES.md`
 Tercer theme: **`themes/uca`**, Pontificia Universidad Católica Argentina. Empezó siendo
 una carpeta con `theme.toml` y `preamble.tex` —el motor sin tocar, que es la prueba de

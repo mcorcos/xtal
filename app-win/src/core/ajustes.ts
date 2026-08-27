@@ -114,6 +114,9 @@ export const CLAVES = {
   letraEditor: "editor.tamano",
   ajustarLinea: "editor.ajustarLinea",
   coloresEditor: "editor.colores",
+  // El autocomplete del modelo local. Mismo nombre que en la app de Mac
+  // (`Autocomplete.claveActivo`), letra por letra.
+  autocomplete: "autocomplete.activo",
 } as const;
 
 /** El nombre que usa la CLI para cada panel → la clave del ajuste. */

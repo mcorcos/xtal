@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState } from "react";
+import * as autocomplete from "./editor/autocomplete";
 import { Inicio } from "./welcome/Inicio";
 import { Workspace } from "./workspace/Workspace";
 import { Ajustes } from "./settings/Ajustes";
@@ -31,6 +32,18 @@ export default function App() {
     if (apariencia === "auto") raiz.removeAttribute("data-tema");
     else raiz.setAttribute("data-tema", apariencia);
   }, [apariencia]);
+
+  /**
+   * El autocomplete lee su interruptor acá y no en el editor: si arrancara el modelo al
+   * abrir un `.tex`, la primera vez que alguien toca un archivo la app se quedaría unos
+   * segundos sin decir por qué.
+   *
+   * Apagado —que es lo de fábrica— esto no hace nada: ni siquiera arranca `llama-server`.
+   * Contraparte del `onAppear` de `XtalApp.swift`.
+   */
+  useEffect(() => {
+    void autocomplete.sincronizar();
+  }, []);
 
   useEffect(() => {
     void (async () => {

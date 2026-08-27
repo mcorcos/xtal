@@ -50,6 +50,19 @@ serde_json = "1"
 # y no un emulador a medias.
 portable-pty = "0.9"
 
+# El autocomplete: bajar el modelo y hablarle a llama-server.
+#
+# `rustls` y no el TLS del sistema: schannel en Windows arrastra su propia cadena de
+# certificados y el modo de fallar es un error de handshake que no dice nada. Con rustls
+# los certificados viajan adentro del binario y el resultado es el mismo en toda máquina.
+#
+# `default-features = false` saca el cliente bloqueante, que no se usa: acá todo pasa
+# adentro del runtime de Tauri.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# Tauri ya trae tokio adentro, pero las features que usamos —escribir un archivo grande
+# sin bloquear, y esperar entre reintentos— hay que pedirlas.
+tokio = { version = "1", features = ["fs", "io-util", "time"] }
+
 # El vigía de la carpeta. En Windows va por `ReadDirectoryChangesW`, en macOS por
 # FSEvents: no es polling. La CLI (`xtal watch`) sí usa polling a propósito, para
 # no cargarse una dependencia; en una app que ya trae un webview adentro, esa

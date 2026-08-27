@@ -24,13 +24,33 @@ let package = Package(
         // **El binario no vive en el repo**: es un `binaryTarget` por URL con su
         // checksum, así que SwiftPM lo baja y lo verifica. Si algún día hay que
         // compilarlo nosotros, el paquete trae el script (`Script/build.sh`, pide Zig).
-        .package(url: "https://github.com/Lakr233/libghostty-spm.git", from: "1.4.0")
+        .package(url: "https://github.com/Lakr233/libghostty-spm.git", from: "1.4.0"),
+
+        // El autocomplete de la línea: el modelo corre **adentro de la máquina**, sin API
+        // ni cuenta ni clave. `mlx-swift-lm` es la librería de modelos de lenguaje de
+        // Apple sobre MLX, su framework de cálculo para Apple Silicon.
+        //
+        // **Pesa en el build, no en el binario del usuario**: son ~410 archivos de Swift
+        // que se compilan una vez (~80 s la primera, después queda en caché). Lo que sí
+        // pesa para el usuario son los ~876 MB del modelo, y por eso **no viaja adentro
+        // de la app**: se baja desde Ajustes, a pedido, y solo si lo prende.
+        //
+        // `swift-transformers` va porque el macro `#huggingFaceTokenizerLoader()` de
+        // `MLXHuggingFace` genera código que usa `Tokenizers.AutoTokenizer`. **Tiene que
+        // ser 1.3 o más**: en 0.1.x el protocolo `Tokenizer` todavía no era `Sendable` y
+        // el macro no compila, con un error que habla del macro y no de la version.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.31.3"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
     ],
     targets: [
         .target(
             name: "XtalFeature",
             dependencies: [
-                .product(name: "GhosttyTerminal", package: "libghostty-spm")
+                .product(name: "GhosttyTerminal", package: "libghostty-spm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "Transformers", package: "swift-transformers"),
             ]
         ),
         .testTarget(name: "XtalFeatureTests", dependencies: ["XtalFeature"]),

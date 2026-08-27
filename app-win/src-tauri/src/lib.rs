@@ -15,6 +15,8 @@
 
 mod arbol;
 mod git;
+mod modelo;
+mod motor;
 mod ordenes;
 mod proceso;
 mod proyecto;
@@ -41,6 +43,8 @@ pub fn run() {
         .manage(pty::Sesiones::default())
         .manage(vigia::Vigia::default())
         .manage(synctex::Cache::default())
+        .manage(modelo::Cancelar::default())
+        .manage(motor::Motor::default())
         .setup(|app| {
             ordenes::registrar(app.handle())?;
             Ok(())
@@ -52,6 +56,12 @@ pub fn run() {
             if let tauri::WindowEvent::Destroyed = evento {
                 if let Some(s) = ventana.app_handle().try_state::<pty::Sesiones>() {
                     s.matar_todo();
+                }
+                // Y el modelo. `llama-server` es un proceso aparte con un giga de pesos
+                // adentro: si la app se cierra y él queda, el usuario ve a Xtal cerrada y
+                // a la memoria tomada, sin nada en pantalla que lo explique.
+                if let Some(m) = ventana.app_handle().try_state::<motor::Motor>() {
+                    m.matar();
                 }
             }
         })
@@ -100,6 +110,15 @@ pub fn run() {
             // Disco
             vigia::vigilar,
             vigia::dejar_de_vigilar,
+            // El autocomplete: el modelo y su motor
+            modelo::modelo_estado,
+            modelo::modelo_descargar,
+            modelo::modelo_cancelar,
+            modelo::modelo_borrar,
+            motor::motor_prender,
+            motor::motor_apagar,
+            motor::motor_prendido,
+            motor::motor_completar,
             // SyncTeX
             synctex::synctex_cajas,
             synctex::synctex_fuente,

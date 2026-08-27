@@ -1144,3 +1144,98 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     #expect(Resaltado.expandirTabs("\tif x {") == "    if x {")
     #expect(Resaltado.expandirTabs("sin tabs") == "sin tabs")
 }
+
+// ---------------------------------------------------------------------------
+// El autocomplete de la línea
+// ---------------------------------------------------------------------------
+//
+// Lo que se fija acá es lo que se rompe en silencio. Sobre todo la promesa del
+// interruptor: un modelo que se carga con el autocomplete apagado se lleva ~1,2 GB de
+// RAM y la GPU, y **no hay nada en pantalla que lo delate**.
+
+@Test func el_autocomplete_arranca_apagado() async {
+    // De fábrica, apagado. No es una preferencia estética: prendido de entrada, la
+    // primera vez que alguien abre la app se le bajarían 876 MB sin haberlos pedido.
+    await MainActor.run {
+        UserDefaults.standard.removeObject(forKey: Autocomplete.claveActivo)
+        #expect(UserDefaults.standard.bool(forKey: Autocomplete.claveActivo) == false)
+
+        let a = Autocomplete()
+        #expect(a.estado == .apagado)
+        #expect(a.sugerencia == nil)
+    }
+}
+
+@Test func apagado_no_carga_el_modelo() async {
+    await MainActor.run {
+        let a = Autocomplete()
+        a.apagar()
+        #expect(a.estado == .apagado)
+
+        // Con el interruptor apagado, pedir una sugerencia tiene que ser un no-op. Si
+        // esto empezara a construir el motor, el modelo se cargaría por escribir una
+        // letra en un editor con el autocomplete apagado.
+        let tv = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        tv.string = "El filtro tiene una frecuencia de corte"
+        tv.setSelectedRange(NSRange(location: tv.string.utf16.count, length: 0))
+        a.pedir(en: tv, listaAbierta: false)
+
+        #expect(a.sugerencia == nil)
+        #expect(a.estado == .apagado)
+    }
+}
+
+@Test func prender_sin_modelo_no_rompe_ni_carga_nada() async {
+    await MainActor.run {
+        let a = Autocomplete()
+        // En una máquina sin el modelo bajado, prender tiene que avisar que falta —no
+        // quedarse en silencio ni intentar leer pesos que no están.
+        if !ModeloLocal.estaCompleto {
+            a.prender()
+            #expect(a.estado == .sinModelo)
+        }
+    }
+}
+
+@Test func la_sugerencia_se_recorta_a_algo_que_se_pueda_mostrar() {
+    // Un párrafo entero tapa el editor: se corta en la primera línea en blanco.
+    #expect(Autocomplete.recortar("de corte.\n\nY además el filtro") == "de corte.")
+
+    // Los tokens de control se cuelan cuando el modelo decide que terminó.
+    #expect(Autocomplete.recortar(" 1 kHz<|endoftext|>") == " 1 kHz")
+    #expect(Autocomplete.recortar("\\omega_0<|fim_pad|>otra cosa") == "\\omega_0")
+
+    // El salto del final deja el cursor un renglón más abajo de donde uno miraba.
+    #expect(Autocomplete.recortar("del circuito\n") == "del circuito")
+    #expect(Autocomplete.recortar("del circuito   ") == "del circuito")
+
+    // Como mucho tres renglones.
+    #expect(Autocomplete.recortar("a\nb\nc\nd\ne").components(separatedBy: "\n").count == 3)
+
+    // Lo normal no se toca.
+    #expect(Autocomplete.recortar(" de 1,59 kHz") == " de 1,59 kHz")
+}
+
+@Test func el_modelo_incompleto_no_cuenta_como_instalado() {
+    // El modo de fallar de una bajada cortada es dejar un `model.safetensors` a medias.
+    // Si `estaCompleto` mirara solo si el archivo existe, el motor arrancaría y
+    // reventaría al leerlo, con un error que hablaría del formato y no de la descarga.
+    let fm = FileManager.default
+    let temporal = fm.temporaryDirectory.appendingPathComponent("xtal-modelo-\(UUID().uuidString)")
+    try? fm.createDirectory(at: temporal, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: temporal) }
+
+    // El peso declarado del grande es de cientos de MB; un archivo vacío no llega ni
+    // cerca de la mitad.
+    #expect(ModeloLocal.archivos.contains { $0.nombre == "model.safetensors" })
+    #expect(ModeloLocal.peso > 800_000_000)
+    #expect(ModeloLocal.legible(ModeloLocal.peso).isEmpty == false)
+}
+
+@Test func la_carpeta_del_modelo_vive_fuera_de_caches() {
+    // `Caches` lo vacía el sistema cuando le falta disco. Perder 876 MB en silencio
+    // significa que un día el autocomplete deja de andar sin que nadie haya tocado nada.
+    let ruta = ModeloLocal.carpeta.path
+    #expect(ruta.contains("Application Support"))
+    #expect(!ruta.contains("/Caches/"))
+}

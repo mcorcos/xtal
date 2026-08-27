@@ -24,6 +24,9 @@ struct EditorCodigo: NSViewRepresentable {
     /// El autocompletado. Es del workspace y no del editor porque el catálogo se carga
     /// una vez por proyecto y no una vez por archivo abierto.
     let autocompletado: Autocompletado
+    /// El autocomplete del modelo local: el texto gris que propone cómo sigue la línea.
+    /// Es el singleton, no una instancia por editor — ver `Autocomplete.compartido`.
+    @ObservedObject var autocomplete: Autocomplete
 
     /// Lo que pide la sincronía desde el PDF: mostrame este rango y dejámelo marcado.
     /// Lleva id propio por lo mismo que `Insercion`: dos pedidos iguales seguidos son
@@ -48,8 +51,20 @@ struct EditorCodigo: NSViewRepresentable {
     func makeCoordinator() -> Coord { Coord(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        guard let tv = scroll.documentView as? NSTextView else { return scroll }
+        // El text view se arma a mano en vez de con `NSTextView.scrollableTextView()`
+        // por una sola razón: hace falta que sea un `VistaEditor`, que es el que sabe
+        // pintar el fantasma del autocomplete. Todo lo demás de acá abajo es lo que esa
+        // función de conveniencia hace igual.
+        let scroll = NSScrollView()
+        let tv = VistaEditor(frame: .zero)
+        tv.autoresizingMask = [.width]
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        scroll.documentView = tv
 
         tv.delegate = context.coordinator
         tv.isRichText = false
@@ -74,6 +89,13 @@ struct EditorCodigo: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let tv = scroll.documentView as? NSTextView else { return }
         context.coordinator.padre = self
+
+        // El fantasma se copia acá y no se pide desde el text view porque `Autocomplete`
+        // es un `ObservableObject`: cuando contesta el modelo, SwiftUI vuelve a pasar por
+        // este `update` solo, y el redibujado sale de ahí sin ningún aviso a mano.
+        if let vista = tv as? VistaEditor {
+            vista.mostrar(autocomplete.sugerencia, en: autocomplete.posicion)
+        }
 
         // Solo pisar el contenido cuando cambió desde afuera (otro archivo, o el archivo
         // se regeneró). Si escribiéramos en cada update, el cursor saltaría al principio
@@ -151,11 +173,22 @@ struct EditorCodigo: NSViewRepresentable {
         /// de SwiftUI, mover el cursor redibujaría el workspace entero —terminal y PDF
         /// incluidos— en cada flecha del teclado.
         func textViewDidChangeSelection(_ n: Notification) {
+            // Mover el cursor invalida la sugerencia: fue calculada para el lugar donde
+            // estaba antes. `descartar()` no hace nada si no había nada, así que sale
+            // gratis llamarlo en cada movimiento.
+            if let tv = n.object as? NSTextView, tv.selectedRange().location != padre.autocomplete.posicion {
+                padre.autocomplete.descartar()
+            }
+
             guard let tv = n.object as? NSTextView else { return }
             let r = tv.selectedRange()
-            // Seleccionar con el mouse en otro lado abandona lo que se venía escribiendo.
-            // Sin esto, la lista queda flotando arriba de un cursor que ya no está ahí.
-            if r.length > 0 { padre.autocompletado.cerrar() }
+            // Mover el cursor con el mouse abandona lo que se venía escribiendo.
+            //
+            // Se re-evalúa en vez de cerrar a secas: si clickeaste adentro de otro `\ref{`
+            // la lista tiene que seguir, pero parada **ahí**. Antes esto solo miraba
+            // `r.length > 0`, así que un click simple dejaba la lista flotando arriba de
+            // un cursor que ya no estaba ahí.
+            if padre.autocompletado.visible { padre.autocompletado.revisar(tv) }
             let s = tv.string as NSString
             padre.sincronia.seleccionEditor = r.length > 0 ? s.substring(with: r) : ""
             // Las líneas son lo que entiende SyncTeX: el mapa que deja LaTeX habla de
@@ -224,6 +257,10 @@ struct EditorCodigo: NSViewRepresentable {
             escribiendo = false
             colorear(tv)
             padre.autocompletado.revisar(tv)
+            // El pedido va después de `revisar`, que es quien decide si la lista de
+            // `\omega` queda abierta. Con la lista abierta el autocomplete se calla: son
+            // dos cosas peleando por Tab, y la lista —que no se equivoca nunca— gana.
+            padre.autocomplete.pedir(en: tv, listaAbierta: padre.autocompletado.visible)
         }
 
         /// Las teclas que maneja la lista de autocompletado mientras está abierta.
@@ -234,6 +271,27 @@ struct EditorCodigo: NSViewRepresentable {
         /// se la come; `false` la deja seguir a su comportamiento normal.
         func textView(_ tv: NSTextView, doCommandBy sel: Selector) -> Bool {
             let ac = padre.autocompletado
+
+            // El fantasma va **antes** que la lista y solo cuando la lista está cerrada.
+            // Son dos dueños posibles de la misma tecla, y el orden lo decide acá y no en
+            // cada uno: con la lista abierta, Tab elige de la lista; con la lista cerrada
+            // y un fantasma en pantalla, Tab lo acepta.
+            if !ac.visible {
+                switch sel {
+                case #selector(NSResponder.insertTab(_:)):
+                    if padre.autocomplete.aceptar(en: tv) { return true }
+                case #selector(NSResponder.cancelOperation(_:)):
+                    // Esc descarta, pero solo se come la tecla si de verdad había algo:
+                    // si no, Esc tiene que seguir sirviendo para lo de siempre.
+                    if padre.autocomplete.sugerencia != nil {
+                        padre.autocomplete.descartar()
+                        return true
+                    }
+                default:
+                    break
+                }
+            }
+
             guard ac.visible else { return false }
             switch sel {
             case #selector(NSResponder.moveDown(_:)):

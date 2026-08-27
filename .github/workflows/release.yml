@@ -291,6 +291,33 @@ jobs:
           cp target/release/xtal.exe app-win/src-tauri/resources/xtal.exe
           ls -la app-win/src-tauri/resources/
 
+      # El motor del autocomplete, por el mismo argumento que el binario de arriba.
+      #
+      # En Mac el modelo lo corre MLX, que va compilado adentro de la app. En Windows lo
+      # corre `llama-server`, que es un programa aparte: sin él, prender el autocomplete
+      # falla con «no encontré llama-server», que no es algo que el usuario pueda
+      # resolver. Son 18 MB — a diferencia del modelo, eso sí entra en un instalador.
+      #
+      # **La version va clavada**, como la de Tectonic en el job del PDF: llama.cpp
+      # publica varias veces por día, y un instalador que trae algo distinto cada vez que
+      # se compila es un instalador que no se puede depurar.
+      #
+      # **El build `cpu-x64` y no uno de GPU**: los de CUDA pesan 250 MB y solo sirven con
+      # una placa NVIDIA. Para un modelo de 1.5B completando una línea, la CPU alcanza.
+      - name: Meter llama-server adentro de la app
+        shell: bash
+        env:
+          LLAMA_BUILD: b10647
+        run: |
+          set -euo pipefail
+          url="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-win-cpu-x64.zip"
+          curl -fsSL "$url" -o llama.zip
+          unzip -o -j llama.zip -d llama-tmp
+          # Van el server y las DLLs que carga: `llama-server.exe` solo no arranca.
+          cp llama-tmp/llama-server.exe app-win/src-tauri/resources/
+          cp llama-tmp/*.dll app-win/src-tauri/resources/ 2>/dev/null || true
+          ls -la app-win/src-tauri/resources/
+
       - name: Compilar la app y armar el instalador
         working-directory: app-win
         # `tauri build` corre `npm run build` por su cuenta (lo dice `beforeBuildCommand`)
@@ -343,6 +370,11 @@ jobs:
           echo "Uso $XC"
           sudo xcode-select -switch "$XC"
           xcodebuild -version
+          # **La Metal Toolchain no viene con Xcode 26**: es un componente aparte. Sin
+          # ella, compilar `mlx-swift` —que trae sus propios shaders— falla con «cannot
+          # execute tool 'metal'», que no dice que falta un componente descargable.
+          # Es lo que hace el autocomplete, así que sin esto no hay app.
+          xcodebuild -downloadComponent MetalToolchain
 
       - name: Cachear los paquetes de SwiftPM
         uses: actions/cache@v4
@@ -374,6 +406,8 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
             build
 
       - name: Firmar ad-hoc y verificar
