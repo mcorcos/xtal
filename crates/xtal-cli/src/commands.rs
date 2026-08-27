@@ -777,6 +777,15 @@ fn write_split(
         std::fs::write(&path, contenido)
             .with_context(|| format!("escribiendo {}", path.display()))?;
     }
+    // Los binarios que aporta el theme (el logo de la carátula). Van con la misma
+    // clave que el resto, así que el `\includegraphics` del `.tex` los encuentra.
+    for (rel, bytes) in &rendered.assets {
+        let path = outdir.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, bytes).with_context(|| format!("escribiendo {}", path.display()))?;
+    }
     Ok(())
 }
 

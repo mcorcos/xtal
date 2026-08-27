@@ -81,6 +81,10 @@
       "nombre": "ITBA"
     },
     {
+      "id": "uca",
+      "nombre": "UCA"
+    },
+    {
       "id": "generico",
       "nombre": "Sin institución"
     }

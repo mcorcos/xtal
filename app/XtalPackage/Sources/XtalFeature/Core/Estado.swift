@@ -88,7 +88,7 @@ public final class Ajuste {
     /// en disco aunque el binario sí lo traiga. Si algún día se agrega un comando
     /// `xtal theme list`, esta lista se borra y se usa aquello.
     static func disponibles() -> [String] {
-        let embebidos = ["itba", "generico"]
+        let embebidos = ["itba", "uca", "generico"]
         let dir = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".config/xtal/themes")
         let enDisco = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []

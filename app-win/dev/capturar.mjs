@@ -117,7 +117,7 @@ function git() {
 /** Los themes, con la misma regla que el comando `themes` de la app. */
 function themes() {
   const dir = join(process.env.HOME ?? "", ".config/xtal/themes");
-  const ids = new Set(["itba", "generico"]);
+  const ids = new Set(["itba", "uca", "generico"]);
   if (existsSync(dir)) for (const n of readdirSync(dir)) if (!n.startsWith(".")) ids.add(n);
   const valor = (clave, toml) => {
     for (const l of toml.split("\n")) {

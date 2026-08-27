@@ -1,0 +1,27 @@
+# Theme UCA — Pontificia Universidad Católica Argentina.
+#
+# Copiado de la estructura de `themes/itba`: el motor de Xtal no sabe nada de la UCA,
+# solo sabe leer themes. Para el de otra facultad, copiá esta carpeta y cambiale el
+# nombre y el color.
+
+[institucion]
+# El nombre completo es "Pontificia Universidad Católica Argentina «Santa María de los
+# Buenos Aires»". En una carátula esa línea entra a dos renglones y se lee peor, así que
+# va la forma corta, que es como la universidad se nombra a sí misma en sus documentos.
+nombre = "Pontificia Universidad Católica Argentina"
+sigla = "UCA"
+
+[colors]
+# Azul institucional UCA. Sale de la identidad visual de uca.edu.ar, donde es el color
+# de los títulos, del cuerpo de texto y del pie de página.
+primary = "003A73"
+
+[logos]
+# Nombres de archivo relativos al directorio del theme. Son PDF vectoriales: el sello
+# escala a cualquier tamaño sin pixelarse y pesan 31 KB cada uno.
+#
+# Los dos salen del mismo dibujo. La identidad de la UCA es de una sola tinta, así que
+# el "color" es el sello en el azul institucional y el monocromo es el mismo sello en
+# negro. Ver `docs/THEMES.md` para de dónde salieron y cómo rehacerlos.
+principal = "logo-azul.pdf"
+monocromo = "logo-bn.pdf"

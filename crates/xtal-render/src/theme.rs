@@ -28,6 +28,25 @@ struct ThemeManifest {
     institucion: Institucion,
     #[serde(default)]
     colors: Colors,
+    #[serde(default)]
+    logos: LogosManifest,
+}
+
+/// La sección `[logos]` del `theme.toml`: nombres de archivo **relativos al directorio
+/// del theme**.
+///
+/// Las dos claves son opcionales, y un theme sin logos es un theme válido: la carátula
+/// entonces arranca por el nombre de la institución, como venía haciendo.
+#[derive(Debug, Default, Deserialize)]
+struct LogosManifest {
+    /// El de todos los días, a color.
+    #[serde(default)]
+    principal: Option<String>,
+    /// El que se usa con `--monochrome`. Sin él, el modo monocromo no dibuja logo: es
+    /// preferible a imprimir un logo a color en un informe que se pidió en blanco y
+    /// negro.
+    #[serde(default)]
+    monocromo: Option<String>,
 }
 
 /// Los dos campos son opcionales.
@@ -53,6 +72,29 @@ struct Colors {
     primary: Option<String>,
 }
 
+/// Un archivo del theme ya leído a memoria (hoy, un logo).
+///
+/// Se guardan **los bytes**, no la ruta, porque el render es una función pura: no toca
+/// disco para decidir nada. Además el theme puede venir embebido en el binario, donde
+/// no hay ninguna ruta que pasarle a LaTeX.
+#[derive(Clone, PartialEq)]
+pub struct ThemeAsset {
+    /// El nombre del archivo tal como lo declara el `theme.toml` (`logo-azul.pdf`).
+    /// Es también el nombre con el que se escribe al lado del `.tex`.
+    pub filename: String,
+    pub bytes: Vec<u8>,
+}
+
+/// `Debug` a mano: el derivado imprimiría los 30 KB del PDF en cualquier log.
+impl std::fmt::Debug for ThemeAsset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ThemeAsset")
+            .field("filename", &self.filename)
+            .field("bytes", &format_args!("{} bytes", self.bytes.len()))
+            .finish()
+    }
+}
+
 /// Un theme ya cargado, listo para el render.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
@@ -66,6 +108,24 @@ pub struct Theme {
     pub primary_hex: String,
     /// Preámbulo LaTeX extra del theme (puede estar vacío).
     pub preamble: String,
+    /// El logo a color, si el theme declara uno.
+    pub logo: Option<ThemeAsset>,
+    /// El logo para `--monochrome`, si el theme declara uno.
+    pub logo_mono: Option<ThemeAsset>,
+}
+
+impl Theme {
+    /// El logo que corresponde según el modo.
+    ///
+    /// En monocromo devuelve el logo B/N y **no cae al de color**: meter un logo a
+    /// color en un informe que se pidió en blanco y negro es peor que no poner ninguno.
+    pub fn logo_for(&self, monochrome: bool) -> Option<&ThemeAsset> {
+        if monochrome {
+            self.logo_mono.as_ref()
+        } else {
+            self.logo.as_ref()
+        }
+    }
 }
 
 impl Theme {
@@ -91,7 +151,9 @@ impl Theme {
             }
         })?;
         let preamble = std::fs::read_to_string(dir.join("preamble.tex")).unwrap_or_default();
-        Self::build(name, &manifest_text, preamble)
+        Self::build(name, &manifest_text, preamble, |rel| {
+            std::fs::read(dir.join(rel)).ok()
+        })
     }
 
     fn from_embedded(name: &str) -> Result<Theme> {
@@ -107,15 +169,47 @@ impl Theme {
         let preamble = EmbeddedThemes::get(&format!("{name}/preamble.tex"))
             .and_then(|f| std::str::from_utf8(&f.data).ok().map(|s| s.to_string()))
             .unwrap_or_default();
-        Self::build(name, &manifest_text, preamble)
+        Self::build(name, &manifest_text, preamble, |rel| {
+            EmbeddedThemes::get(&format!("{name}/{rel}")).map(|f| f.data.into_owned())
+        })
     }
 
-    fn build(name: &str, manifest_text: &str, preamble: String) -> Result<Theme> {
+    /// `read` trae un archivo del theme por su nombre relativo. Es un parámetro y no
+    /// una ruta porque el theme puede venir de disco o de adentro del binario, y el
+    /// resto del armado es idéntico en los dos casos.
+    fn build(
+        name: &str,
+        manifest_text: &str,
+        preamble: String,
+        read: impl Fn(&str) -> Option<Vec<u8>>,
+    ) -> Result<Theme> {
         let manifest: ThemeManifest =
             toml::from_str(manifest_text).map_err(|e| RenderError::ThemeInvalid {
                 name: name.to_string(),
                 reason: e.to_string(),
             })?;
+
+        // Un logo declarado que no está es un error, no un logo menos.
+        //
+        // La tentación es ignorarlo y seguir: la carátula igual sale. Pero entonces un
+        // typo en el nombre del archivo se ve **exactamente igual** que un theme sin
+        // logo, y el que lo escribió no tiene forma de darse cuenta. Lo que no está
+        // declarado no se busca; lo que está declarado tiene que existir.
+        let cargar = |declarado: Option<String>| -> Result<Option<ThemeAsset>> {
+            let Some(filename) = declarado else {
+                return Ok(None);
+            };
+            let bytes = read(&filename).ok_or_else(|| RenderError::ThemeInvalid {
+                name: name.to_string(),
+                reason: format!(
+                    "el theme declara el logo '{filename}' pero el archivo no está en la carpeta del theme"
+                ),
+            })?;
+            Ok(Some(ThemeAsset { filename, bytes }))
+        };
+        let logo = cargar(manifest.logos.principal)?;
+        let logo_mono = cargar(manifest.logos.monocromo)?;
+
         Ok(Theme {
             name: name.to_string(),
             institution_name: manifest.institucion.nombre.unwrap_or_default(),
@@ -125,6 +219,8 @@ impl Theme {
                 .primary
                 .unwrap_or_else(|| "333333".to_string()),
             preamble,
+            logo,
+            logo_mono,
         })
     }
 }
@@ -198,6 +294,67 @@ mod tests {
     }
 
     #[test]
+    fn loads_embedded_uca() {
+        // El tercer theme. Existe para que "agregar una facultad" siga siendo copiar una
+        // carpeta: si algún día el motor vuelve a saber de una institución en particular,
+        // se rompe acá.
+        let theme = Theme::load("uca", None).unwrap();
+        assert_eq!(theme.institution_sigla, "UCA");
+        assert_eq!(theme.primary_hex, "003A73");
+        assert!(theme.institution_name.contains("Católica"));
+    }
+
+    #[test]
+    fn el_theme_de_la_uca_trae_los_dos_logos() {
+        // Es el primer theme con logos, así que también es el que fija que el motor los
+        // lea desde adentro del binario y no solo desde disco.
+        let theme = Theme::load("uca", None).unwrap();
+        let color = theme.logo.as_ref().expect("logo a color");
+        let bn = theme.logo_mono.as_ref().expect("logo monocromo");
+        assert_eq!(color.filename, "logo-azul.pdf");
+        assert_eq!(bn.filename, "logo-bn.pdf");
+        // Son PDF de verdad, no un archivo vacío ni el HTML de un 404.
+        assert!(
+            color.bytes.starts_with(b"%PDF-"),
+            "el logo a color no es un PDF"
+        );
+        assert!(bn.bytes.starts_with(b"%PDF-"), "el logo B/N no es un PDF");
+    }
+
+    #[test]
+    fn en_monocromo_se_usa_el_logo_bn_y_no_el_de_color() {
+        // Un logo a color en un informe que se pidió en blanco y negro es peor que no
+        // poner ninguno.
+        let theme = Theme::load("uca", None).unwrap();
+        assert_eq!(theme.logo_for(false).unwrap().filename, "logo-azul.pdf");
+        assert_eq!(theme.logo_for(true).unwrap().filename, "logo-bn.pdf");
+
+        // Y un theme sin logos no dibuja nada en ninguno de los dos modos.
+        let generico = Theme::load("generico", None).unwrap();
+        assert!(generico.logo_for(false).is_none());
+        assert!(generico.logo_for(true).is_none());
+    }
+
+    #[test]
+    fn un_logo_declarado_que_no_esta_es_un_error() {
+        // La alternativa —ignorarlo y seguir— hace que un typo en el nombre del archivo
+        // se vea EXACTAMENTE igual que un theme sin logo. Que falle es la única forma
+        // de que el que armó el theme se entere.
+        let err = Theme::build(
+            "roto",
+            "[logos]\nprincipal = \"no-existe.pdf\"\n",
+            String::new(),
+            |_| None,
+        )
+        .unwrap_err();
+        let texto = err.to_string();
+        assert!(
+            texto.contains("no-existe.pdf"),
+            "el error no nombra el archivo: {texto}"
+        );
+    }
+
+    #[test]
     fn loads_embedded_generico() {
         // El segundo theme existe justamente para que el motor no pueda dar por
         // sentado nada de ITBA. Sin institución y sin color propio.
@@ -212,7 +369,7 @@ mod tests {
     fn un_theme_sin_institucion_carga_igual() {
         // El caso mínimo: un theme.toml vacío tiene que ser un theme válido. Antes
         // del segundo theme, `[institucion]` era obligatorio y esto era un error.
-        let theme = Theme::build("pelado", "", String::new()).unwrap();
+        let theme = Theme::build("pelado", "", String::new(), |_| None).unwrap();
         assert!(theme.institution_name.is_empty());
         assert_eq!(theme.primary_hex, "333333");
     }
