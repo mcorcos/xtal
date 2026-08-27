@@ -517,3 +517,136 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     #expect(Workspace.rangoDeParrafo(999, en: texto) != nil)
     #expect(Workspace.rangoDeParrafo(0, en: texto) == nil)
 }
+
+// MARK: - Autocompletado
+
+// El disparador es lo que decide si la lista abre o no, y es lo que más se rompe en
+// silencio: un `/` que abre la lista en el medio de una ruta no se ve como un bug del
+// autocompletado, se ve como que la app "hace cosas raras".
+
+@Test func la_barra_invertida_dispara_el_autocompletado() {
+    let t = "hola \\om" as NSString
+    let r = Autocompletado.prefijo(en: t, cursor: t.length)
+    #expect(r?.consulta == "\\om")
+    #expect(r?.rango.location == 5)
+    #expect(r?.rango.length == 3)
+}
+
+@Test func la_barra_invertida_sola_ya_abre_la_lista() {
+    // Es el momento exacto en el que uno no se acuerda del comando. Ahí se muestra el
+    // historial.
+    let t = "texto \\" as NSString
+    let r = Autocompletado.prefijo(en: t, cursor: t.length)
+    #expect(r != nil)
+    #expect(r?.consulta == "\\")
+}
+
+@Test func la_barra_comun_dispara_como_en_overleaf() {
+    let t = "hola /sub" as NSString
+    let r = Autocompletado.prefijo(en: t, cursor: t.length)
+    #expect(r?.consulta == "sub")
+    #expect(r?.rango.location == 5)
+}
+
+@Test func la_barra_comun_al_principio_de_la_linea_tambien() {
+    let t = "/sec" as NSString
+    #expect(Autocompletado.prefijo(en: t, cursor: t.length)?.consulta == "sec")
+}
+
+@Test func la_barra_comun_en_el_medio_de_una_palabra_no_dispara() {
+    // Sin esto, `1/2`, `docs/api` y cualquier ruta abrirían la lista mientras escribís.
+    for texto in ["1/2", "docs/api", "a/b"] {
+        let t = texto as NSString
+        #expect(Autocompletado.prefijo(en: t, cursor: t.length) == nil,
+                "«\(texto)» no tendría que disparar")
+    }
+}
+
+@Test func una_barra_comun_sola_no_dispara() {
+    // Una `/` sola es una división, no un pedido de autocompletar.
+    let t = "a / " as NSString
+    #expect(Autocompletado.prefijo(en: t, cursor: 3) == nil)
+}
+
+@Test func el_texto_comun_no_dispara() {
+    let t = "una palabra cualquiera" as NSString
+    #expect(Autocompletado.prefijo(en: t, cursor: t.length) == nil)
+}
+
+@Test func los_numeros_cortan_la_palabra() {
+    // Ningún comando de LaTeX lleva números. Aceptarlos haría que la lista se abra
+    // en el medio de `x2` o de una medición.
+    let t = "\\om3" as NSString
+    #expect(Autocompletado.prefijo(en: t, cursor: t.length) == nil)
+}
+
+// MARK: - La búsqueda del catálogo
+
+// Estos son un espejo de los tests de `crates/xtal-model/src/latex.rs`. Están duplicados
+// a propósito: la búsqueda se re-implementa en Swift porque corre en cada tecla y no se
+// le puede preguntar al binario. Si los puntajes se separan, las dos apps ordenan
+// distinto y el que usa las dos lo nota enseguida.
+
+@MainActor
+@Test func el_id_exacto_gana_igual_que_en_rust() {
+    let c = Catalogo()
+    c.usarSoloParaTests([
+        EntradaLatex(id: "pi", comando: "\\pi", nombre: "pi", vista: "π", grupo: "griegas",
+                     busca: ["pi"], insercion: "\\pi", retroceso: 0, matematica: true),
+        EntradaLatex(id: "parallel", comando: "\\parallel", nombre: "Paralelo", vista: "∥",
+                     grupo: "varios", busca: ["paralelo"], insercion: "\\parallel",
+                     retroceso: 0, matematica: true),
+        EntradaLatex(id: "pico", comando: "\\pico", nombre: "Prefijo pico", vista: "p",
+                     grupo: "unidades", busca: ["pico"], insercion: "\\pico",
+                     retroceso: 0, matematica: false),
+    ])
+    #expect(c.buscar("pi").first?.id == "pi")
+}
+
+@MainActor
+@Test func se_busca_por_lo_que_uno_tiene_en_la_cabeza() {
+    // Nadie se acuerda de que "menor o igual" se dice `leq`. Lo que uno recuerda es
+    // qué quiere. Es la mitad del valor de todo esto.
+    let c = Catalogo()
+    c.usarSoloParaTests([
+        EntradaLatex(id: "leq", comando: "\\leq", nombre: "Menor o igual", vista: "≤",
+                     grupo: "relaciones", busca: ["menor", "igual"], insercion: "\\leq",
+                     retroceso: 0, matematica: true),
+        EntradaLatex(id: "ohm", comando: "\\ohm", nombre: "Ohm", vista: "Ω",
+                     grupo: "unidades", busca: ["ohm", "resistencia"], insercion: "\\ohm",
+                     retroceso: 0, matematica: false),
+    ])
+    #expect(c.buscar("menor").first?.id == "leq")
+    #expect(c.buscar("resistencia").first?.id == "ohm")
+}
+
+@MainActor
+@Test func la_barra_y_las_tildes_no_estorban() {
+    // En el editor la consulta llega con la barra adelante (`\om`). Si no se sacara, no
+    // coincidiría con nada y la lista saldría vacía justo cuando más se la necesita.
+    #expect(Catalogo.normalizar("\\Omega") == "omega")
+    #expect(Catalogo.normalizar("ángulo") == "angulo")
+    #expect(Catalogo.normalizar("  MENOR  ") == "menor")
+}
+
+@MainActor
+@Test func el_historial_deja_lo_ultimo_primero_y_sin_repetir() {
+    let c = Catalogo()
+    let omega = EntradaLatex(id: "omega", comando: "\\omega", nombre: "omega", vista: "ω",
+                             grupo: "griegas", busca: [], insercion: "\\omega",
+                             retroceso: 0, matematica: true)
+    let leq = EntradaLatex(id: "leq", comando: "\\leq", nombre: "Menor o igual", vista: "≤",
+                           grupo: "relaciones", busca: [], insercion: "\\leq",
+                           retroceso: 0, matematica: true)
+    c.usarSoloParaTests([omega, leq])
+    c.olvidarHistorial()
+
+    c.usar(omega)
+    c.usar(leq)
+    c.usar(omega)          // repetido: tiene que quedar uno solo, y adelante
+    #expect(c.historial == ["omega", "leq"])
+    #expect(c.recientes.first?.id == "omega")
+
+    c.olvidarHistorial()
+    #expect(c.recientes.isEmpty)
+}

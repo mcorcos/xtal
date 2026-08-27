@@ -137,10 +137,15 @@ def main() -> int:
     )
     print()
     for p in deriva:
-        wins = ", ".join(f"`{w}`" for w in p.get("win", [])) or "_(sin contraparte)_"
         print(f"- **{p['por_que']}**")
         print(f"  - cambió `{p['mac']}`")
-        print(f"  - no cambió {wins}")
+        if p.get("win"):
+            wins = ", ".join(f"`{w}`" for w in p["win"])
+            print(f"  - no cambió {wins}")
+        else:
+            # Sin contraparte: es una deuda conocida, no un descuido. Se dice qué falta,
+            # que es lo único accionable.
+            print(f"  - **todavía no existe en Windows**: {p.get('pendiente', 'sin anotar')}")
     print()
     print(
         "Esto no frena nada: puede estar bien, puede ser una diferencia a propósito. "

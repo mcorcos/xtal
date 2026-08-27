@@ -195,4 +195,7 @@ extension Notification.Name {
     /// workspace hace. Son dos y no una con autodetección: ver `flechasSincronia`.
     public static let xtalSincronizarAlPdf = Notification.Name("xtal.sincronizar.pdf")
     public static let xtalSincronizarAlEditor = Notification.Name("xtal.sincronizar.editor")
+    /// El selector de símbolos (⌘⇧E). Mismo arreglo que los de arriba: el menú
+    /// avisa y el workspace abre, porque desde el menú no se llega al estado de la vista.
+    public static let xtalSelectorSimbolos = Notification.Name("xtal.selectorSimbolos")
 }

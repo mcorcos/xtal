@@ -9,6 +9,7 @@
 //! - [`Project`] — el manifiesto del proyecto-carpeta (`xtal.toml`).
 //! - [`style`] — el "buen gusto codificado": defaults de línea y color.
 
+pub mod latex;
 pub mod measurement;
 pub mod plot;
 pub mod project;

@@ -132,6 +132,9 @@ struct VisorArchivo: View {
     /// La ida y vuelta con el PDF del informe.
     let sincronia: Sincronia
     @Binding var revelar: EditorCodigo.Revelar?
+    /// El autocompletado del editor. Viene del workspace: el catálogo se carga una
+    /// vez por proyecto y no una vez por archivo.
+    let autocompletado: Autocompletado
 
     var body: some View {
         // El `frame` va acá y no adentro de cada caso: un `NSViewRepresentable` no
@@ -146,7 +149,8 @@ struct VisorArchivo: View {
         switch Arbol.clase(de: url) {
         case .texto:
             EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion,
-                         sincronia: sincronia, revelar: $revelar)
+                         sincronia: sincronia, revelar: $revelar,
+                         autocompletado: autocompletado)
         case .imagen:
             imagen
         case .pdf:
