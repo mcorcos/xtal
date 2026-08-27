@@ -105,6 +105,110 @@ public final class Git {
         await hacer(["commit", "-m", texto])
     }
 
+    // MARK: - Historial
+
+    /// Una version guardada del informe.
+    ///
+    /// Es un commit, pero **la palabra «commit» no aparece en la pantalla**: quien
+    /// escribe un TP no tiene por qué saber git. Lo que necesita es «volver a como estaba
+    /// ayer», y eso es lo que el panel ofrece.
+    public struct Version: Identifiable, Equatable, Sendable {
+        /// El hash corto. Es lo que se le pasa a `git show`.
+        public let id: String
+        public let fecha: Date
+        public let autor: String
+        public let mensaje: String
+
+        /// «hace 2 horas». Es lo que se lee en la lista: una fecha absoluta obliga a
+        /// hacer la cuenta, y lo que uno busca es «la de antes de romperlo».
+        public var relativa: String {
+            let f = RelativeDateTimeFormatter()
+            f.locale = Locale(identifier: "es")
+            f.unitsStyle = .full
+            return f.localizedString(for: fecha, relativeTo: Date())
+        }
+    }
+
+    /// Las versiones del proyecto, o las de un archivo si se le pasa uno.
+    ///
+    /// Filtrando por archivo aparecen solo las veces que ESE archivo cambió, que es lo
+    /// que uno quiere mirando una sección: el historial entero de un informe de tres
+    /// semanas no ayuda a encontrar el párrafo que borraste.
+    public func historial(de archivo: URL? = nil, limite: Int = 100) async -> [Version] {
+        // `%x00` separa con un byte nulo y no con un carácter: un mensaje de commit puede
+        // tener cualquier cosa adentro, y con `|` o tabs el parseo se rompe con el primer
+        // mensaje que lo use.
+        var args = ["log", "--format=%h%x00%at%x00%an%x00%s", "-n", String(limite)]
+        if let archivo {
+            args.append(contentsOf: ["--follow", "--", archivo.path])
+        }
+        let r = await correr(args)
+        guard r.ok else { return [] }
+
+        return r.stdout.split(separator: "\n").compactMap { linea in
+            let partes = linea.components(separatedBy: "\u{0}")
+            guard partes.count >= 4, let ts = TimeInterval(partes[1]) else { return nil }
+            return Version(id: partes[0],
+                           fecha: Date(timeIntervalSince1970: ts),
+                           autor: partes[2],
+                           mensaje: partes[3])
+        }
+    }
+
+    /// Cómo estaba un archivo en esa version.
+    ///
+    /// `nil` si en ese momento el archivo no existía, que es un resultado y no un error:
+    /// la sección que agregaste ayer no está en la version de anteayer.
+    public func contenido(de archivo: URL, en version: String) async -> String? {
+        // La ruta tiene que ser **relativa a la raíz del repo**: `git show` no entiende
+        // una absoluta después de los dos puntos.
+        let raiz = await correr(["rev-parse", "--show-toplevel"])
+        guard raiz.ok else { return nil }
+
+        // **Los dos lados se resuelven con `resolvingSymlinksInPath`.**
+        //
+        // Sin eso, la comparación falla y no dice por qué. El caso que lo destapó: una
+        // carpeta en `/var/folders/…`, que en macOS es un symlink a `/private/var/…`.
+        // `git rev-parse` devuelve la resuelta y el `URL` de la app la de arriba, así que
+        // el prefijo no coincide, la ruta se le pasa absoluta a `git show`, git no
+        // encuentra nada y el panel de versiones sale vacío. Es el primo del problema de
+        // rutas que ya está anotado para Windows en `docs/APP-WINDOWS.md`.
+        let base = URL(fileURLWithPath: raiz.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            .resolvingSymlinksInPath().path
+        var rel = archivo.resolvingSymlinksInPath().path
+        guard rel.hasPrefix(base) else { return nil }
+        rel = String(rel.dropFirst(base.count))
+        if rel.hasPrefix("/") { rel.removeFirst() }
+
+        let r = await correr(["show", "\(version):\(rel)"])
+        return r.ok ? r.stdout : nil
+    }
+
+    /// Empieza a guardar versiones en una carpeta que todavía no las guarda.
+    ///
+    /// Es `git init` más la primera version, y de paso un `.gitignore` con `salida/`:
+    /// esa carpeta la regenera cada compilación, y guardarla haría que cada version pese
+    /// un PDF entero y que las diferencias entre dos versiones sean ilegibles.
+    public func empezarAGuardar() async {
+        ocupado = true
+        defer { ocupado = false }
+
+        let ignore = carpeta.appendingPathComponent(".gitignore")
+        if !FileManager.default.fileExists(atPath: ignore.path) {
+            let contenido = """
+            # Lo genera cada compilación: no hace falta guardarlo, y guardarlo haría que
+            # cada version pese un PDF entero.
+            salida/
+            """
+            try? contenido.write(to: ignore, atomically: true, encoding: .utf8)
+        }
+
+        _ = await correr(["init"])
+        _ = await correr(["add", "-A"])
+        _ = await correr(["commit", "-m", "Primera version del informe"])
+        await refrescar()
+    }
+
     private func hacer(_ args: [String], refrescando: Bool = true) async {
         ocupado = true
         defer { ocupado = false }
