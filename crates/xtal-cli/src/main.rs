@@ -19,6 +19,7 @@ mod electronics;
 mod example;
 mod gen;
 mod inventory;
+mod latex;
 mod mcp;
 mod plan;
 mod setup;
@@ -68,6 +69,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Plan(a) => plan::cmd_plan(a, &project, json),
         Command::Status(a) => plan::cmd_status(a, &project, json),
         Command::Scan(a) => inventory::cmd_scan(a, &project, json),
+        Command::Latex(a) => latex::cmd_latex(a, json),
         Command::Section(cmd) => commands::cmd_section(cmd, &project, json),
         #[cfg(feature = "electronics")]
         Command::Circuit(cmd) => electronics::cmd_circuit(cmd, &project, json),

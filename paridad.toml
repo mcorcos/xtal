@@ -32,8 +32,12 @@
 #   win      = uno o más archivos de la app de Windows que hacen lo mismo
 #   por_que  = qué es esa pieza, en una línea
 #
+#   pendiente = por qué todavía no hay contraparte (solo cuando `win` está vacío)
+#
 # Un archivo que todavía no tiene contraparte va con `win = []` y un `pendiente` que
-# explica por qué. Eso no es una omisión: es una diferencia conocida y anotada.
+# explica qué falta. Eso no es una omisión: es una diferencia conocida y anotada, y
+# aparece en el informe de **cada** release hasta que alguien la cierre. Es a propósito:
+# una deuda que deja de verse deja de existir.
 
 # ---------------------------------------------------------------------------
 # Núcleo: lo que la app sabe hacer, sin pantalla
@@ -131,6 +135,23 @@ por_que = "el parser de SyncTeX: de una línea del fuente a un rectángulo del P
 mac = "app/XtalPackage/Sources/XtalFeature/Editor/Sincronia.swift"
 win = ["app-win/src/editor/sincronia.ts"]
 por_que = "las dos flechas entre el editor y el PDF"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/Catalogo.swift"
+win = ["app-win/src/editor/catalogo.ts"]
+por_que = "el catálogo de LaTeX y su búsqueda. Los datos vienen del núcleo; el orden se re-implementa de los dos lados y tiene que dar igual"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/Autocompletado.swift"
+win = []
+pendiente = "la lista que aparece al escribir `\\om` o `/om`. En Windows va con `@codemirror/autocomplete`, que ya está instalado"
+por_que = "el autocompletado del editor"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/SelectorSimbolos.swift"
+win = []
+pendiente = "la grilla de símbolos con historial (⌘⇧E en Mac)"
+por_que = "el selector de símbolos"
 
 [[par]]
 mac = "app/XtalPackage/Sources/XtalFeature/Editor/Bloques.swift"

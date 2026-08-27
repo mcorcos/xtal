@@ -412,6 +412,61 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
   ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
   va a advertir la primera vez.
 
+### El autocompletado, mejor que el de Overleaf — HECHO en Mac (2026-08-27), pedido de Manu
+En Overleaf escribís `/sub` y te ofrece `\subsection`. Manu pidió eso pero mucho mejor, y
+además un **selector de símbolos con historial**, porque siempre terminaba buscando una
+tabla de LaTeX en internet para copiar un `\leq`.
+- **El catálogo vive en el núcleo**: `crates/xtal-model/src/latex.rs`, ~190 entradas, y se
+  pide con `xtal latex --json`. **Las apps no traen su propia lista**: hay dos apps en
+  lenguajes distintos y dos listas se separan en la primera semana. Es la misma decisión
+  que los themes.
+- **Tres cosas que Overleaf no tiene**, y las tres salen de lo que uno hace de verdad:
+  1. **Se ve el símbolo.** Cada fila muestra la `ω` grande al lado del `\omega`. El nombre
+     de un comando no dice nada si no te acordás; el dibujo, sí.
+  2. **Se busca por lo que el símbolo ES, en castellano.** `menor` → `\leq`,
+     `resistencia` → `\ohm`, `raiz` → `\sqrt`. Nadie recuerda que «menor o igual» se dice
+     `leq`; uno recuerda qué quiere. Hay un test por cada uno de esos casos.
+  3. **Trae lo de electrónica.** `\ohm`, `\micro`, `\decibel`, `\SI{}{}`. Un editor de
+     LaTeX genérico no puede ofrecerlos porque no sabe qué paquetes carga tu documento;
+     Xtal sí, porque `siunitx` lo pone él en el preámbulo base.
+- **Dispara con `\` y con `/`.** La `\` es lo natural de LaTeX; la `/` es lo que la gente
+  ya tiene en el dedo de otros editores. La `/` **pide arrancar palabra**: sin eso, `1/2`
+  y `docs/api` abrirían la lista mientras escribís. Hay un test con los tres casos.
+- **La `\` sola ya abre la lista, y muestra el historial.** Es el momento exacto en el que
+  uno no se acuerda del comando, y lo último que usaste es la mejor apuesta que hay.
+- **El selector de símbolos es ⌘⇧E**, y **no ⌃⌘Espacio**, que era la idea original: ese
+  atajo es del sistema —abre el visor de caracteres y emoji de macOS— y lo atiende el
+  método de entrada antes que la app. Un atajo que a veces abre lo tuyo y a veces abre el
+  del sistema es peor que uno raro.
+- Arriba de todo del selector va **Recientes**. El historial vive en `UserDefaults`, no en
+  la config de Xtal, porque describe cómo trabaja esta persona en ESTA máquina — la misma
+  separación que hay entre `config.toml` y `agents.toml`.
+- **La búsqueda se re-implementa en cada app y eso es a propósito**: corre en cada tecla y
+  un subproceso por tecla no es una opción. Los puntajes son los mismos que en Rust y los
+  tests de Swift son un espejo de los de Rust. Que no se separen lo vigila `paridad.toml`.
+- **Un `NSPanel` no activante y no el autocompletado de AppKit.** `NSTextView.complete(_:)`
+  solo sabe mostrar texto plano en una columna: no hay dónde poner el símbolo grande, que
+  es justo lo que hace que esto sirva. Y el panel es `.nonactivatingPanel` porque si
+  robara el foco, la tecla siguiente cerraría todo.
+- **Trampas que costaron una vuelta cada una**:
+  - Las funciones puras (`prefijo`, `normalizar`, `puntaje`) van **`nonisolated`**. La
+    clase es `@MainActor`, y un `@Test` que llama a un método aislado sin estarlo **aborta
+    con SIGTRAP** sin imprimir nada. Ya estaba anotado en este archivo y mordió igual.
+  - **El retrato no captura una hoja de SwiftUI.** Un `.sheet` es una `NSWindow` aparte:
+    `Desarrollo` agarraba la primera visible y salía la pantalla de atrás. Ahora prefiere
+    `NSApp.keyWindow`. **Aun así el contenido sale en blanco** —el árbol de capas de una
+    hoja recién presentada no tiene lo dibujado—, así que la verificación de esto son los
+    tests y no un PNG. Queda anotado como lo que es.
+  - **Lanzar el `.app` a mano desde una sesión sin terminal no abre ninguna ventana.** Hay
+    que usar `open --env CLAVE=valor -n Xtal.app`. Sin eso el retrato no se dispara nunca
+    y no queda ni rastro de por qué. **Guardá este truco**, es el gemelo del
+    `script -q /dev/null` para lo interactivo.
+  - `xcodebuild test` no corre acá: el target de UI tests pide «automation mode» y expira.
+    **`swift test` adentro de `app/XtalPackage` sí**, y son 39 tests.
+- **En Windows todavía no está, y es a propósito.** Está anotado en `paridad.toml` con su
+  `pendiente`, así que sale en el informe de **cada** release hasta que se cierre. Lo único
+  ya portado es el catálogo (`app-win/src/editor/catalogo.ts`).
+
 ### Que las dos apps no se separen solas — HECHO (2026-08-27), pedido de Manu
 Hay **dos apps de escritorio en lenguajes distintos** que se publican con el **mismo
 número de version**. Si la de Windows queda atrás, el que la instala recibe una app que
@@ -861,7 +916,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update` · `setup` · `agents [install|uninstall|add|remove]` ·
-`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `uninstall` ·
+`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `latex [consulta]` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)

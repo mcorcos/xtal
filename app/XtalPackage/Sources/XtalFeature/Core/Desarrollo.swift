@@ -72,6 +72,25 @@ public enum Desarrollo {
         return URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
     }
 
+    /// `XTAL_SIMBOLOS=1` — abre el selector de símbolos apenas arranca.
+    ///
+    /// Existe por lo mismo que `XTAL_SYNC`: una sesión sin manos no puede apretar
+    /// ⌘⇧E, y sin poder abrirlo no hay forma de mirar si la grilla dibuja. Con esto,
+    /// un `XTAL_SNAPSHOT` del mismo arranque sale con el selector en pantalla.
+    public static var abrirSelectorSimbolos: Bool {
+        ProcessInfo.processInfo.environment["XTAL_SIMBOLOS"] == "1"
+    }
+
+    /// `XTAL_AUTOCOMPLETAR="\\om"` — escribe eso al final del archivo abierto, como si
+    /// alguien lo hubiera tipeado, para que se dispare la lista del autocompletado.
+    ///
+    /// Se escribe **de verdad** en el editor en vez de armar la lista a mano: lo que hay
+    /// que probar es justamente que tipear dispare, no que la lista sepa dibujarse.
+    public static var textoAAutocompletar: String? {
+        let v = ProcessInfo.processInfo.environment["XTAL_AUTOCOMPLETAR"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
     /// `XTAL_COMPILAR=1` — compila apenas abre, sin esperar un ⌘R.
     public static var compilarAlAbrir: Bool {
         ProcessInfo.processInfo.environment["XTAL_COMPILAR"] == "1"
@@ -146,9 +165,18 @@ public enum Desarrollo {
         DispatchQueue.main.asyncAfter(deadline: .now() + segundos) {
             defer { NSApp.terminate(nil) }
             anotar("disparó · ventanas: \(NSApp.windows.count)")
-            guard let ventana = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
-                  let vista = ventana.contentView
-            else { return }
+
+            // La ventana **clave** primero, y la principal como respaldo.
+            //
+            // Una hoja de SwiftUI (`.sheet`) no se dibuja adentro de su ventana padre:
+            // es una `NSWindow` aparte, pegada arriba. Agarrando siempre la primera
+            // visible, el retrato salía con la pantalla de atrás y la hoja no aparecía —
+            // se leía como que el diálogo no se había abierto, cuando sí. Vale para el
+            // selector de símbolos, para «Informe nuevo» y para cualquier diálogo.
+            let candidata = NSApp.keyWindow
+                ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
+            guard let ventana = candidata, let vista = ventana.contentView else { return }
+            anotar("ventana: \(ventana.className) · clave: \(NSApp.keyWindow != nil)")
 
             // Forzar el layout y el dibujado pendientes ANTES de retratar.
             //

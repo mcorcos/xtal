@@ -21,6 +21,9 @@ struct EditorCodigo: NSViewRepresentable {
     let sincronia: Sincronia
     /// Un pedido de seleccionar un rango, que llega desde el PDF. Se limpia al aplicarlo.
     @Binding var revelar: Revelar?
+    /// El autocompletado. Es del workspace y no del editor porque el catálogo se carga
+    /// una vez por proyecto y no una vez por archivo abierto.
+    let autocompletado: Autocompletado
 
     /// Lo que pide la sincronía desde el PDF: mostrame este rango y dejámelo marcado.
     /// Lleva id propio por lo mismo que `Insercion`: dos pedidos iguales seguidos son
@@ -150,6 +153,9 @@ struct EditorCodigo: NSViewRepresentable {
         func textViewDidChangeSelection(_ n: Notification) {
             guard let tv = n.object as? NSTextView else { return }
             let r = tv.selectedRange()
+            // Seleccionar con el mouse en otro lado abandona lo que se venía escribiendo.
+            // Sin esto, la lista queda flotando arriba de un cursor que ya no está ahí.
+            if r.length > 0 { padre.autocompletado.cerrar() }
             let s = tv.string as NSString
             padre.sincronia.seleccionEditor = r.length > 0 ? s.substring(with: r) : ""
             // Las líneas son lo que entiende SyncTeX: el mapa que deja LaTeX habla de
@@ -206,6 +212,37 @@ struct EditorCodigo: NSViewRepresentable {
             padre.texto = tv.string
             escribiendo = false
             colorear(tv)
+            padre.autocompletado.revisar(tv)
+        }
+
+        /// Las teclas que maneja la lista de autocompletado mientras está abierta.
+        ///
+        /// Va por `doCommandBy` y no por un monitor de eventos porque acá las teclas ya
+        /// llegan traducidas a comandos: `moveDown:` es la flecha abajo Y Ctrl-N, que es
+        /// lo que espera cualquiera que venga de un editor de verdad. Devolver `true`
+        /// se la come; `false` la deja seguir a su comportamiento normal.
+        func textView(_ tv: NSTextView, doCommandBy sel: Selector) -> Bool {
+            let ac = padre.autocompletado
+            guard ac.visible else { return false }
+            switch sel {
+            case #selector(NSResponder.moveDown(_:)):
+                ac.bajar(); return true
+            case #selector(NSResponder.moveUp(_:)):
+                ac.subir(); return true
+            case #selector(NSResponder.insertNewline(_:)),
+                 #selector(NSResponder.insertTab(_:)):
+                return ac.aceptar(en: tv)
+            case #selector(NSResponder.cancelOperation(_:)):
+                ac.cerrar(); return true
+            // Mover el cursor a otro lado es abandonar lo que se estaba escribiendo. Se
+            // cierra, pero NO se consume la tecla: la flecha tiene que mover igual.
+            case #selector(NSResponder.moveLeft(_:)),
+                 #selector(NSResponder.moveRight(_:)),
+                 #selector(NSResponder.insertLineBreak(_:)):
+                ac.cerrar(); return false
+            default:
+                return false
+            }
         }
 
         // Los patrones, compilados una sola vez: recolorear en cada tecla y recompilar

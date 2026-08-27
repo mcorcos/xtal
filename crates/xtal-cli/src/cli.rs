@@ -45,6 +45,9 @@ pub enum Command {
     /// El orden de la carpeta: qué es cada archivo que hay adentro, cuál ya se usó
     /// y con qué comando se usa el que falta.
     Scan(ScanArgs),
+    /// Comandos y símbolos de LaTeX: buscalos por lo que son, no por cómo se escriben.
+    /// Es el catálogo que usa el autocompletado de las apps.
+    Latex(LatexArgs),
     /// Secciones del informe.
     #[command(subcommand)]
     Section(SectionCmd),
@@ -541,6 +544,24 @@ pub struct PlanAddArgs {
 
 #[derive(Debug, Args)]
 pub struct StatusArgs {}
+
+/// Argumentos de `xtal latex`.
+///
+/// Sin nada sale el catálogo entero agrupado. Con una consulta sale lo que coincide, en
+/// orden de relevancia. `--json` es lo que piden las dos apps de escritorio al arrancar.
+#[derive(Debug, Args)]
+pub struct LatexArgs {
+    /// Qué buscar. Vale el comando (`omega`, `\leq`) o lo que el símbolo es
+    /// (`resistencia`, `menor`, `integral`).
+    pub consulta: Option<String>,
+    /// Solo un grupo: estructura, matematica, griegas, relaciones, operadores, flechas,
+    /// delimitadores, decoracion, unidades, varios.
+    #[arg(long)]
+    pub grupo: Option<String>,
+    /// Cortar la lista en tantos resultados.
+    #[arg(long)]
+    pub limite: Option<usize>,
+}
 
 #[derive(Debug, Args)]
 pub struct ScanArgs {

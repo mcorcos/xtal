@@ -59,6 +59,23 @@ struct XtalApp: App {
                 Button("Traer del PDF al editor") {
                     NotificationCenter.default.post(name: .xtalSincronizarAlEditor, object: nil)
                 }
+
+                Divider()
+
+                // El selector de símbolos.
+                //
+                // **NO va en ⌃⌘Espacio**, aunque sea el gesto que uno ya tiene en el dedo
+                // para «meter un carácter que no sé escribir»: ese atajo es del sistema —
+                // abre el visor de caracteres y emoji de macOS— y lo atiende el método de
+                // entrada antes que la app. Un atajo que a veces abre lo tuyo y a veces
+                // abre el del sistema es peor que uno raro.
+                //
+                // Este SÍ lleva el atajo acá, al revés que los de arriba: no hay ningún
+                // botón de una vista que lo tenga, así que no hay con qué pisarse.
+                Button("Símbolos…") {
+                    NotificationCenter.default.post(name: .xtalSelectorSimbolos, object: nil)
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
 

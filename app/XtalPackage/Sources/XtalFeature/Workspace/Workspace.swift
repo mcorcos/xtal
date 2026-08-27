@@ -62,6 +62,15 @@ public struct Workspace: View {
     @State private var sincronia = Sincronia()
     /// El pedido que va del PDF al editor: mostrame este rango.
     @State private var revelar: EditorCodigo.Revelar?
+
+    /// El autocompletado del editor, que además es el dueño del catálogo de LaTeX.
+    ///
+    /// Vive en el workspace y no en el editor porque el catálogo se pide **una vez** al
+    /// binario y queda en memoria: colgarlo del editor sería un subproceso por cada click
+    /// en el árbol de archivos.
+    @StateObject private var autocompletado = Autocompletado()
+    /// ¿Está abierto el selector de símbolos? (⌘⇧E)
+    @State private var eligiendoSimbolo = false
     @Environment(\.colorScheme) private var esquema
 
     /// El diálogo de crear o renombrar una sección.
@@ -195,6 +204,9 @@ public struct Workspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .xtalTerminalNueva)) { _ in
             agentes.abrir()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .xtalSelectorSimbolos)) { _ in
+            eligiendoSimbolo = true
+        }
         .onDisappear { vigia?.parar() }
         .sheet(item: $pedidoArchivo) { pedido in
             DialogoTitulo(titulo: pedido.titulo, texto: $nombreArchivo) { nombre in
@@ -220,7 +232,18 @@ public struct Workspace: View {
                 }
             }
         }
+        .sheet(isPresented: $eligiendoSimbolo) {
+            SelectorSimbolos(catalogo: autocompletado.catalogo) { entrada in
+                // El selector no conoce el editor: deja el pedido en el mismo binding que
+                // usa el menú de bloques, y el editor lo aplica donde esté el cursor.
+                insercion = .init(texto: entrada.insercion, retroceso: entrada.retroceso)
+            }
+        }
         .task {
+            // El catálogo, apenas se abre el proyecto. Es un subproceso y unos cientos de
+            // entradas: si tardara, lo único que pasa es que el autocompletado aparece un
+            // segundo después. Nada más depende de esto.
+            await autocompletado.catalogo.cargar()
             await ajuste.refrescar()
             await secciones.recargar()
             cargarSeleccionado()
@@ -237,6 +260,20 @@ public struct Workspace: View {
                 if let e = proyecto.error {
                     proyecto.error = e.ubicar(en: secciones.lista)
                 }
+            }
+
+            // Abrir el selector de símbolos y disparar el autocompletado solos, para
+            // poder mirarlos. Ver `Desarrollo`. Los dos esperan a que el catálogo esté:
+            // sin él, el selector sale con el cartel de "no pude leerlo" y la lista del
+            // autocompletado directamente no abre.
+            if Desarrollo.abrirSelectorSimbolos {
+                eligiendoSimbolo = true
+            }
+            if let tecleado = Desarrollo.textoAAutocompletar {
+                // Se escribe de verdad en el editor, no se arma la lista a mano: lo que
+                // hay que probar es que **tipear** dispare.
+                try? await Task.sleep(for: .milliseconds(600))
+                texto += tecleado
             }
 
             // Disparar la sincronía sola, para poder mirarla. Ver `Desarrollo`.
@@ -645,7 +682,8 @@ public struct Workspace: View {
                          icono: Arbol.icono(de: url, esCarpeta: false, abierta: false),
                          sufijo: generado(url) ? "generado" : nil)
                 VisorArchivo(url: url, texto: $texto, insercion: $insercion,
-                             sincronia: sincronia, revelar: $revelar)
+                             sincronia: sincronia, revelar: $revelar,
+                             autocompletado: autocompletado)
             } else {
                 Spacer(minLength: 0)
             }
