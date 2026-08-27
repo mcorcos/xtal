@@ -150,7 +150,7 @@ por_que = "el autocompletado del editor"
 [[par]]
 mac = "app/XtalPackage/Sources/XtalFeature/Editor/SelectorSimbolos.swift"
 win = []
-pendiente = "la grilla de símbolos con historial (⌃⌘Espacio en Mac)"
+pendiente = "la grilla de símbolos con historial (⌘⇧E en Mac)"
 por_que = "el selector de símbolos"
 
 [[par]]
