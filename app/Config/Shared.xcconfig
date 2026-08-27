@@ -12,7 +12,7 @@ PRODUCT_BUNDLE_IDENTIFIER = com.unit.xtal
 // La version de la app va clavada a la del workspace de Rust (Cargo.toml).
 // El job `check` de .github/workflows/release.yml no publica si no coinciden:
 // una app que dice 0.1.0 hablándole a una CLI 0.3.2 no se puede diagnosticar.
-MARKETING_VERSION = 0.5.0
+MARKETING_VERSION = 0.6.0
 CURRENT_PROJECT_VERSION = 1
 
 // ==========================================
