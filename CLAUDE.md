@@ -412,6 +412,67 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
   ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
   va a advertir la primera vez.
 
+### La barra, abrir cualquier carpeta, y `\ref{` con las figuras de verdad — HECHO en Mac (2026-08-27), pedido de Manu
+Tres cosas de la misma tanda, todas de «robarle a Overleaf premium para que nadie lo pague».
+
+**La barra de bloques, a la vista.** `BarraBloques` estaba escrita hacía meses en
+`Bloques.swift` y **no estaba enchufada a ninguna vista**. Ahora va arriba del texto, con
+Sección, Subsección, Ecuación, Figura, Tabla, Lista, el `···` y **Símbolos**. Aparece
+**solo en un `.tex`**: en un `.toml` o un `.sh`, un `\section{}` no es un atajo, es basura
+que hay que borrar.
+
+**Un proyecto se crea adentro de la carpeta que ya tenés.** Antes, elegir una carpeta sin
+`xtal.toml` daba «no hay ningún xtal.toml, elegí la carpeta del informe» — o sea, le
+decía a alguien que se equivocó cuando había elegido bien: tiene su `tp4` con las cosas
+adentro y quiere trabajar ahí. Ahora ofrece crearlo ahí mismo, con `xtal init`, que **solo
+agrega**: las subcarpetas, el `xtal.toml` y los briefs para el agente. No mueve ni borra
+nada. Verificado con una carpeta con archivos adentro.
+
+**`\ref{` ofrece tus figuras, con el epígrafe.** Es lo que Overleaf cobra, y sale mejor.
+- **`xtal refs`** (`crates/xtal-cli/src/refs.rs`) barre los `.tex` del proyecto y, para
+  cada `\label{}`, anota en qué entorno está y cuál fue el `\caption{}` o el `\section{}`
+  más cercano. **Barrido de texto, no un parser de LaTeX**: parsear LaTeX de verdad es un
+  proyecto entero, y para saber que un `\label` está adentro de un `figure` con tal
+  epígrafe alcanza con mirar por dónde se viene pasando.
+- **Los gráficos de Xtal entran también**: el motor les escribe `\label{fig:<id>}` al
+  dibujarlos, así que se citan aunque no estén escritos en ningún `.tex`.
+- **`salida/` queda afuera**: ahí vive el `.tex` generado y sus etiquetas son las mismas
+  de arriba. Sin excluirlo, cada figura aparecía dos veces.
+- **El epígrafe sale como en el PDF.** `limpiar()` saca los comandos y deja el texto, y
+  **traduce los símbolos con el catálogo del autocompletado**: `\SI{500}{\micro\second}`
+  queda «500µs». Salió gratis, los datos ya estaban. Un comando que **envuelve** algo
+  (`\si{}`, `\frac{}{}`) no se sustituye: su `vista` en el catálogo es un *ejemplo* de lo
+  que produce («kΩ»), no su símbolo, y meterlo dejaría ese ejemplo adentro del epígrafe.
+- **Trampa que costó**: `limpiar()` recorría **bytes**. Una tilde son dos bytes en UTF-8,
+  así que «Parámetros» salía «ParÃ¡metros». Casi todos los epígrafes de un informe en
+  castellano tienen una, así que se vio en la primera corrida contra el ejemplo.
+- En la app, `Referencias.swift` pide `xtal refs --json` **como mucho cada 1,5 s**: un
+  subproceso por tecla no es una opción, y una etiqueta recién escrita que aparece un
+  segundo después no se nota.
+- El detector de contexto (`Autocompletado.referencia`) busca hacia atrás la `{` sin
+  cerrar y el comando que la abrió. **Se corta en el primer `}` o salto de línea**: un
+  `\ref{}` no cruza renglones, y sin ese corte cualquier llave suelta más arriba del
+  archivo haría creer que estás adentro de una referencia. Vale para `ref`, `cref`,
+  `Cref`, `eqref`, `autoref`, `pageref` y `nameref`.
+- **Una etiqueta no entra al historial**: es de ESTE documento y en el próximo proyecto
+  sería una sugerencia que no existe.
+- Los íconos de la lista son **SF Symbols y no emoji**: un 🖼 a color al lado de un id en
+  monoespaciada se ve pegoteado y cambia de dibujo según la version de macOS. `xtal refs`
+  en la terminal sí usa emoji, porque ahí no hay SF Symbols.
+
+**Tres cosas del arnés de desarrollo, que costaron más que la función:**
+- **`XTAL_AUTOCOMPLETAR` escribía en el binding `texto` y no disparaba nada.** `revisar()`
+  cuelga de `textDidChange`, que AppKit dispara **solo cuando teclea una persona**: el
+  texto aparecía en pantalla y la lista no abría nunca, que se lee igual que un bug. Ahora
+  va por `insercion`, el mismo camino que el menú de bloques.
+- **El retrato no veía el panel.** La lista es una `NSPanel` aparte, así que no está en el
+  árbol de capas de la ventana principal. `Desarrollo` ahora prefiere, en orden: un panel
+  visible → `keyWindow` → la primera visible. Lanzando con `open` desde una sesión sin
+  manos **`keyWindow` es nil**, así que el panel tiene que ir primero.
+- **`insertar` necesita `@MainActor` explícito.** Los métodos del delegado lo heredan del
+  SDK; ese es propio. Sin eso, el paquete compila con `xcodebuild` y **`swift test` lo
+  rechaza**, que es donde corren los tests.
+
 ### El autocompletado, mejor que el de Overleaf — HECHO en Mac (2026-08-27), pedido de Manu
 En Overleaf escribís `/sub` y te ofrece `\subsection`. Manu pidió eso pero mucho mejor, y
 además un **selector de símbolos con historial**, porque siempre terminaba buscando una
@@ -916,7 +977,7 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update` · `setup` · `agents [install|uninstall|add|remove]` ·
-`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `latex [consulta]` · `uninstall` ·
+`app [abrir|compilar|modo|ver|panel|terminal|frente]` · `latex [consulta]` · `refs` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)

@@ -135,6 +135,11 @@ struct VisorArchivo: View {
     /// El autocompletado del editor. Viene del workspace: el catálogo se carga una
     /// vez por proyecto y no una vez por archivo.
     let autocompletado: Autocompletado
+    /// Meter un bloque de LaTeX donde está el cursor. Lo resuelve el workspace, que es
+    /// quien tiene el binding del editor.
+    let insertarBloque: (Bloque) -> Void
+    /// Abrir el selector de símbolos.
+    let abrirSimbolos: () -> Void
 
     var body: some View {
         // El `frame` va acá y no adentro de cada caso: un `NSViewRepresentable` no
@@ -148,9 +153,17 @@ struct VisorArchivo: View {
     private var contenido: some View {
         switch Arbol.clase(de: url) {
         case .texto:
-            EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion,
-                         sincronia: sincronia, revelar: $revelar,
-                         autocompletado: autocompletado)
+            VStack(spacing: 0) {
+                // La barra **solo en un `.tex`**. En un `.toml` o en un `.sh` un
+                // `\section{}` no es un atajo: es basura que hay que borrar. Un botón
+                // que mete algo que no corresponde es peor que un botón que no está.
+                if url.pathExtension.lowercased() == "tex" {
+                    BarraBloques(insertar: insertarBloque, abrirSimbolos: abrirSimbolos)
+                }
+                EditorCodigo(texto: $texto, archivoID: url.path, insercion: $insercion,
+                             sincronia: sincronia, revelar: $revelar,
+                             autocompletado: autocompletado)
+            }
         case .imagen:
             imagen
         case .pdf:

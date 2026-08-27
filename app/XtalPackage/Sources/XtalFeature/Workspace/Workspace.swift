@@ -244,6 +244,10 @@ public struct Workspace: View {
             // entradas: si tardara, lo único que pasa es que el autocompletado aparece un
             // segundo después. Nada más depende de esto.
             await autocompletado.catalogo.cargar()
+            // Las etiquetas del informe, para `\ref{`. Necesita saber de qué proyecto:
+            // son las de ESTE documento, no una lista global.
+            autocompletado.referencias.carpeta = proyecto.carpeta
+            await autocompletado.referencias.refrescar(forzar: true)
             await ajuste.refrescar()
             await secciones.recargar()
             cargarSeleccionado()
@@ -270,10 +274,15 @@ public struct Workspace: View {
                 eligiendoSimbolo = true
             }
             if let tecleado = Desarrollo.textoAAutocompletar {
-                // Se escribe de verdad en el editor, no se arma la lista a mano: lo que
-                // hay que probar es que **tipear** dispare.
+                // Va por `insercion`, que es el mismo camino que el menú de bloques y
+                // termina en `insertText` del editor.
+                //
+                // **Escribir en el binding `texto` no sirve**: `revisar()` cuelga de
+                // `textDidChange`, que AppKit solo dispara cuando teclea una persona. Con
+                // `texto +=` el texto aparecía en pantalla y la lista no abría nunca, y
+                // eso se lee como que el autocompletado está roto cuando no lo está.
                 try? await Task.sleep(for: .milliseconds(600))
-                texto += tecleado
+                insercion = .init(texto: tecleado)
             }
 
             // Disparar la sincronía sola, para poder mirarla. Ver `Desarrollo`.
@@ -683,7 +692,9 @@ public struct Workspace: View {
                          sufijo: generado(url) ? "generado" : nil)
                 VisorArchivo(url: url, texto: $texto, insercion: $insercion,
                              sincronia: sincronia, revelar: $revelar,
-                             autocompletado: autocompletado)
+                             autocompletado: autocompletado,
+                             insertarBloque: { insercion = $0.insercion },
+                             abrirSimbolos: { eligiendoSimbolo = true })
             } else {
                 Spacer(minLength: 0)
             }

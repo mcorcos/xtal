@@ -14,6 +14,10 @@ struct Inicio: View {
     @State private var creandoEjemplo = false
     @State private var creandoProyecto = false
     @State private var error: String?
+    /// La carpeta que se eligió y todavía no tiene informe. Dispara el diálogo que
+    /// ofrece crearlo ahí adentro.
+    @State private var carpetaSinInforme: URL?
+    @State private var creandoAcaAdentro = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -30,6 +34,16 @@ struct Inicio: View {
                 Recientes.agregar(url)
                 abrir(url)
             }, cancelar: { creandoProyecto = false })
+        }
+        // Elegiste una carpeta que todavía no tiene informe. No es un error: se ofrece
+        // crearlo ahí adentro, que es lo que la persona quería.
+        .alert("Crear el informe acá",
+               isPresented: Binding(get: { carpetaSinInforme != nil },
+                                    set: { if !$0 { carpetaSinInforme = nil } })) {
+            Button("Crear acá") { if let u = carpetaSinInforme { crearAcaAdentro(u) } }
+            Button("Cancelar", role: .cancel) { carpetaSinInforme = nil }
+        } message: {
+            Text("En «\(carpetaSinInforme?.lastPathComponent ?? "")» todavía no hay un informe de Xtal.\n\nSe crea adentro de esa misma carpeta, con lo que ya tenga: no se mueve ni se borra nada.")
         }
     }
 
@@ -58,7 +72,7 @@ struct Inicio: View {
                             destacado: true) { creandoProyecto = true }
 
                 BotonInicio(icono: "folder", titulo: "Abrir una carpeta",
-                            detalle: "La que tenga el xtal.toml adentro",
+                            detalle: "Si todavía no tiene informe, lo creo ahí adentro",
                             accion: elegirCarpeta)
 
                 BotonInicio(icono: "sparkles", titulo: "Probar con un ejemplo",
@@ -145,12 +159,45 @@ struct Inicio: View {
         panel.message = "Elegí la carpeta del informe"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        // Una carpeta sin `xtal.toml` **no es un error**: es una carpeta donde todavía
+        // no hay informe.
+        //
+        // Antes acá salía «no hay ningún xtal.toml, elegí la carpeta del informe», que es
+        // decirle a alguien que se equivocó cuando en realidad eligió bien: tiene su
+        // `tp4` con las cosas adentro y quiere trabajar ahí. Hacerlo empezar de cero en
+        // otro lado y después mudar los archivos a mano es exactamente el trabajo que
+        // esta app viene a sacar.
         guard Proyecto.esProyecto(url) else {
-            error = "En \(url.lastPathComponent) no hay ningún xtal.toml. Elegí la carpeta del informe, o creá uno con el ejemplo."
+            error = nil
+            carpetaSinInforme = url
             return
         }
         error = nil
         abrir(url)
+    }
+
+    /// Crea el informe **adentro** de una carpeta que ya existe, con lo que tenga adentro.
+    ///
+    /// Es `xtal init`, corrido con esa carpeta como directorio de trabajo. Solo agrega:
+    /// crea las subcarpetas del proyecto, el `xtal.toml` y los archivos que explican el
+    /// proyecto a un agente. **No toca ni mueve nada de lo que ya estaba.**
+    private func crearAcaAdentro(_ url: URL) {
+        // Flag propio y no `creandoProyecto`: ese es el que abre la pantalla «Informe
+        // nuevo». Reusarlo abriría el formulario entero justo cuando lo que se pidió fue
+        // no tener que llenarlo.
+        creandoAcaAdentro = true
+        error = nil
+        Task {
+            defer { creandoAcaAdentro = false }
+            do {
+                let r = try await XtalCLI.correr(["init"], en: url)
+                guard r.ok else { error = r.texto; return }
+                carpetaSinInforme = nil
+                abrir(url)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
     }
 
     /// Materializa el ejemplo embebido en el binario y lo abre.
