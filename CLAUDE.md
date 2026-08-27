@@ -228,6 +228,13 @@ principio y `docs/PENDIENTES.md` la tenía anotada como pendiente.
 - **Un logo declarado que no está hace fallar la carga del theme.** Ignorarlo y seguir
   deja que un typo en el nombre se vea **exactamente igual** que un theme sin logo. Lo
   que no se declara no se busca; lo que se declara tiene que existir.
+- **`--monochrome` estaba a medias, y se vio recién con un theme con logo** (2026-08-27).
+  El logo cambiaba bien al B/N, pero **el título de la carátula seguía saliendo en el
+  color de la institución**: `\xtalPrimary` se definía siempre con el hex del theme, sin
+  mirar el modo. No se ve leyendo el código —el `\color{xtalPrimary}` de la carátula
+  está bien; lo que estaba mal era el valor— y salta a la vista en el PDF. Se apaga en
+  **un solo lugar**, `build_preamble`, y de ahí lo heredan la carátula y el título del
+  formato `paper`. Le pasaba igual a ITBA: es del motor, no del theme.
 - **En monocromo se usa el logo B/N y NO se cae al de color** (`Theme::logo_for`): un
   logo a color en un informe que se pidió en blanco y negro es peor que ninguno.
 - **El logo va solo en `facultad`.** Un paper a dos columnas no lleva membrete, y el

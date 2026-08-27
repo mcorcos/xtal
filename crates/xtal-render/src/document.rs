@@ -99,7 +99,17 @@ fn format_preamble(format: DocFormat) -> String {
 /// El orden importa y es este a propósito: **lo más general primero, lo más específico
 /// último**, para que cada capa pueda pisar a la anterior. Xtal pone la base, el theme
 /// pone lo de la institución, y el informe tiene la última palabra.
-pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta, format: DocFormat) -> String {
+///
+/// `monochrome` acá decide **el valor de `\xtalPrimary`**, no si se usa: en monocromo
+/// vale negro. Es el único lugar donde hace falta apagarlo, porque todo lo que lleva el
+/// color institucional —el título de la carátula, el del formato `paper`— lo pide por
+/// ese nombre. Ver [`build_cover`].
+pub fn build_preamble(
+    theme: &Theme,
+    doc: &xtal_model::DocumentMeta,
+    format: DocFormat,
+    monochrome: bool,
+) -> String {
     let mut p = String::new();
     p.push_str("% --- Preámbulo base de Xtal ---\n");
     // La caja de texto la decide el formato: un informe de facultad quiere márgenes
@@ -143,10 +153,22 @@ pub fn build_preamble(theme: &Theme, doc: &xtal_model::DocumentMeta, format: Doc
     p.push_str("% Paleta de colores de Xtal (roles de señal + paleta extendida)\n");
     p.push_str(&pgfplots::color_preamble());
     p.push('\n');
-    p.push_str("% Color institucional del theme\n");
+    // En monocromo el color institucional vale negro, y se apaga acá y no en cada lugar
+    // que lo usa. Si no, `--monochrome` sale a medias: el logo cambia al monocromo del
+    // theme pero el título de la carátula se queda en el azul de la institución, que es
+    // justo lo que uno no quiere cuando imprime en blanco y negro.
+    p.push_str(if monochrome {
+        "% Color institucional del theme (apagado: --monochrome)\n"
+    } else {
+        "% Color institucional del theme\n"
+    });
     p.push_str(&format!(
         "\\definecolor{{xtalPrimary}}{{HTML}}{{{}}}\n",
-        theme.primary_hex
+        if monochrome {
+            "000000"
+        } else {
+            &theme.primary_hex
+        }
     ));
     p.push('\n');
     if !theme.preamble.trim().is_empty() {
@@ -535,7 +557,7 @@ pub fn assemble_parts(
     let format = resolved.format;
     let rendered = render_used_plots(project, plots, measurements, resolved.monochrome, format)?;
     Ok(DocumentParts {
-        preamble: build_preamble(theme, &project.document, format),
+        preamble: build_preamble(theme, &project.document, format, resolved.monochrome),
         cover: build_cover(project, theme, format, resolved.monochrome),
         body: build_body(&project.sections, &rendered),
         show_toc: show_toc(format, &project.sections),
@@ -622,7 +644,7 @@ pub fn assemble_split(
         render_section(&mut body, section, 0, &rendered, FigureMode::Call);
     }
 
-    let mut preamble = build_preamble(theme, &project.document, format);
+    let mut preamble = build_preamble(theme, &project.document, format, resolved.monochrome);
     preamble.push_str(&plot_macro());
 
     Ok(SplitDocument {
@@ -688,5 +710,50 @@ fn figure_of(plot: &Plot, tikz: String, format: DocFormat) -> RenderedFigure {
         tikz,
         caption,
         wide,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `--monochrome` tiene que apagar TODO, no solo el logo.
+    ///
+    /// El bug que fija: `\xtalPrimary` se definía siempre con el color del theme, así
+    /// que en monocromo el sello salía en negro pero el título de la carátula se quedaba
+    /// en el azul de la institución. Se ve enseguida en un PDF y no se ve para nada
+    /// leyendo el código, porque el `\color{xtalPrimary}` de la carátula está bien: el
+    /// que estaba mal era el valor.
+    #[test]
+    fn en_monocromo_el_color_institucional_es_negro() {
+        let theme = Theme::load("uca", None).unwrap();
+        let doc = xtal_model::DocumentMeta::default();
+
+        let color = build_preamble(&theme, &doc, DocFormat::Facultad, false);
+        assert!(
+            color.contains("\\definecolor{xtalPrimary}{HTML}{003A73}"),
+            "en color, xtalPrimary tiene que ser el del theme"
+        );
+
+        let mono = build_preamble(&theme, &doc, DocFormat::Facultad, true);
+        assert!(
+            mono.contains("\\definecolor{xtalPrimary}{HTML}{000000}"),
+            "en monocromo, xtalPrimary tiene que ser negro"
+        );
+        assert!(
+            !mono.contains("003A73"),
+            "en monocromo no puede quedar rastro del color del theme"
+        );
+    }
+
+    /// El formato `paper` pasa por el mismo preámbulo, así que hereda el arreglo. Vale
+    /// la pena fijarlo: su título también lleva `\color{xtalPrimary}`, en otra línea.
+    #[test]
+    fn el_formato_paper_tambien_apaga_el_color() {
+        let theme = Theme::load("itba", None).unwrap();
+        let doc = xtal_model::DocumentMeta::default();
+        let mono = build_preamble(&theme, &doc, DocFormat::Paper, true);
+        assert!(mono.contains("\\definecolor{xtalPrimary}{HTML}{000000}"));
+        assert!(!mono.contains("003C71"));
     }
 }
