@@ -379,11 +379,44 @@ jobs:
       - name: Cachear los paquetes de SwiftPM
         uses: actions/cache@v4
         with:
-          # El xcframework de libghostty se baja por HTTP con checksum y pesa: sin
-          # caché, cada release lo vuelve a traer entero.
-          path: ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          # **La ruta es `app/build/SourcePackages`, no la DerivedData del sistema.**
+          # El build corre con `-derivedDataPath build` desde `app/`, así que los paquetes
+          # bajados van ahí. Apuntando a `~/Library/Developer/Xcode/DerivedData` esto no
+          # cacheaba nada: se veía como un paso verde que no hacía su trabajo.
+          #
+          # Lo que ahorra: el xcframework de libghostty, que se baja por HTTP, y ahora
+          # también `mlx-swift`, que es grande.
+          path: app/build/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('app/XtalPackage/Package.resolved', 'app/Xtal.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
+          # Sin `restore-keys`: una caché de paquetes que no corresponde al
+          # `Package.resolved` de hoy es peor que no tener caché.
+
+      # Resolver los paquetes ANTES de compilar, y en su propio paso.
+      #
+      # **Esto es lo que arregla el crash de la 0.6.0.** Sin este paso, `xcodebuild`
+      # resuelve el grafo de paquetes *mientras* compila, y al terminar Xcode intenta
+      # registrar las referencias en el navegador del proyecto. Ahí revienta:
+      #
+      #     INTERNAL ERROR: Uncaught exception
+      #     -[NSMutableArray insertObjects:atIndexes:]: count of array (15) differs
+      #     from count of index set (14)
+      #     … IDESPMWorkspaceDelegate.registerDependencyFileReferences
+      #
+      # Es un bug de Xcode y el stack es todo suyo, así que no dice qué hacer. Con la
+      # resolución hecha aparte, el grafo ya está armado y estable cuando arranca el
+      # build, y el camino que crashea no se recorre. Los 15 paquetes aparecieron al
+      # sumar `mlx-swift-lm` y `swift-transformers` para el autocomplete.
+      #
+      # De paso: si la resolución falla —un repo caído, un checksum que no da— el error
+      # dice eso, en vez de salir como un fallo del build treinta líneas más adelante.
+      - name: Resolver las dependencias de SwiftPM
+        working-directory: app
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project Xtal.xcodeproj \
+            -scheme Xtal \
+            -derivedDataPath build
 
       - name: Compilar la app
         working-directory: app
