@@ -1240,6 +1240,41 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     #expect(!ruta.contains("/Caches/"))
 }
 
+@Test func el_synctex_de_otra_maquina_se_reancla_en_este_proyecto() throws {
+    // El `.synctex.gz` guarda las rutas absolutas de la máquina que compiló. Copiar el
+    // informe a otra carpeta, clonarlo en otra máquina o abrirlo desde un worktree
+    // dejaba esas rutas apuntando a un lugar que no existe: no matcheaba ningún archivo
+    // y la sincronía "no andaba" sin dar ningún error. Es el mismo problema de rutas que
+    // ya estaba anotado para el historial y para Windows.
+    let fm = FileManager.default
+    let proyecto = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-test-\(UUID().uuidString)")
+    let secciones = proyecto.appendingPathComponent("secciones")
+    try fm.createDirectory(at: secciones, withIntermediateDirectories: true)
+    try fm.createDirectory(at: proyecto.appendingPathComponent("salida"),
+                           withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: proyecto) }
+    let modelo = secciones.appendingPathComponent("03-modelo.tex")
+    try "\\section{Modelo}".write(to: modelo, atomically: true, encoding: .utf8)
+
+    // Un synctex mínimo, con la ruta de OTRA máquina.
+    let texto = """
+    SyncTeX Version:1
+    Input:1:/Users/otro/dev/tp/salida/../secciones/03-modelo.tex
+    Unit:1
+    Content:
+    {1
+    (1,3:0,30000000:20000000,600000,200000
+    )
+    }
+    """
+    let st = SyncTeX.parsear(texto, base: proyecto.appendingPathComponent("salida"),
+                             fecha: Date())
+    let cajas = st.cajas(archivo: modelo, lineas: 1...5) { _ in 842 }
+    #expect(!cajas.isEmpty, "la ruta de otra máquina no se reancló en este proyecto")
+    #expect(cajas.first?.linea == 3)
+}
+
 // MARK: - Actualizador
 //
 // Se testea lo que decide solo y no se ve: comparar dos versiones, encontrar un hash en

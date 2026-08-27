@@ -375,6 +375,17 @@ crece hacia abajo** al revés que en PDFKit, y los `Input:` que nombran cada arc
 están todos en el encabezado** — aparecen intercalados en el contenido, a medida que el
 motor abre cada archivo.
 
+**Y una cuarta, que se descubrió tarde: el `.synctex.gz` guarda las rutas absolutas de
+la máquina que compiló.** Con eso alcanza mientras el informe no se mueva; en cuanto se
+copia a otra carpeta, se clona en otra máquina o se abre desde un worktree, esas rutas
+apuntan a un lugar que no tiene nada que ver, no matchea ningún archivo y **la sincronía
+deja de andar sin dar ningún error**. Ahora las rutas se vuelven a anclar en el proyecto
+que se está mirando: si la ruta no cae adentro de esta carpeta, se busca su cola
+(`secciones/03-modelo.tex`) acá. No alcanza con preguntar si el archivo existe — la
+carpeta original puede seguir existiendo en la misma máquina, y ahí se elegiría el
+archivo de la otra copia. Es el primo del problema de rutas que ya estaba anotado para
+el historial (los symlinks de `/var/folders`) y para Windows.
+
 Una línea de LaTeX produce un árbol de cajas anidadas: la ecuación entera, cada fracción,
 cada subíndice. Se pintan **solo las maximales** —lo que está adentro de otra ya elegida
 se descarta— y queda un rectángulo por línea impresa en vez de la misma zona pintada

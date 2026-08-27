@@ -971,6 +971,16 @@ exactamente el agujero que tapa SyncTeX, y ahora está.
   `main.tex` generado no lleva a ningún lado a propósito.
 - La búsqueda por texto **no se tiró**: quedó de respaldo para cuando no hay mapa (un
   proyecto compilado con una versión anterior, un `.tex` externo).
+- **Las rutas del synctex se reanclan en el proyecto que se está mirando** (2026-08-27).
+  El archivo guarda **las rutas absolutas de la máquina que compiló**, así que el mapa
+  servía solo mientras el informe no se moviera: copiado a otra carpeta, clonado en otra
+  máquina o abierto desde un worktree, no matcheaba nada y **la sincronía dejaba de andar
+  sin dar ningún error**. Lo encontraron los dos tests de SyncTeX, que fallaban en
+  cualquier lado que no fuera `~/dev/personal/xtal` — y no se notó antes porque **el CI
+  no corre los tests de Swift**. Ahora, si la ruta no cae adentro de esta carpeta, se
+  busca su cola (`secciones/03-modelo.tex`) acá. **No alcanza con preguntar si el archivo
+  existe**: la carpeta original puede seguir existiendo en la misma máquina y se elegiría
+  el archivo de la otra copia. Es el primo del problema de symlinks del historial.
 - **`main.synctex.gz` del ejemplo va commiteado**, con el mismo criterio que el PDF: sin
   él, los tres tests de SyncTeX se saltean solos en cualquier máquina que no haya
   compilado el ejemplo, que es justo la de otro.
