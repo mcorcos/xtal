@@ -263,10 +263,19 @@ El job `release` deja en la Release un `manifiestos-<version>.tar.gz` con los tr
 archivos ya generados y con los hashes de esa Release adentro. Publicarlos es copiarlos,
 no volver a armarlos.
 
-### scoop — el que se actualiza solo
+> **Ninguno de los dos está publicado todavía** (verificado el 27 de agosto de 2026):
+> `mcorcos/scoop-xtal` no existe y `manifests/u/UNIT` no está en `microsoft/winget-pkgs`,
+> así que `scoop install xtal` y `winget install UNIT.Xtal` fallan. Lo que sigue es cómo
+> se ponen a andar. El README dice lo mismo, y hasta que esto cambie **tiene que seguir
+> diciéndolo**: una instrucción de instalación que no anda es peor que no ofrecerla.
 
-Es el gemelo del tap de Homebrew. El bucket es un repo aparte, **`mcorcos/scoop-xtal`**,
-con un workflow que mira la última Release cada hora y regenera su manifiesto con:
+### scoop — el que se actualizará solo
+
+Es el gemelo del tap de Homebrew. El bucket va en un repo aparte, **`mcorcos/scoop-xtal`**
+—que **todavía hay que crear**: los pasos están en
+[`packaging/scoop/bucket/LEEME-COMO-CREARLO.md`](../packaging/scoop/bucket/LEEME-COMO-CREARLO.md),
+y el contenido ya está versionado ahí—, con un workflow que mira la última Release cada
+hora y regenera su manifiesto con:
 
 ```
 packaging/scoop/render-manifest.sh <version> --from-release

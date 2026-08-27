@@ -592,7 +592,13 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
     cae a la de adentro, así la app y la terminal nunca corren versiones distintas.
   - **Cuatro caminos, ninguno con administrador**: el `.exe` de la Release,
     `winget install UNIT.Xtal`, `irm …/install.ps1 | iex`, y `scoop install xtal` para la
-    CLI sola.
+    CLI sola. **De los cuatro andan dos** (verificado el 2026-08-27): el `.exe` y el
+    `install.ps1`. Los manifiestos de scoop y winget se generan solos y viajan en la
+    Release, pero **publicarlos es un paso a mano que nadie hizo todavía** — el bucket
+    `mcorcos/scoop-xtal` no existe y `UNIT.Xtal` no está en `microsoft/winget-pkgs`. El
+    README los sacó hasta que estén: una instrucción de instalación que no anda es peor
+    que no ofrecerla. Es la segunda vez que este cartel promete un `winget install` que
+    no existe.
   - **scoop es el Homebrew de Windows** y se resolvió igual que el tap:
     `packaging/scoop/render-manifest.sh` con los mismos dos modos, y un bucket aparte que
     se actualiza solo leyendo el `SHA256SUMS`. Cero secrets.
