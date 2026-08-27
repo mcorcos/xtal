@@ -9,7 +9,10 @@
 PRODUCT_NAME = Xtal
 PRODUCT_DISPLAY_NAME = Xtal
 PRODUCT_BUNDLE_IDENTIFIER = com.unit.xtal
-MARKETING_VERSION = 0.1.0
+// La version de la app va clavada a la del workspace de Rust (Cargo.toml).
+// El job `check` de .github/workflows/release.yml no publica si no coinciden:
+// una app que dice 0.1.0 hablándole a una CLI 0.3.2 no se puede diagnosticar.
+MARKETING_VERSION = 0.3.2
 CURRENT_PROJECT_VERSION = 1
 
 // ==========================================

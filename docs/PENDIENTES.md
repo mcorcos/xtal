@@ -204,11 +204,48 @@ del CI en Windows va a decir bastante; el primer usuario de verdad, más.
 Tampoco está **firmada**: SmartScreen va a mostrar «Windows protegió su PC» la primera
 vez. Eso necesita un certificado de firma de código, que se paga.
 
+### 8. La app de Mac se distribuye — HECHO (27 de agosto de 2026), pedido de Manu
+
+Existía desde hacía meses y **no se publicaba en ningún lado**. Para tenerla había que
+clonar el repo, abrir Xcode y compilarla: la única forma de dársela a alguien era pasarle
+un `.app` por AirDrop, que del otro lado macOS bloquea. Windows tenía instalador y Mac no.
+
+Ahora son **dos comandos, y cada uno se trae todo**:
+
+```bash
+brew install mcorcos/xtal/xtal              # la CLI, con tectonic y ngspice
+brew install --cask mcorcos/xtal/xtal-app   # la app; se trae la CLI sola
+```
+
+- **Job `app-mac`** en el release: `xcodebuild` en un runner de macOS, app **universal**
+  (arm64 + x86_64, que el xcframework de libghostty tiene las dos slices), comprimida con
+  `ditto` — con `zip` un bundle de macOS llega roto del otro lado.
+- **Cask `xtal-app`** en el tap, generado por `packaging/homebrew/render-cask.sh`, gemelo
+  del de la fórmula y con los mismos dos modos. Declara `depends_on formula:` sobre la
+  CLI: por eso alcanza con un comando.
+- **ngspice pasó a ser dependencia de la fórmula.** Antes quedaba afuera "porque no todo
+  el mundo simula", y el resultado era que el que sí simulaba se enteraba de que le
+  faltaba recién cuando `xtal sim` fallaba, a mitad del TP.
+- **La version de la app entró al job `check`**, como las tres de la app de Windows.
+  Estaba clavada en `0.1.0` desde el principio mientras la CLI iba por `0.3.2`.
+
+**Lo que sigue abierto: la firma.** La app va firmada **ad-hoc**, no con un Developer ID
+de Apple. En Apple Silicon un binario sin ninguna firma directamente no corre, así que
+ad-hoc es el piso. Lo que cuesta: Homebrew le pone cuarentena a todo lo que baja, y sobre
+una app sin Developer ID esa cuarentena hace que macOS diga «no se puede abrir» y **no**
+ofrezca el «Abrir igualmente» de Ajustes. El cask se la saca en su `postflight`, así que
+por ese camino no se nota; **el que baje el zip a mano de la Release sí se come el
+bloqueo** y tiene que correr `xattr -dr com.apple.quarantine`.
+
+Firmar de verdad son 99 dólares al año más notarizar cada build, y el certificado tendría
+que vivir como secret de un repo público. Es la misma decisión que la firma de Windows:
+cuesta plata, y hasta que alguien la ponga se documenta y se sigue.
+
 ---
 
 ## Backlog de producto (esto ya no es pulido)
 
-### 8. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
+### 9. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
 
 Que `xtal circuit import` acepte el `.asc` que dibujás en LTspice y lo convierta a
 netlist. Hoy solo toma netlists ya en texto.
@@ -222,11 +259,11 @@ escribir a ciegas: hay que probar el `-netlist` de punta a punta. Instalarlo y l
 
 El "re-netlistar al guardar el `.asc`" (watch) va junto con esto.
 
-### 9. Capa 2 — ensamblar circuitos desde bloques curados
+### 10. Capa 2 — ensamblar circuitos desde bloques curados
 
 Bloques con puertos declarados que se conectan entre sí. Está en `cristal-spec.md`.
 
-### 10. Capa 3 — diseñar desde una especificación
+### 11. Capa 3 — diseñar desde una especificación
 
 Loop de LLM + ngspice, donde **ngspice es el juez, no la IA**. Investigación, no
 producto.

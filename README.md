@@ -72,7 +72,25 @@ abajo), o `install.ps1 -SinApp`.
 `install.ps1` baja el binario, verifica el checksum, lo deja en
 `%LOCALAPPDATA%\Programs\xtal` y lo agrega al PATH del usuario.
 
-**Homebrew** (macOS y Linux) — instala también Tectonic:
+**macOS** — un comando por cosa, y cada uno se trae todo lo que necesita:
+
+```bash
+# La CLI. Viene con el motor LaTeX (tectonic) y el simulador (ngspice).
+brew install mcorcos/xtal/xtal
+
+# La app de escritorio. Se trae la CLI sola, así que con este solo alcanza.
+brew install --cask mcorcos/xtal/xtal-app
+```
+
+No hace falta correr nada más: la configuración, los themes y el skill del agente se
+escriben en el primer comando que corras.
+
+> La app **no está firmada con un Developer ID de Apple**. Instalada por el cask no
+> molesta — el cask le saca la cuarentena —, pero bajada a mano de la Release,
+> macOS la bloquea: hay que sacarle el atributo con
+> `xattr -dr com.apple.quarantine /Applications/Xtal.app`.
+
+**Linux** — con Homebrew, que instala también Tectonic:
 
 ```bash
 brew install mcorcos/xtal/xtal

@@ -405,6 +405,59 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
   ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
   va a advertir la primera vez.
 
+### La app de Mac se instala con un comando — HECHO (2026-08-27), pedido de Manu
+La app existía desde hacía meses y **no se publicaba en ningún lado**. Para tenerla había
+que clonar el repo y abrir Xcode. Windows tenía instalador y Mac no: la única forma de
+dársela a alguien era pasarle el `.app` a mano, que del otro lado macOS bloquea.
+Ver `docs/RELEASING.md` («La app de escritorio de macOS»).
+- **Dos comandos, y cada uno se trae todo**: `brew install mcorcos/xtal/xtal` para la CLI
+  y `brew install --cask mcorcos/xtal/xtal-app` para la app. El cask declara
+  `depends_on formula:` sobre la CLI, así que con ese solo alcanza.
+- **Cask y no fórmula.** Homebrew separa las dos cosas a propósito: una fórmula deja
+  binarios en su prefijo, un cask deja una `.app` en `/Applications`, que es donde
+  Launchpad y Spotlight la buscan. `packaging/homebrew/render-cask.sh` es el gemelo de
+  `render-formula.sh`, con los mismos dos modos (`<dir>` y `--from-release`) por la misma
+  razón: la plantilla vive en un solo lugar y el workflow del tap la baja por HTTP.
+- **Job `app-mac`** en el release: `xcodebuild` en un runner de macOS. Tres cosas que
+  importan:
+  1. **La app sale universal** (`ARCHS = "arm64 x86_64"`), porque el xcframework de
+     libghostty trae la slice `macos-arm64_x86_64`. Un zip solo para las dos
+     arquitecturas, y el cask no tiene que adivinar. El job lo **verifica con
+     `lipo -info`**: si algún día el xcframework deja de traer la de Intel, el build
+     sigue andando y la app sale solo ARM, y eso tiene que ser un error del CI y no un
+     bug de alguien.
+  2. **Se comprime con `ditto`, no con `zip`.** Es lo que preserva los symlinks y los
+     metadatos de un bundle de macOS. Con `zip`, el `.app` llega roto del otro lado.
+  3. **El Xcode se elige tomando el mayor que haya** (`ls -d /Applications/Xcode*.app |
+     sort -V | tail -1`), no clavando una ruta: el paquete pide swift-tools-version 6.1
+     y el `/Applications/Xcode.app` de default del runner no siempre es el más nuevo.
+- **El binario `xtal` NO va adentro del `.app`**, al revés que en Windows. Ahí el
+  instalador lo trae adentro porque no hay gestor de paquetes de fábrica; acá el gestor
+  es este mismo, y Homebrew instala la fórmula primero. Así la app y la terminal nunca
+  corren versiones distintas.
+- **La firma es el punto flojo, y es plata.** La app va **ad-hoc** (`codesign --sign -`):
+  en Apple Silicon un binario sin ninguna firma directamente no corre, así que ad-hoc es
+  el piso, no un lujo. Lo que cuesta: Homebrew le pone cuarentena a todo lo que baja, y
+  sobre una app sin Developer ID esa cuarentena hace que macOS diga «no se puede abrir»
+  y **no** ofrezca el «Abrir igualmente» de Ajustes — el único camino queda ser el
+  `xattr` a mano, que es justo lo que un instalador tiene que evitar. Por eso el cask se
+  la saca en su `postflight`. El que baje el zip a mano de la Release sí se come el
+  bloqueo. Con un Developer ID se borra esa línea y no cambia nada más.
+- **ngspice pasó a ser dependencia de la fórmula.** Antes quedaba afuera «porque no todo
+  el mundo simula», y el resultado era que el que sí simulaba se enteraba de que le
+  faltaba recién cuando `xtal sim` fallaba, a mitad del TP. Un comando tiene que dejar
+  todo andando.
+- **La version de la app entró al job `check`.** `app/Config/Shared.xcconfig` decía
+  `0.1.0` desde el primer día mientras la CLI iba por `0.3.2`. El chequeo va aparte del
+  loop de la app de Windows: un `.xcconfig` no lleva comillas.
+- **Dos cosas más que salían de acá**, arregladas de paso:
+  - `xtal doctor` pintaba con **✗ roja** cualquier dependencia ausente, opcional o no. El
+    campo `kind` existía y esa línea no lo miraba, así que un `pdflatex` que falta se
+    leía como «esto está roto». Ahora va punto gris, igual que LTspice.
+  - `docs/RELEASING.md` decía «**el binario `xtal` no va adentro** del instalador de
+    Windows», que es exactamente lo contrario de lo que hace el workflow desde el PR #11.
+    Es la misma clase de párrafo viejo que causó la auditoría de la app de Windows.
+
 ### Dos flechas, no una que adivine — HECHO (2026-08-26), pedido de Manu
 Manu lo probó y no andaba: la autodetección de dirección erraba. La razón no se arregla —
 **casi siempre hay selección de los dos lados**: uno marca algo en el PDF para mirarlo,

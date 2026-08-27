@@ -73,6 +73,17 @@ jobs:
               exit 1
             fi
           done
+
+          # La app de Mac no es otro workspace de Rust: es un proyecto de Xcode, y su
+          # version vive en un .xcconfig, sin comillas. Por eso va aparte del loop de
+          # arriba, que espera un valor entrecomillado.
+          APP_MAC="$(grep -m1 '^MARKETING_VERSION' app/Config/Shared.xcconfig \
+                     | sed -E 's/.*= *([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          if [ "$APP_MAC" != "$CARGO_VERSION" ]; then
+            echo "::error::app/Config/Shared.xcconfig dice $APP_MAC pero el workspace dice $CARGO_VERSION. Sincronizalos."
+            exit 1
+          fi
+
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG_VERSION="${GITHUB_REF_NAME#v}"
             if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
@@ -310,12 +321,103 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  app-mac:
+    name: app de escritorio (macOS)
+    needs: check
+    # `macos-14` y posteriores son runners ARM. El build es **universal** igual
+    # (`ARCHS = arm64 x86_64`): el xcframework de libghostty trae la slice
+    # `macos-arm64_x86_64`, así que una sola app anda en Apple Silicon y en Intel y no
+    # hay que publicar dos zips ni que el cask adivine cuál bajar.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Elegir Xcode
+        # El runner trae varios y el `/Applications/Xcode.app` de default no siempre es
+        # el más nuevo. El paquete pide swift-tools-version 6.1 (Xcode 16.3+), así que
+        # se elige el mayor que haya en vez de clavar una ruta: una imagen nueva del
+        # runner no rompe el release, y una vieja falla con un error que se entiende.
+        run: |
+          set -euo pipefail
+          XC="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          echo "Uso $XC"
+          sudo xcode-select -switch "$XC"
+          xcodebuild -version
+
+      - name: Cachear los paquetes de SwiftPM
+        uses: actions/cache@v4
+        with:
+          # El xcframework de libghostty se baja por HTTP con checksum y pesa: sin
+          # caché, cada release lo vuelve a traer entero.
+          path: ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('app/XtalPackage/Package.resolved', 'app/Xtal.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Compilar la app
+        working-directory: app
+        # Se firma **ad-hoc** (`CODE_SIGN_IDENTITY=-`), no con un Developer ID: este
+        # repo no tiene certificado de Apple ni forma de guardar uno sin meter un
+        # secret. En Apple Silicon un binario sin ninguna firma directamente no corre,
+        # así que ad-hoc es el piso, no un lujo.
+        #
+        # Lo que cuesta: Gatekeeper marca la app al bajarla. El cask le saca la
+        # cuarentena en su `postflight` — ver packaging/homebrew/render-cask.sh.
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Xtal.xcodeproj \
+            -scheme Xtal \
+            -configuration Release \
+            -derivedDataPath build \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Firmar ad-hoc y verificar
+        working-directory: app
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/Xtal.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          # Que la app sea universal de verdad. Si el xcframework algún día deja de
+          # traer la slice de Intel, el build sigue andando y la app sale solo ARM:
+          # esto lo convierte en un error del CI en vez de en un bug de alguien.
+          lipo -info "$APP/Contents/MacOS/Xtal" | tee /dev/stderr | grep -q x86_64
+          lipo -info "$APP/Contents/MacOS/Xtal" | grep -q arm64
+
+      - name: Empaquetar
+        id: pack
+        working-directory: app
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check.outputs.version }}"
+          mkdir -p ../dist
+          # `ditto` y no `zip`: es lo que preserva los symlinks y los metadatos de un
+          # bundle de macOS. Un `.app` comprimido con `zip` llega roto del otro lado.
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/Build/Products/Release/Xtal.app \
+            "../dist/Xtal-${VERSION}-macos.zip"
+          ls -la ../dist
+
+      - uses: actions/upload-artifact@v5
+        with:
+          # El prefijo `xtal-` no es decorativo: el job `release` baja los artifacts
+          # con `pattern: xtal-*`. Sin él, el zip no llega a la Release.
+          name: xtal-app-macos
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+
   # ---------------------------------------------------------------------------
   # 4. Publicar la Release
   # ---------------------------------------------------------------------------
   release:
     name: publicar release
-    needs: [check, build, app]
+    needs: [check, build, app, app-mac]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -325,8 +427,9 @@ jobs:
       - name: Bajar todos los paquetes
         uses: actions/download-artifact@v5
         with:
-          # Los binarios (`xtal-*`) y la app (`xtal-app-windows`). `docs-assets` no:
-          # ya viaja adentro de cada paquete de la CLI.
+          # Los binarios (`xtal-*`) y las dos apps (`xtal-app-windows`,
+          # `xtal-app-macos`). `docs-assets` no: ya viaja adentro de cada paquete
+          # de la CLI.
           pattern: xtal-*
           path: dist
           merge-multiple: true

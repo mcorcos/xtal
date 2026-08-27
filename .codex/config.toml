@@ -1,0 +1,6 @@
+[mcp_servers.xcodebuild]
+command = "npx"
+args = ["-y", "xcodebuildmcp@2.7.0", "mcp"]
+
+[mcp_servers.xcodebuild.env]
+XCODEBUILDMCP_ENABLED_WORKFLOWS = "macos,project-scaffolding,project-discovery,session-management,ui-automation"
