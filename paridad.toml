@@ -1,0 +1,206 @@
+# Qué archivo de la app de Mac se corresponde con cuál de la app de Windows.
+#
+# ## Para qué existe
+#
+# Xtal tiene DOS apps de escritorio, escritas en lenguajes distintos, que tienen que
+# comportarse igual: `app/` en Swift y `app-win/` en Rust + TypeScript. Ya pasó una vez
+# que se separaron —la primera version de la de Windows salió con 25 divergencias, y se
+# descubrió mirando un retrato de la pantalla, no leyendo el código—, y nada impedía que
+# volviera a pasar.
+#
+# Este archivo es lo que hace que se pueda detectar solo.
+#
+# ## Qué NO hace
+#
+# **No bloquea un merge.** Que la app de Mac se adelante mientras se trabaja es normal y
+# está bien: se prueba primero en la máquina que uno tiene adelante. Un chequeo que
+# frenara cada PR obligaría a portar todo en el momento, y eso termina en dos ports a
+# medias en vez de uno bueno.
+#
+# Lo que sí importa es **qué se publica**: una Release es lo que la gente baja, y ahí las
+# dos apps salen con el mismo número de version. Si la de Windows quedó atrás, el usuario
+# de Windows recibe una app que dice 0.6.0 y no hace lo que la de Mac hace con ese mismo
+# número — y no tiene forma de saberlo.
+#
+# Por eso el chequeo corre **en el release**, compara contra el tag anterior, y lo que
+# encuentra va anotado en las notas de la Release. Ver `dev/paridad.py` y el job
+# `paridad` de `.github/workflows/release.yml`.
+#
+# ## Cómo se lee cada entrada
+#
+#   mac      = el archivo de la app de Swift
+#   win      = uno o más archivos de la app de Windows que hacen lo mismo
+#   por_que  = qué es esa pieza, en una línea
+#
+# Un archivo que todavía no tiene contraparte va con `win = []` y un `pendiente` que
+# explica por qué. Eso no es una omisión: es una diferencia conocida y anotada.
+
+# ---------------------------------------------------------------------------
+# Núcleo: lo que la app sabe hacer, sin pantalla
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Arbol.swift"
+win = ["app-win/src-tauri/src/arbol.rs"]
+por_que = "el árbol de archivos del proyecto, y qué se lista y qué no"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/XtalCLI.swift"
+win = ["app-win/src-tauri/src/xtal_cli.rs"]
+por_que = "cómo la app encuentra y corre el binario `xtal`"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Proyecto.swift"
+win = ["app-win/src-tauri/src/proyecto.rs"]
+por_que = "abrir un proyecto, leerlo y guardarlo"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Secciones.swift"
+win = ["app-win/src-tauri/src/secciones.rs"]
+por_que = "las secciones del informe, que salen del xtal.toml"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Git.swift"
+win = ["app-win/src-tauri/src/git.rs"]
+por_que = "el estado de git del proyecto"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Vigia.swift"
+win = ["app-win/src-tauri/src/vigia.rs"]
+por_que = "mirar el disco y avisar cuando algo cambió"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Ordenes.swift"
+win = ["app-win/src-tauri/src/ordenes.rs", "app-win/src/core/ordenes.ts"]
+por_que = "las órdenes que llegan por `xtal://`, que es como el agente maneja la app"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/ErrorCompilacion.swift"
+win = ["app-win/src/core/errorCompilacion.ts"]
+por_que = "parsear el log de LaTeX y sacar el error que importa"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Estado.swift"
+win = ["app-win/src/core/api.ts"]
+por_que = "lo que devuelve `xtal --json status`: el plan cruzado contra el disco"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Recientes.swift"
+win = ["app-win/src-tauri/src/proyecto.rs"]
+por_que = "las carpetas abiertas últimamente"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Core/Desarrollo.swift"
+win = ["app-win/dev/retratar.mjs", "app-win/maqueta.html"]
+por_que = "los ganchos para poder probar la app sin manejarla a mano"
+
+# ---------------------------------------------------------------------------
+# Diseño
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Design/Tokens.swift"
+win = ["app-win/src/design/tokens.css"]
+por_que = "los colores, tamaños y espaciados. Que se separen es que las dos apps dejen de parecerse"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Design/Componentes.swift"
+win = ["app-win/src/design/Icono.tsx", "app-win/src/design/DialogoTitulo.tsx"]
+por_que = "los pedazos de interfaz que se repiten"
+
+# ---------------------------------------------------------------------------
+# Editor y PDF
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/EditorCodigo.swift"
+win = ["app-win/src/editor/EditorCodigo.tsx"]
+por_que = "el editor de texto, y cuándo guarda"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/VisorPDF.swift"
+win = ["app-win/src/editor/VisorPDF.tsx"]
+por_que = "el visor del PDF"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/SyncTeX.swift"
+win = ["app-win/src-tauri/src/synctex.rs"]
+por_que = "el parser de SyncTeX: de una línea del fuente a un rectángulo del PDF"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/Sincronia.swift"
+win = ["app-win/src/editor/sincronia.ts"]
+por_que = "las dos flechas entre el editor y el PDF"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/Bloques.swift"
+win = ["app-win/src/editor/bloques.ts"]
+por_que = "los bloques de LaTeX que se insertan de a uno"
+
+# ---------------------------------------------------------------------------
+# Pantallas
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Raiz.swift"
+win = ["app-win/src/App.tsx"]
+por_que = "qué pantalla se muestra: inicio, workspace o ajustes"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/Workspace.swift"
+win = ["app-win/src/workspace/Workspace.tsx"]
+por_que = "la pantalla principal. Es el archivo más grande de las dos apps y el que más se separa"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/ArbolArchivos.swift"
+win = ["app-win/src/workspace/ArbolArchivos.tsx"]
+por_que = "el lateral con los archivos"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/PanelError.swift"
+win = ["app-win/src/workspace/PanelError.tsx"]
+por_que = "los errores de compilación, detrás del PDF"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/PanelEstado.swift"
+win = ["app-win/src/workspace/Workspace.tsx"]
+por_que = "«qué me falta», adentro de la app. En Windows vive adentro de Workspace.tsx"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/BarraGit.swift"
+win = ["app-win/src/workspace/BarraGit.tsx"]
+por_que = "la barra de git"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Welcome/Inicio.swift"
+win = ["app-win/src/welcome/Inicio.tsx"]
+por_que = "la pantalla de arranque: abrir, crear o traer el ejemplo"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Welcome/ProyectoNuevo.swift"
+win = ["app-win/src/welcome/ProyectoNuevo.tsx"]
+por_que = "crear un informe: nombre, carpeta, institución y formato"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Settings/Ajustes.swift"
+win = ["app-win/src/settings/Ajustes.tsx"]
+por_que = "los ajustes"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Settings/Agentes.swift"
+win = ["app-win/src/settings/Ajustes.tsx"]
+por_que = "el panel de agentes de IA. En Windows es una sección de la pantalla de ajustes"
+
+# ---------------------------------------------------------------------------
+# Terminal
+# ---------------------------------------------------------------------------
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Terminal/Terminal.swift"
+win = ["app-win/src/terminal/Terminal.tsx", "app-win/src-tauri/src/pty.rs"]
+por_que = "la terminal integrada. En Mac la dibuja libghostty; en Windows, ConPTY + xterm.js"
+
+[[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Terminal/Sesiones.swift"
+win = ["app-win/src/terminal/sesiones.ts"]
+por_que = "las sesiones de terminal, que no se mueren al cambiar de pantalla"

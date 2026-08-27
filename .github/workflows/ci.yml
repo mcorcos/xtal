@@ -46,6 +46,18 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      # El informe de paridad entre las dos apps de escritorio NO frena un merge: que la
+      # de Mac se adelante mientras se trabaja está bien, y ese informe corre en el
+      # release (job `paridad` de release.yml).
+      #
+      # Lo que SÍ frena un merge es que el mapa apunte a un archivo que no existe. Si
+      # alguien renombra o mueve un archivo y no toca `paridad.toml`, ese par deja de
+      # vigilar y **se ve exactamente igual que uno que funciona**. Es el mismo criterio
+      # que el de un logo declarado que no está en el theme: lo que no se declara no se
+      # busca, lo que se declara tiene que existir.
+      - name: el mapa de paridad apunta a archivos que existen
+        run: python3 dev/paridad.py --lista
+
   test:
     name: tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
