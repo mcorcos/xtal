@@ -173,7 +173,16 @@ public enum Desarrollo {
             // visible, el retrato salía con la pantalla de atrás y la hoja no aparecía —
             // se leía como que el diálogo no se había abierto, cuando sí. Vale para el
             // selector de símbolos, para «Informe nuevo» y para cualquier diálogo.
-            let candidata = NSApp.keyWindow
+            // Y si hay un panel flotante abierto —la lista del autocompletado— ese gana
+            // sobre todo: es lo único que uno quiere mirar cuando lo está probando, y no
+            // se dibuja adentro de la ventana principal, así que de otro modo no sale en
+            // ningún retrato. Va primero porque cuando la app no tiene el foco (que es lo
+            // normal lanzándola con `open` desde una sesión sin manos) `keyWindow` es nil.
+            let panel = NSApp.windows.first {
+                $0.isVisible && $0 is NSPanel && $0.contentView != nil
+            }
+            let candidata = panel
+                ?? NSApp.keyWindow
                 ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
             guard let ventana = candidata, let vista = ventana.contentView else { return }
             anotar("ventana: \(ventana.className) · clave: \(NSApp.keyWindow != nil)")

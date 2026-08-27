@@ -154,6 +154,12 @@ pendiente = "la grilla de símbolos con historial (⌘⇧E en Mac)"
 por_que = "el selector de símbolos"
 
 [[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Editor/Referencias.swift"
+win = []
+pendiente = "las etiquetas del informe para `\\ref{`, con su epígrafe. Los datos ya vienen del núcleo (`xtal refs --json`): falta la lista y el detector del contexto"
+por_que = "el autocompletado de referencias"
+
+[[par]]
 mac = "app/XtalPackage/Sources/XtalFeature/Editor/Bloques.swift"
 win = ["app-win/src/editor/bloques.ts"]
 por_que = "los bloques de LaTeX que se insertan de a uno"

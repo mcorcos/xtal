@@ -188,6 +188,12 @@ struct EditorCodigo: NSViewRepresentable {
         /// Se usa `insertText(_:replacementRange:)` y no tocar el `textStorage` a mano
         /// justamente por eso: escribiendo directo en el storage, ⌘Z no deshace la
         /// inserción y el usuario pierde el control de su propio documento.
+        /// `@MainActor` porque toca la vista y el autocompletado, que lo son.
+        ///
+        /// Los métodos del delegado (`textDidChange`, `doCommandBy`) lo heredan del SDK;
+        /// este es propio y hay que decirlo. Sin eso, el paquete compila con `xcodebuild`
+        /// pero `swift test` —que va en modo estricto— lo rechaza.
+        @MainActor
         func insertar(_ pedido: Insercion, en tv: NSTextView) {
             tv.insertText(pedido.texto, replacementRange: tv.selectedRange())
             if pedido.retroceso > 0 {
@@ -199,6 +205,11 @@ struct EditorCodigo: NSViewRepresentable {
             escribiendo = false
             colorear(tv)
             tv.window?.makeFirstResponder(tv)
+            // Después de meter un bloque, revisar dónde quedó el cursor. Meter un
+            // `\ref{}` y que la lista de etiquetas aparezca sola es lo que uno espera;
+            // con un `\section{}` no pasa nada, porque adentro de las llaves no hay
+            // ningún disparador.
+            padre.autocompletado.revisar(tv)
         }
 
         init(_ p: EditorCodigo) {

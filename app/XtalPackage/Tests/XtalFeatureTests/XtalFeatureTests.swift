@@ -650,3 +650,69 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     c.olvidarHistorial()
     #expect(c.recientes.isEmpty)
 }
+
+// MARK: - Autocompletado de referencias
+
+// Adentro de un `\ref{` lo único válido es una etiqueta del documento. Detectar ese
+// contexto es lo que decide si se ofrecen etiquetas o comandos de LaTeX, y equivocarse
+// ofrece siempre lo que no sirve.
+
+@Test func adentro_de_ref_se_detecta_la_consulta() {
+    let t = "mirá la \\ref{fig:" as NSString
+    let r = Autocompletado.referencia(en: t, cursor: t.length)
+    #expect(r?.consulta == "fig:")
+    // El rango es lo tipeado DESPUÉS de la llave: al aceptar se reemplaza solo eso y la
+    // llave que cierra queda donde estaba.
+    #expect(r?.rango.length == 4)
+}
+
+@Test func la_llave_recien_abierta_ya_ofrece_todo() {
+    let t = "\\ref{" as NSString
+    let r = Autocompletado.referencia(en: t, cursor: t.length)
+    #expect(r != nil)
+    #expect(r?.consulta == "")
+}
+
+@Test func los_otros_comandos_de_referencia_tambien_valen() {
+    for cmd in ["cref", "eqref", "autoref", "pageref", "nameref"] {
+        let t = "\\\(cmd){tab:a" as NSString
+        #expect(Autocompletado.referencia(en: t, cursor: t.length)?.consulta == "tab:a",
+                "\\\(cmd) tendría que disparar")
+    }
+}
+
+@Test func un_comando_que_no_lleva_etiqueta_no_dispara() {
+    // Sin esto, escribir adentro de un `\textbf{}` ofrecería las figuras del informe.
+    for t in ["\\textbf{hola", "\\caption{la medida", "\\section{El modelo"] {
+        let s = t as NSString
+        #expect(Autocompletado.referencia(en: s, cursor: s.length) == nil, "«\(t)» no")
+    }
+}
+
+@Test func con_la_referencia_ya_cerrada_no_dispara() {
+    let t = "\\ref{fig:bode} y sigo" as NSString
+    #expect(Autocompletado.referencia(en: t, cursor: t.length) == nil)
+}
+
+@Test func la_busqueda_de_referencia_no_cruza_renglones() {
+    // Un `\ref{}` no ocupa dos líneas. Sin cortar en el salto, cualquier llave suelta
+    // más arriba del archivo haría creer que estás adentro de una referencia.
+    let t = "\\ref{\notra linea" as NSString
+    #expect(Autocompletado.referencia(en: t, cursor: t.length) == nil)
+}
+
+@MainActor
+@Test func las_etiquetas_que_empiezan_con_lo_tipeado_van_primero() {
+    // Si escribiste `fig:`, querés las figuras arriba, no una sección cuyo título
+    // menciona la palabra «figura».
+    let r = Referencias()
+    r.usarSoloParaTests([
+        .init(id: "sec:intro", tipo: "seccion", texto: "La figura del banco",
+              archivo: "a.tex", linea: 1),
+        .init(id: "fig:bode", tipo: "figura", texto: "Respuesta en frecuencia",
+              archivo: "b.tex", linea: 9),
+    ])
+    #expect(r.buscar("fig:").first?.id == "fig:bode")
+    // Y el epígrafe también encuentra: es lo que uno tiene en la cabeza.
+    #expect(r.buscar("frecuencia").first?.id == "fig:bode")
+}

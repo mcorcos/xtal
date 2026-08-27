@@ -48,6 +48,9 @@ pub enum Command {
     /// Comandos y símbolos de LaTeX: buscalos por lo que son, no por cómo se escriben.
     /// Es el catálogo que usa el autocompletado de las apps.
     Latex(LatexArgs),
+    /// Las etiquetas del informe (`\label{}`) con qué es cada una: la figura con su
+    /// epígrafe, la sección con su título. Es lo que ofrece el editor al escribir `\ref{`.
+    Refs(RefsArgs),
     /// Secciones del informe.
     #[command(subcommand)]
     Section(SectionCmd),
@@ -561,6 +564,13 @@ pub struct LatexArgs {
     /// Cortar la lista en tantos resultados.
     #[arg(long)]
     pub limite: Option<usize>,
+}
+
+/// Argumentos de `xtal refs`.
+#[derive(Debug, Args)]
+pub struct RefsArgs {
+    /// Filtrar por una parte del id o del epígrafe.
+    pub consulta: Option<String>,
 }
 
 #[derive(Debug, Args)]

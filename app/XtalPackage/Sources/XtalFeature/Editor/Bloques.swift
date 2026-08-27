@@ -151,6 +151,9 @@ enum Bloque: String, CaseIterable, Identifiable {
 /// Los seis de siempre quedan como botones; el resto vive en el `···` del final.
 struct BarraBloques: View {
     let insertar: (Bloque) -> Void
+    /// Abrir el selector de símbolos. Va aparte de `insertar` porque un símbolo no es un
+    /// bloque: no se inserta de una, primero hay que elegirlo.
+    let abrirSimbolos: () -> Void
 
     /// Los que se usan todo el tiempo escribiendo un informe.
     private static let frecuentes: [Bloque] = [
@@ -162,6 +165,12 @@ struct BarraBloques: View {
             ForEach(Self.frecuentes) { b in
                 BotonBloque(bloque: b, accion: { insertar(b) })
             }
+
+            // Símbolos va al final y separado: los de la izquierda meten una estructura
+            // entera, este abre una pantalla para elegir. Son dos gestos distintos y
+            // ponerlos pegados hace que se confundan.
+            Divider().frame(height: 14).padding(.horizontal, Tok.S.xs)
+            BotonSimbolos(accion: abrirSimbolos)
 
             Menu {
                 ForEach(Bloque.allCases.filter { !Self.frecuentes.contains($0) }) { b in
@@ -187,6 +196,33 @@ struct BarraBloques: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Tok.borderSubtle).frame(height: 1)
         }
+    }
+}
+
+/// El botón de símbolos. Muestra una `Ω` y no un ícono del sistema: es el mismo criterio
+/// que la lista del autocompletado —el dibujo dice lo que el nombre no— y de paso deja
+/// claro de qué se trata sin leer el rótulo.
+private struct BotonSimbolos: View {
+    let accion: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: accion) {
+            HStack(spacing: Tok.S.xs) {
+                Text("Ω").font(.system(size: 12, weight: .medium))
+                Text("Símbolos").font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(Tok.textSecondary)
+            .padding(.horizontal, Tok.S.sm)
+            .frame(height: Tok.H.boton)
+            .background(hover ? Tok.bgHover : Color.clear,
+                        in: RoundedRectangle(cornerRadius: Tok.R.boton, style: .continuous))
+            .borde(hover ? Tok.borderDefault : Color.clear, radio: Tok.R.boton)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help("Buscar un símbolo (⌘⇧E)")
     }
 }
 
