@@ -30,8 +30,20 @@ public enum Desarrollo {
     /// `XTAL_SHOW=ajustes|pdf|nuevo` — muestra esa pantalla sola, sin tener que abrirla
     /// a mano. Sirve para retratar una pantalla que vive en otra ventana o detrás de un
     /// botón (`nuevo` es la tarjeta de proyecto nuevo, que normalmente sale en un sheet).
+    ///
+    /// Para el panel de la derecha está `XTAL_SOLAPA`, que es otra cosa: no reemplaza la
+    /// pantalla, elige qué se mira adentro del workspace.
     public static var pantallaForzada: String? {
         let v = ProcessInfo.processInfo.environment["XTAL_SHOW"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
+    /// `XTAL_SOLAPA=pdf|errores|versiones` — con qué solapa del panel derecho arranca.
+    ///
+    /// Existe por lo mismo que el resto: una sesión sin manos no puede hacer click en
+    /// «Versiones», y sin poder abrirla no hay forma de mirar si el panel dibuja.
+    public static var solapaForzada: String? {
+        let v = ProcessInfo.processInfo.environment["XTAL_SOLAPA"] ?? ""
         return v.isEmpty ? nil : v
     }
 

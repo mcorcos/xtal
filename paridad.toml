@@ -194,6 +194,12 @@ win = ["app-win/src/workspace/Workspace.tsx"]
 por_que = "«qué me falta», adentro de la app. En Windows vive adentro de Workspace.tsx"
 
 [[par]]
+mac = "app/XtalPackage/Sources/XtalFeature/Workspace/PanelHistorial.swift"
+win = []
+pendiente = "el panel de versiones: la lista del historial de git del archivo abierto, ver cómo estaba y traerla al editor. El backend ya tiene `git.rs`"
+por_que = "el historial de versiones, que es lo que Overleaf cobra"
+
+[[par]]
 mac = "app/XtalPackage/Sources/XtalFeature/Workspace/BarraGit.swift"
 win = ["app-win/src/workspace/BarraGit.tsx"]
 por_que = "la barra de git"

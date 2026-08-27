@@ -412,6 +412,40 @@ si `Cargo.toml`, `tauri.conf.json` y `package.json` no dicen lo mismo.
   ahí. El CI ahora compila en `windows-latest`. Y **la app no está firmada**: SmartScreen
   va a advertir la primera vez.
 
+### El historial de versiones, sin tener que saber git — HECHO en Mac (2026-08-27), pedido de Manu
+Es lo otro que Overleaf cobra, y en Xtal sale **gratis y mejor**: el proyecto es una
+carpeta con git, así que las versiones son infinitas, son tuyas y están en tu máquina.
+Faltaba la pantalla. Es la tercera solapa del panel derecho, al lado de `main.pdf` y
+`Errores`.
+- **No dice «commit» en ningún lado.** Quien escribe un TP no tiene por qué saber git: lo
+  que necesita es una lista de «hace 2 horas» y poder traer de vuelta el párrafo que
+  borró. Los nombres de git no explican nada de eso, y el que sí sabe git tiene la
+  terminal integrada al lado.
+- **Muestra las versiones del ARCHIVO abierto**, no las del proyecto entero (`git log
+  --follow -- <archivo>`). Mirando una sección, el historial completo de un informe de
+  tres semanas no ayuda a encontrar el párrafo que faltaba.
+- **Traer una version va al editor, no al disco.** Recuperar algo no puede pisarte lo de
+  ahora sin que lo mires antes; guardar sigue siendo del que escribe.
+- **Si la carpeta no está en git, no es un error: es un botón.** «Empezar a guardar
+  versiones» hace `git init` + la primera version, y de paso escribe un `.gitignore` con
+  `salida/` — esa carpeta la regenera cada compilación, y guardarla haría que cada version
+  pese un PDF entero y que la diferencia entre dos sea ilegible.
+- **El historial lo corre `Git.swift` y no un comando nuevo de la CLI.** Es la decisión que
+  ya estaba tomada para el estado y el commit: en git, la app habla con git. Inventar un
+  `xtal history` sería un segundo camino para lo mismo.
+- **Bug que encontró el test, y no el ojo**: `git show <hash>:<ruta>` pide la ruta
+  **relativa a la raíz del repo**, y la comparación fallaba con cualquier carpeta que
+  cuelgue de un symlink —`/var/folders/…`, que en macOS apunta a `/private/var/…`—.
+  `rev-parse` devuelve la resuelta y el `URL` de la app la de arriba: el prefijo no
+  coincidía, la ruta se le pasaba absoluta, git no encontraba nada y **el panel salía
+  vacío sin decir por qué**. Ahora se resuelven los dos lados. Es el primo del problema de
+  rutas que ya estaba anotado para Windows.
+- Las **flechas de sincronía se esconden fuera de la solapa del PDF**: son la ida y la
+  vuelta entre el editor y el PDF, y flotando encima de la lista de versiones le tapaban
+  la primera fila. Se vio en el primer retrato.
+- Gancho nuevo: **`XTAL_SOLAPA=pdf|errores|versiones`**, porque una sesión sin manos no
+  puede hacer click en «Versiones».
+
 ### La barra, abrir cualquier carpeta, y `\ref{` con las figuras de verdad — HECHO en Mac (2026-08-27), pedido de Manu
 Tres cosas de la misma tanda, todas de «robarle a Overleaf premium para que nadie lo pague».
 

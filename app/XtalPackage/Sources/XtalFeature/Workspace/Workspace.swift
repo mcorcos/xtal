@@ -95,7 +95,7 @@ public struct Workspace: View {
     /// de cuando pasan.
     @State private var solapa: Salida = .pdf
 
-    enum Salida { case pdf, errores }
+    enum Salida { case pdf, errores, versiones }
 
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
@@ -270,6 +270,13 @@ public struct Workspace: View {
             // poder mirarlos. Ver `Desarrollo`. Los dos esperan a que el catálogo esté:
             // sin él, el selector sale con el cartel de "no pude leerlo" y la lista del
             // autocompletado directamente no abre.
+            if let s = Desarrollo.solapaForzada {
+                switch s {
+                case "errores": solapa = .errores
+                case "versiones": solapa = .versiones
+                default: solapa = .pdf
+                }
+            }
             if Desarrollo.abrirSelectorSimbolos {
                 eligiendoSimbolo = true
             }
@@ -753,7 +760,17 @@ public struct Workspace: View {
     ///
     /// Solo aparecen con **las dos vistas en pantalla**: sin el PDF abierto no hay dos
     /// lados entre los cuales ir.
+    @ViewBuilder
     private var flechasSincronia: some View {
+        // Solo con el PDF a la vista. Son la ida y la vuelta **entre el editor y el
+        // PDF**: mirando los errores o el historial de versiones no hay a dónde llevar
+        // nada, y encima quedan flotando encima de esa lista y le tapan la primera fila.
+        if solapa == .pdf {
+            capsulaFlechas
+        }
+    }
+
+    private var capsulaFlechas: some View {
         VStack(spacing: 0) {
             FlechaSync(icono: "arrow.right", ayuda: "Llevar lo seleccionado al PDF (⌥⌘→)",
                        accion: sincronizarAlPdf)
@@ -1105,6 +1122,12 @@ public struct Workspace: View {
                     Vacio(icono: "checkmark.seal", titulo: "No hay errores",
                           detalle: "La última compilación salió limpia")
                 }
+            case .versiones:
+                PanelHistorial(git: git, archivo: arbol.seleccionado) { viejo in
+                    // Va al editor y **no al disco**: recuperar algo no puede pisarte lo
+                    // de ahora sin que lo mires antes. Guardar es del que escribe.
+                    texto = viejo
+                }
             }
         }
         .frame(minWidth: 280, idealWidth: 520)
@@ -1115,6 +1138,10 @@ public struct Workspace: View {
         // El PDF vuelve al frente solo cuando el error se arregla: te quedaste mirando
         // el error, lo corregiste, y lo que querés ver es el resultado.
         .onChange(of: proyecto.error?.mensaje) { _, nuevo in
+            // Si estás mirando versiones, no te sacamos de ahí: compilaste justo para
+            // comparar con lo de antes, y saltar al PDF sería perder lo que estabas
+            // haciendo.
+            guard solapa != .versiones else { return }
             if nuevo == nil {
                 solapa = .pdf
             } else if proyecto.pdf == nil {
@@ -1133,6 +1160,8 @@ public struct Workspace: View {
                        activa: solapa == .errores, alerta: proyecto.error != nil) {
                     solapa = .errores
                 }
+                Solapa(titulo: "Versiones", icono: "clock.arrow.circlepath",
+                       activa: solapa == .versiones) { solapa = .versiones }
                 Spacer()
                 if solapa == .pdf { botonVerLatex }
             }

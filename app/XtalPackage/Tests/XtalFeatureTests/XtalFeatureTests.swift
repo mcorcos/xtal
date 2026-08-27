@@ -716,3 +716,55 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
     // Y el epígrafe también encuentra: es lo que uno tiene en la cabeza.
     #expect(r.buscar("frecuencia").first?.id == "fig:bode")
 }
+
+// MARK: - Historial de versiones
+
+// Se prueba contra un repo de git DE VERDAD, en un directorio temporal. Falsear git con
+// un doble no probaría nada: lo que puede romperse acá es el formato del `log` y la ruta
+// que se le pasa a `show`, y las dos son cosas de git, no nuestras.
+
+@MainActor
+@Test func el_historial_trae_las_versiones_de_un_archivo() async throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("xtal-hist-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    func git(_ args: [String]) throws {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        p.arguments = args
+        p.currentDirectoryURL = dir
+        p.standardOutput = Pipe()
+        p.standardError = Pipe()
+        try p.run()
+        p.waitUntilExit()
+    }
+
+    let archivo = dir.appendingPathComponent("seccion.tex")
+    try git(["init", "-q"])
+    try "primera".write(to: archivo, atomically: true, encoding: .utf8)
+    try git(["add", "-A"])
+    try git(["-c", "user.email=a@b", "-c", "user.name=T", "commit", "-qm", "La primera"])
+    try "segunda".write(to: archivo, atomically: true, encoding: .utf8)
+    try git(["add", "-A"])
+    try git(["-c", "user.email=a@b", "-c", "user.name=T", "commit", "-qm", "La segunda"])
+
+    let g = Git(carpeta: dir)
+    let versiones = await g.historial(de: archivo)
+    #expect(versiones.count == 2)
+    // La más nueva primero: es el orden en que uno busca «la de antes de romperlo».
+    #expect(versiones.first?.mensaje == "La segunda")
+    #expect(versiones.last?.mensaje == "La primera")
+
+    // Y se puede recuperar cómo estaba. La ruta que se le pasa a `git show` tiene que ser
+    // relativa a la raíz del repo: con una absoluta, git no encuentra nada y el panel se
+    // ve vacío sin decir por qué.
+    let vieja = await g.contenido(de: archivo, en: versiones.last!.id)
+    #expect(vieja == "primera")
+
+    // Un archivo que en esa version no existía devuelve nil, que es un resultado y no un
+    // error: la sección que agregaste ayer no está en la version de anteayer.
+    let otro = dir.appendingPathComponent("no-existia.tex")
+    #expect(await g.contenido(de: otro, en: versiones.last!.id) == nil)
+}
