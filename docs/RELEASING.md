@@ -158,7 +158,7 @@ Detalle completo del port en [`APP-WINDOWS.md`](APP-WINDOWS.md).
 
 ## La app de escritorio de macOS
 
-La compila el job `app-mac` con `xcodebuild`, en un runner `macos-15`. El proyecto está
+La compila el job `app-mac` con `xcodebuild`, en un runner `macos-26`. El proyecto está
 en `app/` y es el mismo que se abre en Xcode: no hay una copia aparte para el CI.
 
 **Sale una sola app, universal.** Se compila con `ARCHS = "arm64 x86_64"` porque el
@@ -174,6 +174,30 @@ metadatos de un bundle de macOS. Un `.app` comprimido con `zip` llega roto del o
 **El binario `xtal` NO va adentro**, al revés que en Windows. Acá sí hay un gestor de
 paquetes: el cask declara `depends_on formula: "mcorcos/xtal/xtal"`, así que Homebrew
 instala la CLI primero y la app le habla a esa. Ver `XtalCLI.rutaBinario()`.
+
+### El runner tiene que ser `macos-26`, y no es cosmético
+
+El Xcode más nuevo que trae `macos-15` es el **26.3**, y el 26.3 **crashea** armando el
+grafo de paquetes de este proyecto:
+
+```
+INTERNAL ERROR: Uncaught exception
+-[NSMutableArray insertObjects:atIndexes:]: count of array (15) differs from count of index set (14)
+… IDESPMWorkspaceDelegate.registerDependencyFileReferences
+```
+
+Es un bug de Xcode: el stack es todo suyo y no menciona nada nuestro. Apareció al pasar de
+14 a 15 paquetes, o sea cuando entraron `mlx-swift-lm` y `swift-transformers` para el
+autocomplete. Le pasa a `xcodebuild build` y también a `xcodebuild
+-resolvePackageDependencies`, así que **separar los pasos no lo arregla** — se probó, y
+crashea igual, solo que un paso antes.
+
+`macos-26` trae Xcode **26.6**, donde no pasa. Es el mismo con el que la app compila a
+mano en una Mac, y por eso el bug no se vio hasta publicar.
+
+**El síntoma, para reconocerlo rápido**: `Abort trap: 6` con exit 134 en el job de la app
+de Mac, y un stack entero de `IDEFoundation`/`DVTFoundation`. Lo primero que hay que mirar
+es qué version de Xcode eligió el runner: el paso «Elegir Xcode» la imprime.
 
 ### La firma, que es el punto flojo
 
