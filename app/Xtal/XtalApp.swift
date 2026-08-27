@@ -47,6 +47,13 @@ struct XtalApp: App {
                 Button("Terminal") { alternar("xtal.panel.terminal") }
                     .keyboardShortcut("j", modifiers: .command)
 
+                // La revisión no prende un panel: **elige qué se mira adentro del panel
+                // de la derecha**, que ya existe. Por eso no es un `alternar` sino la
+                // misma orden que manda `xtal app ver revision` — un solo camino a esa
+                // pantalla, y no dos que se pueden desincronizar.
+                Button("Revisión") { verSolapa("revision") }
+                    .keyboardShortcut("3", modifiers: .command)
+
                 Divider()
 
                 // La ida y la vuelta entre el editor y el PDF, cada una por su lado.
@@ -82,6 +89,13 @@ struct XtalApp: App {
         Settings {
             Ajustes()
         }
+    }
+
+    /// Mostrar una solapa del panel derecho. Prende el panel si estaba apagado: una
+    /// orden que no hace nada visible se lee como que la app la ignoró.
+    private func verSolapa(_ cual: String) {
+        UserDefaults.standard.set(true, forKey: "xtal.panel.pdf")
+        NotificationCenter.default.post(name: .xtalVerSolapa, object: cual)
     }
 
     /// Qué panel prende ⌘1, según el modo.

@@ -148,6 +148,7 @@ xtal app abrir              # abre este proyecto en la app (sin carpeta: el actu
 xtal app compilar           # guardar y compilar, lo mismo que ⌘S
 xtal app ver errores        # mostrale el error de compilación
 xtal app ver pdf            # volver al PDF
+xtal app ver revision       # mostrale el diff de lo que tocaste
 xtal app modo agente        # o `editor`
 xtal app panel informe --on # el lateral con qué falta y las secciones
 xtal app terminal           # otra terminal en el panel del agente
@@ -158,6 +159,9 @@ Cuándo sirve, en la práctica:
 
 - **Terminaste de cargar datos y compilaste**: `xtal app ver pdf` y la persona ve el
   resultado sin buscar nada.
+- **Tocaste varios archivos**: `xtal app ver revision` y la persona ve el diff, archivo
+  por archivo, sin tener que pedírtelo ni abrir la terminal. Es lo que hay que hacer al
+  terminar un cambio grande.
 - **No compila**: `xtal app ver errores` y estás señalando el problema en pantalla, en
   vez de pegar un log en el chat.
 - **Creaste un proyecto**: `xtal app abrir` y ya lo tiene abierto.

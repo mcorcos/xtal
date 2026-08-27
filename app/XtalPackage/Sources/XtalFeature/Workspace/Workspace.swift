@@ -21,6 +21,11 @@ public struct Workspace: View {
     @State private var agentes: Agentes
     @State private var proyecto: Proyecto
     @State private var git: Git
+    /// Los pull requests, vía `gh`. Vive acá y no adentro del panel de revisión porque
+    /// la barra de abajo también los muestra: dos dueños serían dos llamadas a `gh`.
+    @State private var github: GitHub
+    /// Qué se está revisando y cuánto se abrió de cada agujero del diff.
+    @State private var revision: Revision
     @State private var ajuste: Ajuste
     @State private var secciones: Secciones
     @State private var arbol: Arbol
@@ -92,10 +97,21 @@ public struct Workspace: View {
     /// Qué se mira en el panel de la derecha.
     ///
     /// **No es estado guardado**: al abrir un proyecto se mira el PDF. Los errores son
-    /// de cuando pasan.
+    /// de cuando pasan, y la revisión es a la que uno va a propósito.
     @State private var solapa: Salida = .pdf
 
-    enum Salida { case pdf, errores, versiones }
+    /// Las cinco cosas que puede haber a la derecha.
+    ///
+    /// Son solapas y no paneles aparte por lo mismo que ya valía para el PDF y los
+    /// errores: **son cinco respuestas a la misma pregunta** —«¿en qué quedó esto?»— y
+    /// solo se mira una por vez. Cinco paneles abiertos en una ventana de 1400 puntos
+    /// dejan cinco columnas de 280, y ninguna sirve.
+    ///
+    /// **Versiones y Revisión no son la misma pantalla**, aunque las dos lean git:
+    /// Versiones es «volver a como estaba ayer» sobre el archivo que tenés abierto, sin
+    /// que la palabra «commit» aparezca nunca; Revisión es el diff, las ramas y los
+    /// pull requests. Ver `docs/GIT.md`.
+    enum Salida: String { case pdf, errores, versiones, revision, terminal }
 
     @AppStorage("xtal.panel.archivos") private var verArchivos = true
     @AppStorage("xtal.panel.pdf") private var verPdf = true
@@ -168,7 +184,12 @@ public struct Workspace: View {
         let tamano = UserDefaults.standard.object(forKey: "xtal.terminal.tamano") as? Double ?? 13
         _agentes = State(initialValue: Agentes(carpeta: carpeta, tamano: tamano))
         _proyecto = State(initialValue: Proyecto(carpeta: carpeta))
-        _git = State(initialValue: Git(carpeta: carpeta))
+        // El mismo objeto `Git` para la barra y para la revisión: dos instancias serían
+        // dos estados que se contradicen cada vez que una hace algo.
+        let g = Git(carpeta: carpeta)
+        _git = State(initialValue: g)
+        _github = State(initialValue: GitHub(carpeta: carpeta))
+        _revision = State(initialValue: Revision(git: g))
         _ajuste = State(initialValue: Ajuste(carpeta: carpeta))
         _secciones = State(initialValue: Secciones(carpeta: carpeta))
         _arbol = State(initialValue: Arbol(carpeta: carpeta))
@@ -181,7 +202,7 @@ public struct Workspace: View {
             case .editor: modoEditor
             case .agente: modoAgente
             }
-            BarraGit(git: git)
+            BarraGit(git: git, github: github)
         }
         .background(Tok.bgBase)
         .toolbar { barra }
@@ -199,7 +220,11 @@ public struct Workspace: View {
         }
         // Las dos órdenes de afuera que necesitan tocar el estado de esta pantalla.
         .onReceive(NotificationCenter.default.publisher(for: .xtalVerSolapa)) { aviso in
-            solapa = (aviso.object as? String) == "errores" ? .errores : .pdf
+            guard let que = aviso.object as? String, let s = Salida(rawValue: que) else {
+                solapa = .pdf
+                return
+            }
+            solapa = s
         }
         .onReceive(NotificationCenter.default.publisher(for: .xtalTerminalNueva)) { _ in
             agentes.abrir()
@@ -251,11 +276,19 @@ public struct Workspace: View {
             await ajuste.refrescar()
             await secciones.recargar()
             cargarSeleccionado()
+            await git.refrescar()
+
+            // **En modo agente, el panel derecho abre en la revisión si hay algo que
+            // revisar.** Es la pregunta que uno tiene cuando trabaja hablándole a un
+            // agente —«¿qué tocó?»— y es la que la app no contestaba. Con la carpeta
+            // limpia no hay nada que mostrar y gana el PDF: un panel vacío de arranque
+            // se lee como que la función no anda.
+            if modo == .agente, git.estado.cambios > 0 || git.estado.adelante > 0 {
+                solapa = .revision
+            }
             // El vigía mira la carpeta: los cambios no vienen todos del editor. Los
             // hace Claude desde la terminal, o `xtal sim` al traer una simulación.
-            let v = Vigia(carpeta: proyecto.carpeta) {
-                if compilarAlGuardar { programarCompilado() }
-            }
+            let v = Vigia(carpeta: proyecto.carpeta) { algoCambio() }
             v.arrancar()
             vigia = v
 
@@ -266,17 +299,29 @@ public struct Workspace: View {
                 }
             }
 
+            // Con qué solapa arranca. **Se resuelve con el `rawValue` del enum y no con
+            // un `switch` a mano**: así valen las cinco sin tener que acordarse de
+            // agregar la nueva acá, que es justo lo que pasó cuando aparecieron Revisión
+            // y Terminal — el `switch` viejo las mandaba al PDF.
+            if let s = Desarrollo.solapaForzada, let cual = Salida(rawValue: s) {
+                solapa = cual
+            }
+
+            // Y `XTAL_REVISION` elige **qué se mira adentro** de la revisión, que es otra
+            // pregunta: la solapa la abre `XTAL_SOLAPA`, pero unificado, partido, la
+            // lista, el historial y el desplegable de ramas son cinco pantallas distintas
+            // y hay que poder retratarlas por separado. Va después, así que abrir la
+            // revisión por acá también funciona sin pasar las dos variables.
+            if let como = Desarrollo.revisionInicial {
+                revision.partida = como == "partida"
+                revision.soloLista = como == "lista"
+                solapa = .revision
+            }
+
             // Abrir el selector de símbolos y disparar el autocompletado solos, para
             // poder mirarlos. Ver `Desarrollo`. Los dos esperan a que el catálogo esté:
             // sin él, el selector sale con el cartel de "no pude leerlo" y la lista del
             // autocompletado directamente no abre.
-            if let s = Desarrollo.solapaForzada {
-                switch s {
-                case "errores": solapa = .errores
-                case "versiones": solapa = .versiones
-                default: solapa = .pdf
-                }
-            }
             if Desarrollo.abrirSelectorSimbolos {
                 eligiendoSimbolo = true
             }
@@ -763,8 +808,9 @@ public struct Workspace: View {
     @ViewBuilder
     private var flechasSincronia: some View {
         // Solo con el PDF a la vista. Son la ida y la vuelta **entre el editor y el
-        // PDF**: mirando los errores o el historial de versiones no hay a dónde llevar
-        // nada, y encima quedan flotando encima de esa lista y le tapan la primera fila.
+        // PDF**: en las otras tres solapas no hay a dónde llevar nada, y encima quedan
+        // flotando arriba de esa lista y le tapan la primera fila. En la revisión es
+        // peor todavía: su barra tiene dos filas y no una.
         if solapa == .pdf {
             capsulaFlechas
         }
@@ -1030,6 +1076,23 @@ public struct Workspace: View {
         await git.refrescar()
     }
 
+    /// Alguien tocó un archivo de la carpeta, y no fue el editor.
+    ///
+    /// Va aparte y no adentro del closure del vigía porque **el `.task` del cuerpo ya
+    /// era demasiado grande para el compilador**: con esto adentro, `swift build`
+    /// contesta «no puedo verificar esta expresión en un tiempo razonable». Es la señal
+    /// de que había que partirla, no de que faltara azúcar.
+    private func algoCambio() {
+        if compilarAlGuardar { programarCompilado() }
+        // Si estás mirando la revisión, se refresca sola: **los archivos los está
+        // tocando el agente**, y un diff que muestra lo de hace tres minutos es peor
+        // que no mostrar nada.
+        Task {
+            await git.refrescar()
+            if solapa == .revision { await revision.recargar() }
+        }
+    }
+
     /// Compila sin que se lo pidan, un rato después de la última tecla.
     private func programarCompilado() {
         compiladoPendiente?.cancel()
@@ -1111,6 +1174,18 @@ public struct Workspace: View {
                     Vacio(icono: "doc.richtext", titulo: "Todavía no compilaste",
                           detalle: "Apretá ⌘S y el PDF aparece acá")
                 }
+            case .revision:
+                PanelRevision(git: git, github: github, revision: revision) { ruta in
+                    alEditor { abrirArchivo(proyecto.carpeta.appendingPathComponent(ruta)) }
+                }
+
+            case .terminal:
+                // **La terminal vive en un solo lugar a la vez.** La vista de AppKit se
+                // la guarda la sesión, y montarla en dos sitios del árbol la sacaría de
+                // uno para ponerla en el otro — el cajón se quedaría en negro. Por eso
+                // elegir esta solapa cierra el cajón, y abrir el cajón vuelve al PDF.
+                PanelTerminales(agentes: agentes)
+
             case .errores:
                 if let e = proyecto.error {
                     PanelError(error: e) { titulo in
@@ -1137,6 +1212,12 @@ public struct Workspace: View {
         .overlay(alignment: .bottom) { avisoSincronia }
         // El PDF vuelve al frente solo cuando el error se arregla: te quedaste mirando
         // el error, lo corregiste, y lo que querés ver es el resultado.
+        .onChange(of: solapa) { _, nueva in
+            if nueva == .terminal { verTerminal = false }
+        }
+        .onChange(of: verTerminal) { _, abierto in
+            if abierto, solapa == .terminal { solapa = .pdf }
+        }
         .onChange(of: proyecto.error?.mensaje) { _, nuevo in
             // Si estás mirando versiones, no te sacamos de ahí: compilaste justo para
             // comparar con lo de antes, y saltar al PDF sería perder lo que estabas
@@ -1162,8 +1243,20 @@ public struct Workspace: View {
                 }
                 Solapa(titulo: "Versiones", icono: "clock.arrow.circlepath",
                        activa: solapa == .versiones) { solapa = .versiones }
+                // El punto de la revisión avisa que hay cambios sin mirar. Es el mismo
+                // recurso que el de los errores y por la misma razón: enterarse sin que
+                // te saquen de lo que estabas haciendo.
+                Solapa(titulo: "Revisión", icono: "arrow.trianglehead.pull",
+                       activa: solapa == .revision, alerta: git.estado.cambios > 0) {
+                    solapa = .revision
+                }
+                Solapa(titulo: "Terminal", icono: "terminal",
+                       activa: solapa == .terminal) { solapa = .terminal }
                 Spacer()
                 if solapa == .pdf { botonVerLatex }
+                if solapa == .revision, !git.estado.rama.isEmpty {
+                    ChipPR(estado: github.estadoDe(git.estado.rama), compacto: true)
+                }
             }
             .padding(.horizontal, Tok.S.md)
             .frame(height: Tok.H.fila)

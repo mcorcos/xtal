@@ -17,6 +17,7 @@
 //! xtal://compilar                    guardar y compilar (Ctrl+S)
 //! xtal://modo/agente|editor          cambiar de modo
 //! xtal://ver/pdf|errores             qué se mira en el panel derecho
+//!                                    (`revision` y `terminal` todavía no: ver `paridad.toml`)
 //! xtal://panel/pdf|informe|terminal|archivos?ver=1|0
 //! xtal://terminal/nueva              otra terminal en el panel del agente
 //! ```
