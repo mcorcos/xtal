@@ -210,12 +210,18 @@ Existía desde hacía meses y **no se publicaba en ningún lado**. Para tenerla 
 clonar el repo, abrir Xcode y compilarla: la única forma de dársela a alguien era pasarle
 un `.app` por AirDrop, que del otro lado macOS bloquea. Windows tenía instalador y Mac no.
 
-Ahora son **dos comandos, y cada uno se trae todo**:
+Ahora, en una Mac recién sacada de la caja, es **un comando**:
 
 ```bash
-brew install mcorcos/xtal/xtal              # la CLI, con tectonic y ngspice
-brew install --cask mcorcos/xtal/xtal-app   # la app; se trae la CLI sola
+brew install --cask mcorcos/xtal/xtal-app
 ```
+
+Eso deja la app, el comando `xtal`, tectonic y ngspice. **No hace falta `brew tap`
+antes**: con el nombre de tres partes Homebrew agrega el tap solo. El nombre de dos
+(`brew install mcorcos/xtal`) NO existe — eso nombra el tap, no lo que hay adentro, y
+brew responde «No available formula with the name "xtal"».
+
+Quien quiera solo la CLI tiene `brew install mcorcos/xtal/xtal`.
 
 - **Job `app-mac`** en el release: `xcodebuild` en un runner de macOS, app **universal**
   (arm64 + x86_64, que el xcframework de libghostty tiene las dos slices), comprimida con

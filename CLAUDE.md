@@ -410,9 +410,13 @@ La app existía desde hacía meses y **no se publicaba en ningún lado**. Para t
 que clonar el repo y abrir Xcode. Windows tenía instalador y Mac no: la única forma de
 dársela a alguien era pasarle el `.app` a mano, que del otro lado macOS bloquea.
 Ver `docs/RELEASING.md` («La app de escritorio de macOS»).
-- **Dos comandos, y cada uno se trae todo**: `brew install mcorcos/xtal/xtal` para la CLI
-  y `brew install --cask mcorcos/xtal/xtal-app` para la app. El cask declara
-  `depends_on formula:` sobre la CLI, así que con ese solo alcanza.
+- **Un comando** en una Mac recién sacada de la caja:
+  `brew install --cask mcorcos/xtal/xtal-app`. Deja la app, el comando `xtal`, tectonic y
+  ngspice, porque el cask declara `depends_on formula:` sobre la CLI y la fórmula declara
+  las dos dependencias. **No hace falta `brew tap` antes**: con el nombre de tres partes
+  Homebrew agrega el tap solo. Con dos (`brew install mcorcos/xtal`) **no anda** — eso
+  nombra el tap, no lo que hay adentro. El que quiere solo la CLI tiene
+  `brew install mcorcos/xtal/xtal`.
 - **Cask y no fórmula.** Homebrew separa las dos cosas a propósito: una fórmula deja
   binarios en su prefijo, un cask deja una `.app` en `/Applications`, que es donde
   Launchpad y Spotlight la buscan. `packaging/homebrew/render-cask.sh` es el gemelo de

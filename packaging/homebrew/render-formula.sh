@@ -126,7 +126,7 @@ class Xtal < Formula
       Empezá por acá:
         xtal example --open
 
-      ¿Querés la app de escritorio?
+      ¿Querés también la app de escritorio?
         brew install --cask mcorcos/xtal/xtal-app
     EOS
   end
