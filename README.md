@@ -72,18 +72,27 @@ abajo), o `install.ps1 -SinApp`.
 `install.ps1` baja el binario, verifica el checksum, lo deja en
 `%LOCALAPPDATA%\Programs\xtal` y lo agrega al PATH del usuario.
 
-**macOS** — un comando por cosa, y cada uno se trae todo lo que necesita:
+**macOS** — **un comando y ya está**, en una Mac recién sacada de la caja:
 
 ```bash
-# La CLI. Viene con el motor LaTeX (tectonic) y el simulador (ngspice).
-brew install mcorcos/xtal/xtal
-
-# La app de escritorio. Se trae la CLI sola, así que con este solo alcanza.
 brew install --cask mcorcos/xtal/xtal-app
 ```
 
-No hace falta correr nada más: la configuración, los themes y el skill del agente se
-escriben en el primer comando que corras.
+Eso deja **todo**: la app en Aplicaciones, el comando `xtal` en la terminal, el motor
+LaTeX (tectonic) y el simulador (ngspice). No hace falta `brew tap` antes — con el nombre
+de tres partes, Homebrew agrega el tap solo. Tampoco hay que correr nada después: la
+configuración, los themes y el skill del agente se escriben en el primer comando.
+
+Lo único que tiene que estar antes es [Homebrew](https://brew.sh).
+
+¿Solo la CLI, sin la app?
+
+```bash
+brew install mcorcos/xtal/xtal
+```
+
+> El nombre va con **tres partes**: usuario, tap y paquete. `brew install mcorcos/xtal`,
+> con dos, no existe — eso nombra el tap, no lo que hay adentro.
 
 > La app **no está firmada con un Developer ID de Apple**. Instalada por el cask no
 > molesta — el cask le saca la cuarentena —, pero bajada a mano de la Release,

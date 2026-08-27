@@ -105,10 +105,10 @@ cask "xtal-app" do
   ]
 
   caveats <<~EOS
-    Xtal quedó en Aplicaciones. Abrila y elegí "Informe nuevo".
+    Ya está todo: la app quedó en Aplicaciones, y con ella vinieron el comando
+    \`xtal\` de la terminal, el motor LaTeX (tectonic) y el simulador (ngspice).
 
-    La app corre el comando \`xtal\` por abajo: ya vino con este cask,
-    junto con el motor LaTeX (tectonic) y el simulador (ngspice).
+    Abrila y elegí "Informe nuevo".
   EOS
 end
 CASK
