@@ -12,11 +12,17 @@
 //!
 //! ## Cómo funciona
 //!
-//! Cada comando arma una URL `xtal://…` y se la da al sistema. En macOS con `open`: el
-//! sistema busca qué app registró ese esquema (lo declara `app/Config/Info.plist`), la
-//! levanta si no está andando y le entrega la URL, y del otro lado la atiende
-//! `Ordenes.swift`. En Windows con `cmd /c start`, y quien enruta es el **registro** —la
-//! clave la escribe el instalador— y del otro lado atiende `ordenes.rs` de `app-win/`.
+//! Cada comando arma una URL `xtal://…` y se la da al sistema. Quién enruta cambia en
+//! cada uno, y por eso hay tres funciones y no una:
+//!
+//!   macOS     `open`. El sistema busca qué app registró el esquema (lo declara
+//!             `app/Config/Info.plist`), la levanta si no está andando y le entrega la
+//!             URL. Del otro lado la atiende `Ordenes.swift`.
+//!   Windows   `cmd /c start`, y quien enruta es el **registro** — la clave la escribe
+//!             el instalador. Del otro lado atiende `ordenes.rs` de `app-win/`.
+//!   Linux     `xdg-open`, y quien enruta es la **base de datos de MIME del escritorio**,
+//!             que se arma a partir del `.desktop` que instala el `.deb`. Atiende el
+//!             mismo `ordenes.rs`: el backend de la app es el mismo en Windows y Linux.
 //!
 //! No hay socket, ni puerto, ni daemon: la misma decisión que el MCP sobre stdio.
 //!
@@ -33,8 +39,12 @@ use crate::cli::{AppArgs, AppCmd, ModoAppArg, PanelAppArg, VistaAppArg};
 use crate::ctx;
 
 pub fn cmd_app(args: AppArgs, project: &Option<PathBuf>, json: bool) -> Result<()> {
-    if !cfg!(any(target_os = "macos", target_os = "windows")) {
-        bail!("la app de escritorio de Xtal está para macOS y Windows");
+    if !cfg!(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    )) {
+        bail!("la app de escritorio de Xtal está para macOS, Windows y Linux");
     }
 
     let (ruta, detalle) = match &args.command {
@@ -123,22 +133,29 @@ fn armar(ruta: &str, frente: bool) -> String {
     }
 }
 
-/// Se la pasa al sistema. `-g` es lo que hace que no robe el foco.
+/// Se la pasa al sistema. Una función por plataforma, porque el programa que enruta y
+/// lo que ese programa sabe hacer cambian en las tres; el detalle está en cada una.
 ///
-/// **`XTAL_APP=/ruta/Xtal.app` fuerza a qué copia va la orden.** Sin eso decide el
-/// sistema, que es lo correcto cuando hay una sola app instalada — pero mientras se
-/// desarrolla hay varias (la de Xcode, la de un worktree, la instalada) y el sistema
+/// **`XTAL_APP` fuerza a qué copia va la orden** en las tres. Sin eso decide el sistema,
+/// que es lo correcto cuando hay una sola app instalada — pero mientras se desarrolla hay
+/// varias (la de Xcode, la de un worktree, la instalada, un AppImage suelto) y el sistema
 /// elige una sola. Es la contraparte de `XTAL_BIN`, que la app usa para hablarle al
 /// binario de un worktree.
 fn abrir(url: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     return abrir_windows(url);
-    #[cfg(not(target_os = "windows"))]
-    return abrir_unix(url);
+    #[cfg(target_os = "linux")]
+    return abrir_linux(url);
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    return abrir_macos(url);
 }
 
-#[cfg(not(target_os = "windows"))]
-fn abrir_unix(url: &str) -> Result<()> {
+/// En macOS `open` se la entrega al sistema, que busca qué app registró el esquema.
+///
+/// **`-g` es lo que hace que no robe el foco**, y es el único de los tres que lo tiene:
+/// ni `start` de Windows ni `xdg-open` saben hacerlo.
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+fn abrir_macos(url: &str) -> Result<()> {
     let mut cmd = Proc::new("open");
     cmd.arg("-g");
     if let Ok(app) = std::env::var("XTAL_APP") {
@@ -157,6 +174,71 @@ fn abrir_unix(url: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// La misma idea en Linux, con tres diferencias.
+///
+/// 1. **Quien enruta es el escritorio, no el sistema.** El `.desktop` que instala el
+///    `.deb` declara `MimeType=x-scheme-handler/xtal`, y `update-desktop-database` —que
+///    corre el propio `dpkg`— arma el índice que `xdg-open` consulta. Con el AppImage no
+///    pasa nada de eso: lo escribe `install.sh`, y además la app lo registra ella al
+///    arrancar (ver `register_all` en `ordenes.rs`). Bajando el AppImage a mano, sin el
+///    instalador, **hay que haberla abierto una vez** para que `xtal app` funcione.
+/// 2. **`xdg-open` no sabe "no robar el foco".** No hay equivalente de `-g`. Como en
+///    Windows, lo que sí se puede es que la app no se traiga sola al frente cuando la
+///    orden no lo pidió, y eso ya lo decide `ordenes.rs`.
+/// 3. **`xdg-open` puede no estar.** Es de `xdg-utils`, que en un escritorio completo
+///    siempre está pero en una instalación mínima o adentro de un contenedor no. Se cae a
+///    `gio open`, que viene con GLib — o sea, con cualquier cosa que use GTK, que es lo
+///    que la app ya necesita para correr.
+///
+/// `XTAL_APP=/ruta/xtal` fuerza a qué copia va la orden: se ejecuta ese binario con la
+/// URL como argumento, que es lo mismo que haría el escritorio. El plugin de instancia
+/// única hace que el proceso nuevo se la entregue al que ya está corriendo y se muera.
+/// Sirve para probar un AppImage suelto sin instalarlo.
+#[cfg(target_os = "linux")]
+fn abrir_linux(url: &str) -> Result<()> {
+    if let Ok(app) = std::env::var("XTAL_APP") {
+        if !app.is_empty() {
+            let salida = Proc::new(&app)
+                .arg(url)
+                .output()
+                .with_context(|| format!("no pude ejecutar {app}"))?;
+            if !salida.status.success() {
+                bail!(
+                    "{app} devolvió un error: {}",
+                    String::from_utf8_lossy(&salida.stderr).trim()
+                );
+            }
+            return Ok(());
+        }
+    }
+
+    // `xdg-open` primero, `gio open` de respaldo. Se guarda el error del primero: si los
+    // dos fallan, el que explica algo es el de `xdg-open`.
+    let mut ultimo = String::new();
+    for (prog, args) in [("xdg-open", &[][..]), ("gio", &["open"][..])] {
+        match Proc::new(prog).args(args).arg(url).output() {
+            Ok(salida) if salida.status.success() => return Ok(()),
+            Ok(salida) => {
+                let err = String::from_utf8_lossy(&salida.stderr).trim().to_string();
+                if ultimo.is_empty() {
+                    ultimo = format!("{prog}: {err}");
+                }
+            }
+            // Que el programa no exista no es un error para contar: se prueba el otro.
+            Err(_) => continue,
+        }
+    }
+
+    bail!(
+        "no encontré la app de escritorio de Xtal. ¿Está instalada y abierta al menos una vez?\n  {}",
+        if ultimo.is_empty() {
+            "no tengo ni `xdg-open` ni `gio` para abrir una URL".to_string()
+        } else {
+            ultimo
+        }
+    )
 }
 
 /// La misma idea en Windows, con tres diferencias que importan.

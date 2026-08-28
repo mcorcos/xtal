@@ -101,14 +101,43 @@ brew install mcorcos/xtal/xtal
 > macOS la bloquea: hay que sacarle el atributo con
 > `xattr -dr com.apple.quarantine /Applications/Xtal.app`.
 
-**Linux** — con Homebrew, que instala también Tectonic:
+**Linux** — **una línea, y deja la CLI y la app**, sin pedir root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh
+```
+
+Solo la CLI, sin la app: `install.sh --sin-app`.
+
+El script baja el binario a `~/.local/bin`, verifica el checksum, y después baja el
+**AppImage** de la app y lo deja instalado en el menú de aplicaciones. No hace falta
+`sudo` en ningún paso: la app se desempaqueta en `~/.local/share/xtal` en vez de
+instalarse con `dpkg`, que sí pediría root.
+
+> El AppImage pesa unos **99 MB** porque trae GTK y WebKit adentro — que es justo lo que
+> lo hace andar en cualquier distro sin instalar nada. El `.deb` pesa 10 MB porque usa los
+> del sistema, y por eso pide root.
+
+> **La app es solo x86_64.** En una máquina ARM queda la CLI, que es la que hace el
+> trabajo. Y **el autocomplete no está en Linux**: la pestaña de Ajustes ni aparece.
+
+Si preferís el gestor de tu distro, la Release publica también el `.deb` (Debian, Ubuntu,
+Mint), el `.rpm` (Fedora) y el AppImage suelto:
+
+```bash
+sudo dpkg -i Xtal-<version>-linux-amd64.deb
+```
+
+Y si ya usás **Homebrew on Linux**, la fórmula anda igual que en macOS y arrastra
+Tectonic y ngspice:
 
 ```bash
 brew install mcorcos/xtal/xtal
 ```
 
-**Script** (macOS y Linux) — baja el binario ya compilado a `~/.local/bin`, verificando
-el checksum:
+**Script** (macOS) — baja el binario ya compilado a `~/.local/bin`, verificando el
+checksum. En macOS **no instala la app**: esa va por el cask de arriba, que es lo que la
+deja en `/Applications`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh

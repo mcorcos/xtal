@@ -502,6 +502,151 @@ jobs:
   # que ya se conocía se termina salteando siempre.
   #
   # El mapa de qué archivo corresponde a cuál está en `paridad.toml`.
+  # ---------------------------------------------------------------------------
+  # La app de escritorio de Linux
+  # ---------------------------------------------------------------------------
+  #
+  # Es el mismo Tauri que el de Windows —el mismo `app-win/`, el mismo backend— con otro
+  # motor de dibujo (WebKitGTK en vez de WebView2) y otros formatos de paquete. Por eso
+  # el job es casi el mismo y las diferencias están comentadas de a una.
+  #
+  # **`ubuntu-22.04` y NO `ubuntu-latest`, y esto no es cosmético.** Un binario de Linux
+  # pide la glibc de la máquina donde se compiló *o una más nueva*: compilado en 24.04
+  # exige glibc 2.39 y **no arranca** en Ubuntu 22.04 ni en Debian 12, que es la mitad de
+  # las máquinas donde esto se va a usar. El error dice «GLIBC_2.39 not found», que no
+  # menciona en ningún lado que el problema es dónde se compiló.
+  #
+  # El día que GitHub retire este runner —pasó con `macos-13`, y un job que pide un runner
+  # retirado queda encolado para siempre— hay que subir al más viejo que quede y avisar en
+  # el README que las distros anteriores se quedan sin app.
+  app-linux:
+    name: app de escritorio (Linux)
+    needs: check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Lo que Tauri necesita para dibujar en Linux, más las cuatro herramientas que
+      # arman los paquetes: `patchelf` para el AppImage, `rpm` para el `.rpm`,
+      # `desktop-file-utils` para validar el `.desktop` y **`xdg-utils`**, que es la que
+      # menos se ve venir: el bundler del AppImage llama a `xdg-mime` porque la app
+      # declara el esquema `xtal://`, y sin él **el `.deb` y el `.rpm` salen bien y el
+      # AppImage muere al final** con «xdg-mime binary not found». Salió de armarlo de
+      # verdad en un contenedor.
+      #
+      # Todas fallan recién al empaquetar, con el build ya compilado.
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf rpm desktop-file-utils \
+            xdg-utils
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app-win/src-tauri
+          key: app-linux
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-win/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: app-win
+        run: npm ci
+
+      # El binario de la CLI viaja adentro del paquete, por el mismo argumento que en
+      # Windows: bajar el `.deb` y abrirlo tiene que alcanzar para que la app haga algo.
+      # No hay riesgo de dos copias desincronizadas — la app **prefiere la que esté
+      # instalada** y solo cae a esta si no hay ninguna (ver `bundled()` en
+      # `app-win/src-tauri/src/xtal_cli.rs`).
+      #
+      # **`llama-server` NO va**, al revés que en Windows: en Linux el autocomplete no se
+      # ofrece, y la pestaña de Ajustes ni aparece. Ver `motor_disponible` en `motor.rs`.
+      - name: Compilar la CLI y meterla adentro de la app
+        run: |
+          set -euo pipefail
+          cargo build --release --bin xtal
+          cp target/release/xtal app-win/src-tauri/resources/xtal
+          chmod +x app-win/src-tauri/resources/xtal
+          ls -la app-win/src-tauri/resources/
+
+      - name: Compilar la app y armar los paquetes
+        working-directory: app-win
+        # `tauri build` arma los tres formatos que declara `tauri.conf.json` para Linux:
+        # el `.deb` (Debian/Ubuntu/Mint), el `.rpm` (Fedora) y el AppImage, que es el que
+        # anda en cualquier distro sin instalar nada y el que usa `install.sh`.
+        run: npm run tauri build
+
+      - name: Juntar los paquetes con un nombre estable
+        id: pack
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.check.outputs.version }}"
+          OUT=app-win/src-tauri/target/release/bundle
+          mkdir -p dist
+          # Tauri los nombra `Xtal_0.6.0_amd64.deb`, `Xtal-0.6.0-1.x86_64.rpm` y
+          # `Xtal_0.6.0_amd64.AppImage`. Se renombran al esquema del resto de los assets
+          # para que `install.sh` pueda armar la URL sin adivinar el separador ni el
+          # número de build del rpm.
+          cp "$OUT"/deb/*.deb          "dist/Xtal-${VERSION}-linux-amd64.deb"
+          cp "$OUT"/rpm/*.rpm          "dist/Xtal-${VERSION}-linux-x86_64.rpm"
+          cp "$OUT"/appimage/*.AppImage "dist/Xtal-${VERSION}-linux-x86_64.AppImage"
+          ls -la dist
+
+      # Que existan no alcanza: un paquete truncado también existe. Y el AppImage es el
+      # único que `install.sh` usa, así que se comprueba además que **se pueda
+      # desempaquetar** — que es exactamente lo que hace el instalador del otro lado.
+      - name: Verificar que los paquetes sirven
+        run: |
+          set -euo pipefail
+          for f in dist/*; do
+            tam=$(stat -c%s "$f")
+            echo "$f — $tam bytes"
+            [ "$tam" -gt 1000000 ] || { echo "::error::$f pesa $tam bytes: está truncado."; exit 1; }
+          done
+          chmod +x dist/*.AppImage
+          # `--appimage-extract` no necesita FUSE, que es justo por lo que `install.sh`
+          # extrae en vez de montar. Si esto falla, el instalador falla.
+          (cd dist && ./*.AppImage --appimage-extract >/dev/null)
+          test -x dist/squashfs-root/AppRun || { echo "::error::el AppImage no trae AppRun."; exit 1; }
+          # Dónde deja Tauri los `resources` en Linux no es al lado del ejecutable —como
+          # en Windows— sino en `usr/lib/<producto>/resources/`. Se busca en vez de
+          # asumirlo, y se imprime: es la ruta que `bundled()` tiene que saber encontrar.
+          echo "--- la CLI adentro del paquete:"
+          find dist/squashfs-root -name xtal -type f -printf '%p\n' || true
+          find dist/squashfs-root -name xtal -type f | grep -q . \
+            || { echo "::error::el AppImage no trae la CLI adentro."; exit 1; }
+          find dist/squashfs-root -name '*.desktop' | grep -q . \
+            || { echo "::error::el AppImage no trae su .desktop: xtal:// no va a andar."; exit 1; }
+          # `MimeType` es lo que hace que `xtal://` funcione, y sale del esquema que
+          # declara `tauri.conf.json`. Si se cae, el agente pierde el manejo de la app y
+          # nada más lo delata.
+          grep -rq 'x-scheme-handler/xtal' dist/squashfs-root --include='*.desktop' \
+            || { echo "::error::el .desktop no declara x-scheme-handler/xtal."; exit 1; }
+          rm -rf dist/squashfs-root
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: xtal-app-linux
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+
   paridad:
     name: paridad entre las dos apps
     needs: check
@@ -551,7 +696,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: publicar release
-    needs: [check, build, app, app-mac, paridad]
+    needs: [check, build, app, app-mac, app-linux, paridad]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -575,7 +720,7 @@ jobs:
           # Un solo archivo con todos los hashes: es lo que verifican install.sh y
           # install.ps1. Van los instaladores de la app también — es lo que más se baja
           # a mano desde la página, y es justo donde un archivo cortado pasa inadvertido.
-          sha256sum *.tar.gz *.zip *.exe *.msi | tee SHA256SUMS
+          sha256sum *.tar.gz *.zip *.exe *.msi *.AppImage *.deb *.rpm | tee SHA256SUMS
 
       # Los manifiestos de los dos gestores de paquetes de Windows, con los hashes de
       # esta Release ya calculados. Se suben como assets para que publicarlos sea copiar
@@ -612,4 +757,7 @@ jobs:
             dist/*.zip
             dist/*.exe
             dist/*.msi
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
             dist/SHA256SUMS

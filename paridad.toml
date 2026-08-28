@@ -2,8 +2,9 @@
 #
 # ## Para qué existe
 #
-# Xtal tiene DOS apps de escritorio, escritas en lenguajes distintos, que tienen que
-# comportarse igual: `app/` en Swift y `app-win/` en Rust + TypeScript. Ya pasó una vez
+# Xtal tiene DOS bases de código de escritorio, escritas en lenguajes distintos, que
+# tienen que comportarse igual: `app/` en Swift y `app-win/` en Rust + TypeScript. Ya
+# pasó una vez
 # que se separaron —la primera version de la de Windows salió con 25 divergencias, y se
 # descubrió mirando un retrato de la pantalla, no leyendo el código—, y nada impedía que
 # volviera a pasar.
@@ -18,9 +19,16 @@
 # medias en vez de uno bueno.
 #
 # Lo que sí importa es **qué se publica**: una Release es lo que la gente baja, y ahí las
-# dos apps salen con el mismo número de version. Si la de Windows quedó atrás, el usuario
+# apps salen con el mismo número de version. Si la de Windows quedó atrás, el usuario
 # de Windows recibe una app que dice 0.6.0 y no hace lo que la de Mac hace con ese mismo
 # número — y no tiene forma de saberlo.
+#
+# **Desde que existe la app de Linux, `app-win/` se publica DOS veces**: como `.exe` en
+# Windows y como AppImage/`.deb`/`.rpm` en Linux. Es el mismo código, así que el mapa de
+# abajo sirve igual y no hay una tercera columna: lo que se porta de Mac a `app-win/`
+# llega a las dos. Lo único que cambia entre esas dos es el empaquetado y el
+# autocomplete, que en Linux no se ofrece — y eso está anotado en `docs/APP-LINUX.md`,
+# no acá, porque no es deriva: es una decisión.
 #
 # Por eso el chequeo corre **en el release**, compara contra el tag anterior, y lo que
 # encuentra va anotado en las notas de la Release. Ver `dev/paridad.py` y el job

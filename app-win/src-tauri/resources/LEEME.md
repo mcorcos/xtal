@@ -1,13 +1,16 @@
 # Recursos que viajan adentro de la app
 
-Acá va **`xtal.exe`**, el binario de la CLI, que el instalador de Windows mete adentro
-del paquete de la app.
+Acá va **el binario de la CLI** —`xtal.exe` en Windows, `xtal` en Linux—, que el paquete
+de la app mete adentro.
 
 ## Por qué
 
-Sin esto, bajar el `.exe` y abrirlo te deja una app que no puede hacer nada: le habla al
-comando `xtal`, y si no está instalado no compila, no simula y no lee un proyecto. «Bajá
-el instalador y además abrí PowerShell y pegá un comando» no es un instalador.
+Sin esto, bajar el instalador y abrirlo te deja una app que no puede hacer nada: le habla
+al comando `xtal`, y si no está instalado no compila, no simula y no lee un proyecto.
+«Bajá el instalador y además abrí una terminal y pegá un comando» no es un instalador.
+
+**En macOS no va**, y no es una omisión: ahí sí hay un gestor de paquetes de fábrica, y el
+cask declara `depends_on formula:` sobre la CLI, así que Homebrew la instala primero.
 
 ## Cuál gana si hay dos
 
@@ -21,9 +24,15 @@ que se descubre tarde y mal.
 
 ## Cómo llega acá
 
-Lo copia el job `app` de `.github/workflows/release.yml`, que compila la CLI para
-`x86_64-pc-windows-msvc` justo antes de armar el instalador. En un build local no está, y
-la app funciona igual mientras tengas la CLI instalada.
+Lo copian los jobs `app` (Windows) y `app-linux` de `.github/workflows/release.yml`, que
+compilan la CLI justo antes de empaquetar, y sus gemelos `instalable` y `paquetes-linux`
+de `ci.yml`. En un build local no está, y la app funciona igual mientras tengas la CLI
+instalada.
+
+**Dónde queda adentro del paquete no es lo mismo en los dos**: en Windows va a
+`resources\` al lado del `.exe`; en Linux, a `/usr/lib/<producto>/resources/` mientras el
+ejecutable va a `/usr/bin/`. Las dos las conoce `bundled()` en `xtal_cli.rs`, y el job del
+release imprime dónde quedó y falla si no está.
 
 Este archivo existe para que la carpeta no esté vacía: `bundle.resources` es un glob y un
 glob que no matchea nada rompe el build.

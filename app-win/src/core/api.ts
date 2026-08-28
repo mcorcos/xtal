@@ -154,6 +154,12 @@ export const modelo = {
 };
 
 export const motor = {
+  /**
+   * ¿Se ofrece el autocomplete en esta máquina? En Linux no: el paquete no trae
+   * `llama-server`. Quién decide es Rust (`motor_disponible`), no un `if` acá — así
+   * el día que el `.deb` lo traiga, la pestaña aparece sin tocar el frontend.
+   */
+  disponible: () => invoke<boolean>("motor_disponible"),
   prender: () => invoke<void>("motor_prender"),
   apagar: () => invoke<void>("motor_apagar"),
   prendido: () => invoke<boolean>("motor_prendido"),

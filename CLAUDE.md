@@ -860,6 +860,83 @@ Ver `docs/RELEASING.md` («La app de escritorio de macOS»).
     Windows», que es exactamente lo contrario de lo que hace el workflow desde el PR #11.
     Es la misma clase de párrafo viejo que causó la auditoría de la app de Windows.
 
+### La app para Linux, y que se baje igual que en Windows — HECHO (2026-08-27), pedido de Manu → `docs/APP-LINUX.md`
+En Linux quedaba **la CLI sola**: Windows tenía instalador y app, Mac tenía cask y app, y
+Linux tenía un `brew install` de la CLI y nada más. Ahora
+`curl … install.sh | sh` deja las dos cosas, **sin pedir root en ningún paso**, que es la
+misma regla que ya seguían `install.ps1` y el resto del proyecto.
+- **No es una app nueva: es la de Windows.** Mismo `app-win/`, mismo Tauri, mismo backend
+  de Rust, mismo frontend. Costó poco porque el código ya estaba escrito
+  multiplataforma: en 3084 líneas de backend había **siete** bloques `#[cfg(windows)]` y
+  todos tenían su rama de Unix. Lo que faltaba era todo lo de alrededor — los formatos de
+  paquete, el instalador y las rutas donde en Linux viven las cosas.
+- **AppImage extraído, y no el `.deb`, y ese es el centro de la decisión.** `dpkg` pide
+  root, y en la máquina de una facultad no se tiene. Pero un AppImage *sin extraer*
+  necesita **FUSE 2**, que en Ubuntu 22.04 en adelante no viene instalado: el síntoma es
+  «dlopen(): error loading libfuse.so.2», que no dice que falta un paquete y que se
+  arregla con... root. `--appimage-extract` no usa FUSE. Los tres formatos se publican
+  igual (AppImage, `.deb`, `.rpm`) para quien prefiera el gestor de su distro.
+- **El `.desktop` lo escribe el instalador**, porque sin `dpkg` no hay quién lo instale, y
+  sin él la app no aparece en el menú **y `xtal://` no funciona** — que es cómo el agente
+  maneja la app. El `Exec=` se reescribe con la ruta absoluta del `AppRun`: el original
+  dice `Exec=Xtal`, que asume que está en el PATH.
+- **El autocomplete no está, a propósito, y la pestaña de Ajustes ni aparece.** `motor.rs`
+  no tiene nada de Windows —`llama-server` existe para Linux—, pero el paquete no lo trae,
+  y un interruptor que falla con «no pude arrancar llama-server» parece un producto roto.
+  Lo decide `motor_disponible()` en Rust y **no un `if` en el frontend**: el día que el
+  paquete lo traiga, la pestaña vuelve sola. Con `XTAL_LLAMA` apuntando a un llama.cpp
+  propio, aparece igual.
+- **Homebrew on Linux pasó a ser el primer gestor que prueba `xtal setup`**, y eso tapó un
+  agujero que no era de Linux sino del producto: **Tectonic no está en apt**, así que en
+  Debian y en Ubuntu —la mayoría de las máquinas— no había ningún camino automático para
+  la dependencia principal. `brew` la tiene, y es el único de los cuatro que no pide root.
+  Hay un test que fija el orden (`MGRS_LINUX`), porque una lista ordenada alfabéticamente
+  por el próximo que pase deja a Ubuntu sin camino y no rompe nada visible.
+- **La ventana en negro con NVIDIA está resuelta y no se ve leyendo el código.** Es el
+  problema más conocido de WebKitGTK: con el driver propietario la ventana abre vacía, sin
+  error y sin log. `WEBKIT_DISABLE_DMABUF_RENDERER=1` lo apaga, y la app se lo pone sola
+  **solo si `/sys/module/nvidia` existe** — apagar el renderer tiene costo, y con Intel,
+  AMD o nouveau sería pagarlo por nada.
+- **Los `resources` no van al lado del ejecutable, al revés que en Windows.** En Linux
+  Tauri los deja en `/usr/lib/<producto>/resources/` mientras el binario va a
+  `/usr/bin/<producto>`. Buscar solo al lado del ejecutable deja la CLI adentro del
+  paquete y a la app diciendo que no la encuentra. El job del release **imprime dónde
+  quedó y falla si no está**: la ruta no se adivina.
+- **El runner es `ubuntu-22.04` y NO `ubuntu-latest`.** Compilado en 24.04 el binario
+  exige glibc 2.39 y **no arranca** en Ubuntu 22.04 ni en Debian 12. El error dice
+  «GLIBC_2.39 not found» y no menciona dónde se compiló. Mismo criterio que ya usaban los
+  binarios de la CLI.
+- **El job del CI `app` pasó a ser una matriz de dos sistemas**, y no es por las dudas:
+  cada uno compila código que el otro ni mira (`#[cfg(windows)]` de un lado,
+  `#[cfg(target_os = "linux")]` del otro). Con un solo runner, la mitad del archivo se
+  publica sin que nadie la haya compilado nunca.
+- **`xdg-utils` faltaba, y solo se descubre armando los paquetes de verdad.** El bundler
+  del AppImage llama a `xdg-mime` porque la app declara el esquema `xtal://`: sin él **el
+  `.deb` y el `.rpm` salen bien y el AppImage muere al final** — o sea, justo el formato
+  que usa el instalador. Todo lo demás —compilar, tipar, los tests— estaba en verde. Por
+  eso ahora hay un job `paquetes-linux` en el CI que los arma **en cada push**, con el
+  mismo argumento que ya justificaba el `instalable` de Windows: sin él, esto se descubre
+  al taggear.
+- **El AppImage pesa 99 MB y el `.deb` 10.** No es un descuido: el AppImage trae GTK y
+  WebKit adentro, que es lo que lo hace andar en cualquier distro sin instalar nada. Bajar
+  99 MB una vez es mejor que pedirle root a alguien que no lo tiene.
+- **Verificado en un contenedor de Linux desde esta Mac**, y esto es lo que se puede
+  afirmar: los tres paquetes se arman; el AppImage **se desempaqueta sin FUSE**; trae la
+  CLI en `usr/lib/Xtal/resources/xtal` —así quedó *verificada* la ruta que busca
+  `bundled()`, no adivinada— y esa CLI corre; el `.desktop` que deja el instalador pasa
+  `desktop-file-validate` y después de `update-desktop-database` **`xdg-mime query default
+  x-scheme-handler/xtal` contesta `xtal.desktop`**; y `install.sh` corre entero en un
+  Linux x86_64 real. **Nadie abrió la app en una máquina con Linux** — WebKitGTK
+  dibujando, el menú de aplicaciones y `xtal app` llegando a una app abierta solo se
+  prueban ahí. Vale la misma advertencia que la app de Windows.
+- **Una regresión mía que atrapó un test que escribí después**: al partir el bloque de
+  Unix de `path_ampliado()` en uno de macOS y uno de Linux, `~/.local/bin` y `~/.cargo/bin`
+  se quedaron afuera de los dos — y ahí es donde `install.sh` deja el propio `xtal`. No
+  rompía nada visible (la app lo busca igual por `candidatos()`), pero un tectonic puesto
+  con `cargo install` dejaba de encontrarse y la app decía que no tenías LaTeX.
+- **Deuda de nombre**: `app-win/` ya no es solo de Windows. Renombrarlo toca 24 archivos,
+  el CI y las claves de caché: es su propia tanda.
+
 ### Dos flechas, no una que adivine — HECHO (2026-08-26), pedido de Manu
 Manu lo probó y no andaba: la autodetección de dirección erraba. La razón no se arregla —
 **casi siempre hay selección de los dos lados**: uno marca algo en el PDF para mirarlo,

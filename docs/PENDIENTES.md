@@ -14,6 +14,9 @@ Funciona de punta a punta y está publicado:
 
 - `brew install mcorcos/xtal/xtal` o el `install.sh` por curl. Cuatro binarios
   (mac arm/intel, linux x86/arm) con checksums, publicados por GitHub Actions.
+- **Las tres apps de escritorio se instalan con un comando**: cask de Homebrew en macOS,
+  `install.ps1` en Windows, `install.sh` en Linux. Ninguno pide permisos de
+  administrador.
 - Se configura solo. En la primera corrida de cualquier comando escribe la config
   global, los themes y el **skill de Claude Code** en `~/.claude/skills/xtal/`.
 - Servidor MCP adentro del mismo binario, para clientes sin terminal.
@@ -253,9 +256,55 @@ cuesta plata, y hasta que alguien la ponga se documenta y se sigue.
 
 ---
 
+### 9. Linux — HECHO, pero nadie lo corrió todavía (27 de agosto de 2026), pedido de Manu
+
+El hueco era el mismo que tuvo Mac hasta la semana pasada: **en Linux quedaba la CLI
+sola**. Windows tenía instalador y app, Mac tenía cask y app, y Linux tenía un `brew
+install` de la CLI y nada más.
+
+Costó poco porque no había nada que escribir de cero: `app-win/` es Tauri, Tauri compila
+para Linux, y en 3084 líneas de backend había **siete** bloques `#[cfg(windows)]`, todos
+con su rama de Unix. Lo que faltaba era todo lo de alrededor. El detalle en
+[`APP-LINUX.md`](APP-LINUX.md); acá lo que importa:
+
+- **`curl … install.sh | sh` deja la CLI y la app**, sin pedir root en ningún paso. Es la
+  contraparte exacta de `install.ps1`.
+- **AppImage extraído, no `.deb`.** `dpkg` pide root; y un AppImage sin extraer pide
+  FUSE 2, que en Ubuntu 22.04 en adelante no viene instalado. Se extrae con
+  `--appimage-extract`, que no usa FUSE, y el instalador le escribe el `.desktop` —sin
+  el cual la app no aparece en el menú **y `xtal://` no funciona**, que es cómo el agente
+  maneja la app.
+- **Los tres formatos se publican igual** (AppImage, `.deb`, `.rpm`) para quien prefiera
+  el gestor de su distro.
+- **El autocomplete no está, a propósito**, y la pestaña de Ajustes ni aparece: el paquete
+  no trae `llama-server`, y un interruptor que falla parece un producto roto. Lo decide
+  `motor_disponible()` en `motor.rs`, no un `if` en el frontend.
+- **Homebrew on Linux pasó a ser el primer gestor que `xtal setup` prueba en Linux**, y
+  eso tapó un agujero de verdad: Tectonic **no está en apt**, así que en Debian y en
+  Ubuntu —la mayoría de las máquinas— no había camino automático para la dependencia
+  principal del producto. `brew` la tiene y no pide root. Hay un test que fija el orden.
+- **La ventana en negro con NVIDIA está resuelta.** Es el problema clásico de WebKitGTK y
+  no da ningún error: la app se pone `WEBKIT_DISABLE_DMABUF_RENDERER=1` sola, pero **solo
+  si `/sys/module/nvidia` existe**.
+
+**Lo que sigue abierto, y es lo mismo que los puntos 2 y 7**: nadie abrió la app en una
+máquina con Linux. Lo que sí se verificó, en un contenedor desde una Mac: los tres
+paquetes se arman —fue lo que destapó que faltaba `xdg-utils`, sin el cual el `.deb` y el
+`.rpm` salen bien y **el AppImage muere al final**—, el AppImage se desempaqueta sin FUSE,
+trae la CLI donde `bundled()` la busca y esa CLI corre, el `.desktop` valida y deja
+`xtal://` enrutado, y `install.sh` corre entero en un Linux x86_64. Lo que no se puede
+probar sin una máquina: WebKitGTK dibujando, el menú de aplicaciones, y `xtal app`
+llegando a una app abierta.
+
+Y queda una deuda de nombre: **`app-win/` ya no es solo de Windows**. Adentro está el
+backend de las dos apps de Tauri. Renombrarlo toca 24 archivos, el CI y las claves de
+caché, así que es su propia tanda.
+
+---
+
 ## Backlog de producto (esto ya no es pulido)
 
-### 9. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
+### 10. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
 
 Que `xtal circuit import` acepte el `.asc` que dibujás en LTspice y lo convierta a
 netlist. Hoy solo toma netlists ya en texto.
@@ -269,11 +318,11 @@ escribir a ciegas: hay que probar el `-netlist` de punta a punta. Instalarlo y l
 
 El "re-netlistar al guardar el `.asc`" (watch) va junto con esto.
 
-### 10. Capa 2 — ensamblar circuitos desde bloques curados
+### 11. Capa 2 — ensamblar circuitos desde bloques curados
 
 Bloques con puertos declarados que se conectan entre sí. Está en `cristal-spec.md`.
 
-### 11. Capa 3 — diseñar desde una especificación
+### 12. Capa 3 — diseñar desde una especificación
 
 Loop de LLM + ngspice, donde **ngspice es el juez, no la IA**. Investigación, no
 producto.

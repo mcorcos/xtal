@@ -44,11 +44,28 @@ fn candidatos() -> Vec<PathBuf> {
     {
         if let Some(home) = std::env::var_os("HOME") {
             let home = PathBuf::from(home);
+            // Donde lo deja `install.sh`, en macOS y en Linux.
             v.push(home.join(".local/bin/xtal"));
             v.push(home.join(".cargo/bin/xtal"));
+            // Homebrew on Linux instalado en el home, que es lo que hace `brew` cuando
+            // no se tiene permiso sobre `/home/linuxbrew`.
+            #[cfg(target_os = "linux")]
+            v.push(home.join(".linuxbrew/bin/xtal"));
         }
         v.push(PathBuf::from("/opt/homebrew/bin/xtal"));
         v.push(PathBuf::from("/usr/local/bin/xtal"));
+
+        #[cfg(target_os = "linux")]
+        {
+            // El prefijo de Homebrew on Linux. No es `/opt/homebrew`: en Linux `brew`
+            // usa el suyo, y es el que exporta `brew shellenv`.
+            v.push(PathBuf::from("/home/linuxbrew/.linuxbrew/bin/xtal"));
+            v.push(PathBuf::from("/snap/bin/xtal"));
+            // Último: si alguien lo puso a mano con permisos de root, o si algún día
+            // hay un `.deb` de la CLI. Va al final porque una copia del sistema no
+            // tiene que ganarle a la que el usuario instaló en su home.
+            v.push(PathBuf::from("/usr/bin/xtal"));
+        }
     }
 
     v
@@ -60,14 +77,39 @@ fn es_ejecutable(p: &Path) -> bool {
 
 /// El `xtal` que el instalador dejó adentro del paquete de la app.
 ///
-/// Tauri copia lo que declara `bundle.resources` a una carpeta al lado del ejecutable
-/// (`resources/` en Windows y Linux; `Contents/Resources/` en macOS). No se usa la API
-/// de rutas de Tauri para resolverlo porque esta función corre antes de que exista el
+/// Tauri copia lo que declara `bundle.resources` a un lugar distinto en cada sistema, y
+/// **en Linux no es al lado del ejecutable**:
+///
+///   Windows   `resources\` al lado del `.exe`.
+///   macOS     `Contents/Resources/`, o sea `../Resources` desde `Contents/MacOS/`.
+///   Linux     `/usr/lib/<producto>/resources/`, mientras el ejecutable va a
+///             `/usr/bin/<producto>`. Adentro del AppImage la relación es la misma,
+///             colgando de `squashfs-root/`.
+///
+/// La de Linux es la que más fácil se pasa por alto: buscar solo al lado del ejecutable
+/// deja la CLI adentro del paquete y a la app diciendo que no la encuentra, que es un
+/// error imposible de entender desde afuera. El job `app-linux` del release imprime
+/// dónde quedó y falla si no está, así que la ruta no se adivina: se verifica.
+///
+/// No se usa la API de rutas de Tauri porque esta función corre antes de que exista el
 /// `AppHandle` —la busca la pantalla de inicio— y con la ruta del ejecutable alcanza.
 fn bundled() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    for rel in ["resources", "../Resources", "."] {
+
+    // Windows y macOS. En Linux también se prueban, porque un AppImage extraído a mano
+    // puede quedar con el binario y los recursos en la misma carpeta.
+    const CERCA: &[&str] = &["resources", "../Resources", "."];
+
+    // El nombre de la carpeta sale del `productName` de `tauri.conf.json`. Se prueban las
+    // dos capitalizaciones porque el empaquetador lo normaliza distinto según el formato,
+    // y elegir mal se ve igual que no traer nada.
+    #[cfg(target_os = "linux")]
+    const LEJOS: &[&str] = &["../lib/Xtal/resources", "../lib/xtal/resources"];
+    #[cfg(not(target_os = "linux"))]
+    const LEJOS: &[&str] = &[];
+
+    for rel in CERCA.iter().chain(LEJOS) {
         let p = dir.join(rel).join(BIN);
         if es_ejecutable(&p) {
             return Some(p);
@@ -157,16 +199,30 @@ impl Salida {
     }
 }
 
+/// Qué decirle a alguien que abrió la app sin tener la CLI.
+///
+/// **El comando cambia con el sistema, y por eso está acá y no escrito en el frontend.**
+/// Antes esta cadena decía «Instalalo desde PowerShell» en las tres plataformas: en
+/// Windows era cierto, y en las otras dos era una instrucción que no se puede seguir —
+/// que es peor que no decir nada, porque manda a alguien a buscar un programa que su
+/// máquina no tiene.
+fn como_instalar() -> String {
+    #[cfg(windows)]
+    let cmd = "irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex";
+    #[cfg(not(windows))]
+    let cmd = "curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh";
+
+    #[cfg(windows)]
+    let donde = "PowerShell";
+    #[cfg(not(windows))]
+    let donde = "una terminal";
+
+    format!("No encuentro el comando `xtal`. Instalalo desde {donde} con:\n  {cmd}")
+}
+
 /// Corre `xtal` con los argumentos que le pases y espera a que termine.
 pub fn correr(args: &[String], carpeta: Option<&Path>) -> Result<Salida, String> {
-    let bin = ruta_binario().ok_or_else(|| {
-        // El comando de verdad. Xtal no está en winget ni en scoop: se instala con su
-        // propio script, que baja el binario del release y lo deja en el PATH del
-        // usuario sin pedir administrador.
-        "No encuentro el comando `xtal`. Instalalo desde PowerShell con:\n  \
-         irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex"
-            .to_string()
-    })?;
+    let bin = ruta_binario().ok_or_else(como_instalar)?;
 
     let mut c = comando(&bin.to_string_lossy());
     c.args(args);

@@ -570,14 +570,18 @@ salga una version nueva.
 
 ## Plataformas
 
-**Mac y Windows.** Son la misma app: mismo modelo, mismas pantallas, mismos atajos, mismo
-sistema de diseño y los mismos números.
+**Mac, Windows y Linux.** Son la misma app: mismo modelo, mismas pantallas, mismos
+atajos, mismo sistema de diseño y los mismos números.
 
 - macOS → `app/`, Swift + AppKit. Terminal libghostty, visor PDFKit, editor `NSTextView`.
 - Windows → `app-win/`, Tauri. Terminal ConPTY + xterm.js, visor pdf.js, editor
   CodeMirror 6. Detalle en [`APP-WINDOWS.md`](APP-WINDOWS.md).
+- Linux → **el mismo `app-win/`**, con WebKitGTK en vez de WebView2 y otros formatos de
+  paquete. No hay una tercera base de código. Lo que cambia está en
+  [`APP-LINUX.md`](APP-LINUX.md).
 
-Las dos le hablan al mismo binario `xtal` y ninguna reimplementa nada.
+Son **dos bases de código y tres apps publicadas**, y las tres le hablan al mismo binario
+`xtal`: ninguna reimplementa nada.
 
 **Dos diferencias, las dos por Windows y las dos anotadas en el código:**
 
