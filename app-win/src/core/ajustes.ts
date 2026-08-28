@@ -95,6 +95,22 @@ export function useAjuste(clave: string, porDefecto: Valor): [any, (v: any) => v
 // necesita para traducir `xtal app panel pdf` a un ajuste. Son las mismas de la app de
 // Mac, letra por letra: una orden de la CLI tiene que hacer lo mismo en las dos.
 
+/**
+ * Los valores de fábrica de los ajustes que **lee más de un archivo**.
+ *
+ * Existe por un bug concreto de la app de Mac: `compilarAlGuardar` estaba declarado en
+ * Ajustes con default `false` y en el workspace con default `true`. Los dos leían la
+ * misma clave, así que hasta que alguien tocara el interruptor la app compilaba sola
+ * mientras el interruptor se veía apagado — y no hay forma de darse cuenta leyendo un
+ * archivo solo. Acá pasaba lo mismo al revés: los dos decían `true`, escritos aparte.
+ *
+ * Contraparte de `Pref` en `Settings/Ajustes.swift`.
+ */
+export const POR_DEFECTO = {
+  /** **Apagado.** Ver el comentario largo en `Workspace.compilarAlGuardar`. */
+  compilarAlGuardar: false,
+} as const;
+
 export const CLAVES = {
   modo: "modo",
   panelPdf: "panel.pdf",

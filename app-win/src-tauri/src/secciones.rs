@@ -26,6 +26,8 @@ use crate::xtal_cli;
 struct Cruda {
     title: String,
     body: String,
+    #[serde(default)]
+    body_file: Option<String>,
     figures: Vec<String>,
     #[serde(default)]
     subsections: Vec<Cruda>,
@@ -38,6 +40,15 @@ pub struct Seccion {
     pub figuras: Vec<String>,
     /// Cuánto está anidada: 0 es una sección, 1 una subsección.
     pub nivel: usize,
+    /// Dónde vive el cuerpo, relativo a la carpeta del proyecto:
+    /// `secciones/01-objetivo.tex`.
+    ///
+    /// **La app abre ese mismo archivo por dos caminos** —la lista de secciones y el
+    /// árbol de archivos— así que la copia que el frontend tiene en memoria se queda
+    /// vieja apenas alguien usa el otro. Con la ruta a mano, abrir una sección puede leer
+    /// el disco, que es la única fuente de verdad. Contraparte de `Secciones.Seccion`
+    /// en la app de Mac.
+    pub archivo: Option<String>,
 }
 
 /// El árbol se aplana con su nivel: una lista se dibuja y se recorre mejor que un árbol,
@@ -50,6 +61,7 @@ fn aplanar(crudas: Vec<Cruda>, nivel: usize) -> Vec<Seccion> {
             cuerpo: c.body,
             figuras: c.figures,
             nivel,
+            archivo: c.body_file,
         });
         out.extend(aplanar(c.subsections, nivel + 1));
     }

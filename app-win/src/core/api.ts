@@ -205,6 +205,16 @@ export interface Seccion {
   figuras: string[];
   /** Cuánto está anidada: 0 es una sección, 1 una subsección. */
   nivel: number;
+  /**
+   * Dónde vive el cuerpo, relativo a la carpeta del proyecto:
+   * `secciones/01-objetivo.tex`.
+   *
+   * **La app abre ese mismo archivo por dos caminos** —la lista de secciones y el árbol
+   * de archivos— así que esta copia se queda vieja apenas alguien usa el otro. Con la
+   * ruta a mano, abrir una sección puede leer el disco, que es la única fuente de
+   * verdad. Igual que `Secciones.Seccion.archivo` en la app de Mac.
+   */
+  archivo: string | null;
 }
 
 export const secciones = {

@@ -122,9 +122,17 @@ public struct Workspace: View {
     /// Si la lista de archivos del proyecto está desplegada. Arranca cerrada: son la
     /// tripa, no el informe.
     @AppStorage("xtal.panel.archivosCrudos") private var verArchivos2 = false
-    /// Prendido por default: el PDF tiene que estar al día sin que nadie se acuerde
-    /// de apretar nada. Se puede apagar en Ajustes para un informe grande.
-    @AppStorage("xtal.compilarAlGuardar") private var compilarAlGuardar = true
+    /// **Apagado por default.** El PDF se rehace con ⌘S, cuando vos lo pedís.
+    ///
+    /// Estuvo prendido y era un enredo: cualquier pausa de un par de segundos mientras
+    /// escribías disparaba una compilación entera —Tectonic, el PDF que se recarga, la
+    /// barra que parpadea— y no había forma de escribir tranquilo. Se prende en
+    /// Ajustes → General para un informe chico, que es donde de verdad sirve.
+    ///
+    /// El default vive en `Pref` y no acá: **estaba escrito dos veces y no coincidía**.
+    /// Ajustes decía `false` y esta línea decía `true`, así que el interruptor se veía
+    /// apagado mientras la app compilaba sola.
+    @AppStorage(Pref.compilarAlGuardar) private var compilarAlGuardar = Pref.compilarAlGuardarPorDefecto
     /// El compilado automático, con retraso. Compilar en cada tecla es absurdo.
     @State private var compiladoPendiente: Task<Void, Never>?
     @State private var vigia: Vigia?
@@ -232,7 +240,17 @@ public struct Workspace: View {
         .onReceive(NotificationCenter.default.publisher(for: .xtalSelectorSimbolos)) { _ in
             eligiendoSimbolo = true
         }
-        .onDisappear { vigia?.parar() }
+        .onDisappear {
+            vigia?.parar()
+            // Cerrar el proyecto con el guardado a medio camino perdía lo último que se
+            // escribió. Ver `Secciones.descargar`.
+            Task { await secciones.descargar() }
+        }
+        // Y lo mismo al cerrar la app, que es el caso donde no hay un después: acá el
+        // guardado tiene que bloquear, porque un `Task` no llega a correr nunca.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            secciones.descargarYa()
+        }
         .sheet(item: $pedidoArchivo) { pedido in
             DialogoTitulo(titulo: pedido.titulo, texto: $nombreArchivo) { nombre in
                 hacer(pedido, nombre)
@@ -375,7 +393,6 @@ public struct Workspace: View {
             }
         }
         .onChange(of: tamanoTerminal) { _, nuevo in agentes.cambiarTamano(nuevo) }
-        .onChange(of: proyecto.seleccionado) { _, _ in cargarSeleccionado() }
         .onChange(of: texto) { _, nuevo in
             // El texto lo acaba de poner la app, no el usuario: se muestra y no se
             // guarda. Ver `cargandoTexto`.
@@ -1122,7 +1139,6 @@ public struct Workspace: View {
         // Guardar lo que estaba escrito antes de cambiar de archivo.
         guardarLoAbierto()
         secciones.seleccionada = nil
-        proyecto.seleccionado = nil
         arbol.seleccionado = url
         // Abrir en el árbol las carpetas que llevan a este archivo, para que se vea
         // dónde está. Abrir algo y no saber de dónde salió es la mitad del problema.
@@ -1133,7 +1149,20 @@ public struct Workspace: View {
         }
         // Primero se declara qué está abierto y después se carga el texto: al revés,
         // el `onChange` del texto dispararía apuntando a lo anterior.
-        mostrar((try? String(contentsOf: url, encoding: .utf8)) ?? "", como: .archivo(url))
+        let mostrado = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        mostrar(mostrado, como: .archivo(url))
+        // Y lo mismo al revés que en `refrescarDesdeElDisco`: el `.tex` de una sección
+        // que venías editando desde la lista puede tener el guardado a medio camino, y
+        // ahí el disco todavía dice lo de antes.
+        Task {
+            await secciones.descargar()
+            guard case .archivo(let abiertoAhora) = abierto, abiertoAhora == url,
+                  texto == mostrado,
+                  let enDisco = try? String(contentsOf: url, encoding: .utf8),
+                  enDisco != mostrado
+            else { return }
+            mostrar(enDisco, como: .archivo(url))
+        }
     }
 
     /// Escribe al disco lo que hay en el editor, si corresponde.
@@ -1296,10 +1325,40 @@ public struct Workspace: View {
         // Guardar lo que estaba abierto antes de perderlo. `guardarLoAbierto` mira
         // `abierto`, así que no hace falta acordarse de qué era.
         guardarLoAbierto()
-        proyecto.seleccionado = nil
         arbol.seleccionado = nil
-        secciones.seleccionada = sec
-        mostrar(sec.cuerpo, como: .seccion(sec.titulo))
+        // Se busca de nuevo en la lista en vez de creerle al parámetro: `guardarLoAbierto`
+        // acaba de dejar ahí lo último que se escribió, y el `sec` que llegó puede ser
+        // de antes. Volver a tocar la sección que estabas editando te devolvía el texto
+        // viejo.
+        let actual = secciones.lista.first { $0.id == sec.id } ?? sec
+        secciones.seleccionada = actual
+        mostrar(actual.cuerpo, como: .seccion(actual.titulo))
+        refrescarDesdeElDisco(actual, mostrado: actual.cuerpo)
+    }
+
+    /// Corrige lo que se acaba de mostrar con lo que de verdad hay en el disco.
+    ///
+    /// El cuerpo de una sección vive en `secciones/NN-loquesea.tex`, **y la app abre ese
+    /// archivo por dos caminos**: la lista de secciones y el árbol de archivos. Además lo
+    /// tocan el agente desde la terminal y `xtal run`. La copia en memoria se queda vieja
+    /// apenas pasa cualquiera de esas cosas, y mostrarla es lo que hace que escribir
+    /// arriba borre lo de antes.
+    ///
+    /// Va en dos tiempos —primero lo de memoria, después lo del disco— porque antes de
+    /// leer hay que terminar de escribir lo pendiente, y eso es un subproceso: dejar el
+    /// editor en blanco mientras tanto se ve peor que corregirlo un instante después.
+    private func refrescarDesdeElDisco(_ sec: Secciones.Seccion, mostrado: String) {
+        Task {
+            await secciones.descargar()
+            // Si mientras tanto cambiaste de archivo o escribiste algo, no se toca nada:
+            // corregir el texto abajo de los dedos de alguien es peor que mostrar algo
+            // viejo.
+            guard case .seccion(let abiertoAhora) = abierto, abiertoAhora == sec.titulo,
+                  texto == mostrado,
+                  let enDisco = secciones.cuerpoEnDisco(de: sec), enDisco != mostrado
+            else { return }
+            mostrar(enDisco, como: .seccion(sec.titulo))
+        }
     }
 
     private func cargarSeleccionado() {

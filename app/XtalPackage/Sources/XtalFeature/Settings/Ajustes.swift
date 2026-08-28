@@ -103,11 +103,28 @@ public struct Ajustes: View {
     }
 }
 
+// MARK: - Los ajustes que se escriben en dos lados
+
+/// Las claves de `UserDefaults` que **lee más de un archivo**, con su valor de fábrica.
+///
+/// Existe por un bug concreto: `xtal.compilarAlGuardar` estaba declarado en Ajustes con
+/// default `false` y en el workspace con default `true`. Los dos leían la misma clave,
+/// así que hasta que alguien tocara el interruptor la app compilaba sola mientras el
+/// interruptor se veía apagado — y no hay forma de darse cuenta leyendo un archivo solo.
+///
+/// Acá van únicamente los que se declaran dos veces. Un ajuste que vive en una sola
+/// vista se sigue escribiendo ahí, que se lee mejor.
+enum Pref {
+    static let compilarAlGuardar = "xtal.compilarAlGuardar"
+    /// **Apagado.** Ver el comentario largo en `Workspace.compilarAlGuardar`.
+    static let compilarAlGuardarPorDefecto = false
+}
+
 // MARK: - General
 
 private struct PanelGeneral: View {
     @AppStorage("xtal.apariencia") private var apariencia = "auto"
-    @AppStorage("xtal.compilarAlGuardar") private var compilarAlGuardar = false
+    @AppStorage(Pref.compilarAlGuardar) private var compilarAlGuardar = Pref.compilarAlGuardarPorDefecto
     @AppStorage("xtal.abrirUltimo") private var abrirUltimo = true
 
     var body: some View {
@@ -131,7 +148,7 @@ private struct PanelGeneral: View {
             }
 
             FilaAjuste(titulo: "Compilar al guardar",
-                       detalle: "Recompila el PDF cada vez que cambia un archivo. Cómodo en un informe chico; en uno grande conviene apagarlo y usar ⌘R.",
+                       detalle: "Recompila el PDF solo, un rato después de cada cambio. Viene apagado: mientras escribís, cada pausa dispara una compilación entera. Con esto apagado el PDF se rehace con ⌘S.",
                        conSeparador: false) {
                 Toggle("", isOn: $compilarAlGuardar).toggleStyle(.switch)
             }

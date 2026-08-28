@@ -64,8 +64,10 @@ import Testing
     #expect(!p.archivos.contains { $0.url.path.contains("/salida/") })
     #expect(p.archivos.contains { $0.nombre == "uno.tex" })
     // Pero algo tiene que quedar abierto: el editor en blanco no le dice a nadie qué
-    // hacer.
-    #expect(p.seleccionado != nil)
+    // hacer. **Eso lo elige `Arbol`, no `Proyecto`.** `Proyecto` tuvo su propia
+    // selección y era un problema: la reasignaba en cada `recargar()`, que corre
+    // después de cada compilación, y el editor se recargaba solo mientras escribías.
+    #expect(Arbol.primeraSeccion(en: base)?.lastPathComponent == "uno.tex")
 }
 
 @Test func el_binario_se_busca_donde_de_verdad_queda_instalado() {
@@ -1409,4 +1411,122 @@ private func syncTexDelEjemplo() -> (SyncTeX, URL)? {
                                        destino: "/Applications/Mi App.app", limpiar: nil)
     #expect(g.contains("'/tmp/d'\\''Alembert/Xtal.app'"))
     #expect(g.contains("'/Applications/Mi App.app'"))
+}
+
+// MARK: - Que lo que escribís se guarde de verdad
+//
+// Son tests de integración: corren el binario `xtal` contra un proyecto de mentira en
+// una carpeta temporal. Sin el binario no hay nada que probar y se saltean, igual que
+// los de SyncTeX cuando el ejemplo no está compilado.
+//
+// Van todos juntos porque prueban la misma cosa desde tres lados: **el cuerpo de una
+// sección tiene que terminar en el `xtal.toml`, y hasta que llegue, la copia en memoria
+// tiene que ser la buena.** Las tres fallas que fijan pasaron de verdad.
+
+/// Un proyecto de Xtal recién creado, con dos secciones. `nil` si el binario no está.
+@MainActor
+private func proyectoConSecciones() throws -> URL? {
+    guard XtalCLI.rutaBinario() != nil else { return nil }
+    let base = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xtal-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    for args in [["init"], ["section", "add", "Uno"], ["section", "add", "Dos"]] {
+        guard (try XtalCLI.correrYEsperar(args, en: base)).ok else { return nil }
+    }
+    return base
+}
+
+/// Lo que el `xtal.toml` dice hoy que tiene adentro esa sección.
+///
+/// Se compara sin el salto de línea del final: `section set` se lo agrega siempre, así
+/// que lo que vuelve del disco nunca es byte a byte lo que mandó el editor.
+@MainActor
+private func cuerpoEnDisco(_ titulo: String, en base: URL) async -> String? {
+    let otro = Secciones(carpeta: base)
+    await otro.recargar()
+    return otro.lista.first { $0.titulo == titulo }?.cuerpo
+        .trimmingCharacters(in: .newlines)
+}
+
+@MainActor
+@Test func lo_que_se_escribe_en_una_seccion_queda_en_la_lista_al_toque() async throws {
+    guard let base = try proyectoConSecciones() else { return }
+    defer { try? FileManager.default.removeItem(at: base) }
+
+    let sec = Secciones(carpeta: base)
+    await sec.recargar()
+    sec.seleccionada = sec.lista.first { $0.titulo == "Uno" }
+
+    sec.guardar("Uno", cuerpo: "Lo que acabo de escribir.")
+
+    // Sin esperar nada: la copia en memoria ya tiene que ser la nueva. Si no, volver a
+    // abrir la sección devuelve el texto de antes y la próxima tecla lo guarda arriba
+    // del bueno. Es la pérdida de trabajo que motivó todo esto.
+    #expect(sec.lista.first { $0.titulo == "Uno" }?.cuerpo == "Lo que acabo de escribir.")
+    #expect(sec.seleccionada?.cuerpo == "Lo que acabo de escribir.")
+
+    // Y en el disco, después de descargar lo pendiente.
+    await sec.descargar()
+    #expect(await cuerpoEnDisco("Uno", en: base) == "Lo que acabo de escribir.")
+}
+
+@MainActor
+@Test func cambiar_de_seccion_no_pierde_lo_de_la_anterior() async throws {
+    guard let base = try proyectoConSecciones() else { return }
+    defer { try? FileManager.default.removeItem(at: base) }
+
+    let sec = Secciones(carpeta: base)
+    await sec.recargar()
+
+    // Escribís en una, te vas a la otra y seguís escribiendo, todo adentro del retraso.
+    // Antes, la segunda tecla cancelaba el guardado de la primera sección y ese texto
+    // no llegaba nunca al disco.
+    sec.guardar("Uno", cuerpo: "Texto de la primera.")
+    sec.guardar("Dos", cuerpo: "Texto de la segunda.")
+    await sec.descargar()
+
+    #expect(await cuerpoEnDisco("Uno", en: base) == "Texto de la primera.")
+    #expect(await cuerpoEnDisco("Dos", en: base) == "Texto de la segunda.")
+}
+
+@MainActor
+@Test func agregar_una_seccion_no_borra_lo_que_estabas_escribiendo() async throws {
+    guard let base = try proyectoConSecciones() else { return }
+    defer { try? FileManager.default.removeItem(at: base) }
+
+    let sec = Secciones(carpeta: base)
+    await sec.recargar()
+
+    // `agregar` corre `section add` y después relee el `xtal.toml`. Si lo pendiente no
+    // se escribe primero, la relectura devuelve el cuerpo viejo y lo pisa en memoria.
+    sec.guardar("Uno", cuerpo: "Esto no se tiene que perder.")
+    await sec.agregar("Tres")
+
+    #expect(sec.lista.first { $0.titulo == "Uno" }?.cuerpo
+        .trimmingCharacters(in: .newlines) == "Esto no se tiene que perder.")
+    #expect(await cuerpoEnDisco("Uno", en: base) == "Esto no se tiene que perder.")
+    #expect(sec.lista.contains { $0.titulo == "Tres" })
+}
+
+@MainActor
+@Test func el_cuerpo_de_una_seccion_se_lee_del_disco_y_no_de_la_memoria() async throws {
+    guard let base = try proyectoConSecciones() else { return }
+    defer { try? FileManager.default.removeItem(at: base) }
+
+    let sec = Secciones(carpeta: base)
+    await sec.recargar()
+    let uno = try #require(sec.lista.first { $0.titulo == "Uno" })
+
+    // El cuerpo de una sección es un archivo, y la app lo abre por dos caminos: esta
+    // lista y el árbol de archivos. Además lo tocan el agente desde la terminal y
+    // `xtal run`. Acá se simula eso: alguien más escribe el `.tex`.
+    let archivo = try #require(uno.archivo)
+    try "Lo escribió otro.".write(to: base.appendingPathComponent(archivo),
+                                  atomically: true, encoding: .utf8)
+
+    // La lista sigue diciendo lo de antes, y está bien: nadie le avisó. Lo que no puede
+    // pasar es que la app le crea a la lista y muestre eso, porque escribir arriba de
+    // ese texto borra lo que hizo el otro.
+    #expect(sec.lista.first { $0.titulo == "Uno" }?.cuerpo != "Lo escribió otro.")
+    #expect(sec.cuerpoEnDisco(de: uno) == "Lo escribió otro.")
 }

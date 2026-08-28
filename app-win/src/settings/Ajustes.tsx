@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { Icono } from "../design/Icono";
-import { CLAVES, useAjuste } from "../core/ajustes";
+import { CLAVES, POR_DEFECTO, useAjuste } from "../core/ajustes";
 import { xtal, modelo, motor, type Doctor, type EstadoModelo } from "../core/api";
 import { listen } from "@tauri-apps/api/event";
 import * as autocomplete from "../editor/autocomplete";
@@ -101,7 +101,8 @@ export function Ajustes({ cerrar }: { cerrar: () => void }) {
 function General() {
   const [apariencia, setApariencia] = useAjuste(CLAVES.apariencia, "auto");
   const [abrirUltimo, setAbrirUltimo] = useAjuste(CLAVES.abrirUltimo, true);
-  const [compilar, setCompilar] = useAjuste(CLAVES.compilarAlGuardar, true);
+  const [compilar, setCompilar] = useAjuste(
+    CLAVES.compilarAlGuardar, POR_DEFECTO.compilarAlGuardar);
 
   return (
     <div className="grupo">
@@ -119,7 +120,7 @@ function General() {
       </FilaAjuste>
 
       <FilaAjuste titulo="Compilar al guardar"
-        detalle="Recompila el PDF cada vez que cambia un archivo. Cómodo en un informe chico; en uno grande conviene apagarlo y usar Ctrl+S.">
+        detalle="Recompila el PDF solo, un rato después de cada cambio. Viene apagado: mientras escribís, cada pausa dispara una compilación entera. Con esto apagado el PDF se rehace con Ctrl+S.">
         <Interruptor prendido={compilar} cambiar={setCompilar} />
       </FilaAjuste>
     </div>
