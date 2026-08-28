@@ -177,6 +177,32 @@ pub async fn motor_prender(motor: tauri::State<'_, Motor>) -> Result<(), String>
     Err("llama-server no llegó a levantar.".into())
 }
 
+/// ¿Se puede ofrecer el autocomplete en esta máquina?
+///
+/// **En Linux la respuesta es que no, y es una decisión de alcance, no una limitación.**
+/// El motor de acá abajo no tiene nada de Windows —`llama-server` existe para Linux y
+/// este archivo lo arrancaría igual—, pero el `.deb` y el AppImage **no lo traen
+/// adentro**, y sin él prender el interruptor falla con «no pude arrancar llama-server»,
+/// que no es algo que alguien pueda resolver.
+///
+/// Se prefirió esconder la pestaña antes que ofrecer un interruptor que no anda: una
+/// función que no está se entiende, y una que está y falla parece un producto roto.
+///
+/// Que la pregunta viva acá y no en el frontend es lo mismo de siempre: el día que el
+/// paquete de Linux traiga el motor, se cambia esta función y la pestaña aparece sola.
+/// Con un `if` en TypeScript habría que acordarse de los dos lados.
+#[tauri::command]
+pub fn motor_disponible() -> bool {
+    // `XTAL_LLAMA` es la puerta para el que ya tiene llama.cpp por su cuenta: si apuntó
+    // la variable a su binario, la pestaña aparece y todo funciona.
+    disponible(std::env::var("XTAL_LLAMA").is_ok_and(|v| !v.is_empty()))
+}
+
+/// La decisión, sin leer el entorno, para poder fijarla en un test.
+fn disponible(hay_llama_propio: bool) -> bool {
+    hay_llama_propio || !cfg!(target_os = "linux")
+}
+
 #[tauri::command]
 pub fn motor_apagar(motor: tauri::State<'_, Motor>) {
     motor.matar();
@@ -246,4 +272,24 @@ pub async fn motor_completar(
 
     let cuerpo: RespuestaInfill = r.json().await.map_err(|e| e.to_string())?;
     Ok(cuerpo.content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn en_linux_no_se_ofrece_el_autocomplete() {
+        // Es una decisión de alcance —el paquete de Linux no trae `llama-server`— y no
+        // una limitación del código. Si algún día lo trae, se cambia acá y la pestaña
+        // aparece sola: el frontend no tiene ningún `if` de plataforma.
+        assert_eq!(disponible(false), !cfg!(target_os = "linux"));
+    }
+
+    #[test]
+    fn con_un_llama_propio_se_ofrece_siempre() {
+        // El que ya tiene llama.cpp instalado apunta `XTAL_LLAMA` a su binario y le
+        // funciona todo, en cualquier sistema.
+        assert!(disponible(true));
+    }
 }

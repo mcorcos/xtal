@@ -41,7 +41,10 @@
       "nsis",
       "msi",
       "app",
-      "dmg"
+      "dmg",
+      "deb",
+      "rpm",
+      "appimage"
     ],
     "publisher": "UNIT",
     "copyright": "© UNIT",
@@ -55,6 +58,23 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "gtk3"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

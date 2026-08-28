@@ -63,6 +63,14 @@ pueden quedar desfasados de los flags reales.
 | `aarch64-unknown-linux-gnu` | `ubuntu-22.04-arm` | Linux ARM |
 | `x86_64-pc-windows-msvc` | `windows-latest` | Windows |
 
+Y las tres apps de escritorio, cada una en su job:
+
+| App | Job | Runner | Formatos |
+|---|---|---|---|
+| macOS | `app-mac` | `macos-26` | `.zip` (universal: ARM + Intel) |
+| Windows | `app` | `windows-latest` | `.exe` (NSIS) + `.msi` |
+| Linux | `app-linux` | `ubuntu-22.04` | AppImage + `.deb` + `.rpm` |
+
 El binario de Mac Intel se **cross-compila** desde el runner ARM: GitHub retiró los
 runners `macos-13`, y un job que los pida se queda encolado para siempre (nos pasó en el
 primer intento de publicar la 0.1.0). El clang de Apple compila x86_64 desde arm64 sin
@@ -119,10 +127,30 @@ bash packaging/homebrew/render-cask.sh    0.1.0 --from-release
 
 `install.sh` vive en la raíz del repo y se sirve desde `raw.githubusercontent.com`, o
 sea que **el instalador que corre la gente es siempre el de `main`**, no el del último
-tag. Cualquier cambio ahí sale a producción apenas se mergea. Los nombres de los assets
-(`xtal-<version>-<target>.tar.gz`, `.zip` en Windows, `Xtal-<version>-windows-x64-setup.exe`)
-y el archivo `SHA256SUMS` son el contrato entre el
-workflow y el instalador: si cambia uno, hay que cambiar el otro.
+tag. Cualquier cambio ahí sale a producción apenas se mergea.
+
+**Los nombres de los assets son el contrato** entre el workflow y los dos instaladores:
+si cambia uno, hay que cambiar el otro. Están los tres en el mismo lugar por eso.
+
+| Asset | Lo arma | Lo baja |
+|---|---|---|
+| `xtal-<version>-<target>.tar.gz` | job `build` | `install.sh` |
+| `xtal-<version>-x86_64-pc-windows-msvc.zip` | job `build` | `install.ps1` |
+| `Xtal-<version>-windows-x64-setup.exe` | job `app` | `install.ps1` |
+| `Xtal-<version>-linux-x86_64.AppImage` | job `app-linux` | `install.sh` |
+| `Xtal-<version>-linux-amd64.deb` | job `app-linux` | a mano |
+| `Xtal-<version>-linux-x86_64.rpm` | job `app-linux` | a mano |
+| `SHA256SUMS` | job `release` | los dos |
+
+**En Linux `install.sh` instala también la app; en macOS no.** No es una omisión: en macOS
+la app va por el cask, que es lo que la deja en `/Applications` —donde Spotlight y
+Launchpad la buscan— y lo que le saca la cuarentena. En Linux no hay un gestor de fábrica,
+así que el script hace las dos cosas, igual que `install.ps1`.
+
+Y **no usa el `.deb`**, que sería lo natural: `dpkg` pide root. Baja el AppImage, lo
+**extrae** (sin extraer necesita FUSE 2, que en Ubuntu 22.04 en adelante no viene
+instalado) y le escribe el `.desktop` él mismo. El detalle está en
+[`APP-LINUX.md`](APP-LINUX.md).
 
 ## La app de escritorio de Windows
 
@@ -224,6 +252,56 @@ notarización al job. Nada más cambia.
 no coincide con la del workspace. Es la misma disciplina que ya tenían los tres archivos
 de la app de Windows, y hace falta por lo mismo: una app que dice 0.1.0 hablándole a una
 CLI 0.3.2 no se puede diagnosticar.
+
+## La app de escritorio de Linux
+
+La compila el job `app-linux`, y **es el mismo `app-win/`**: mismo Tauri, mismo backend de
+Rust, mismo frontend. Lo único distinto es que dibuja con WebKitGTK en vez de WebView2 y
+que se empaqueta en tres formatos. El detalle está en [`APP-LINUX.md`](APP-LINUX.md); acá
+va lo que hace el workflow.
+
+**Salen tres paquetes**, y cada uno tiene su para quién:
+
+| Formato | Para quién | Pide root |
+|---|---|---|
+| AppImage | Cualquier distro. Es el que usa `install.sh`. | No |
+| `.deb` | Debian, Ubuntu, Mint | Sí (`dpkg`) |
+| `.rpm` | Fedora | Sí (`dnf`) |
+
+**El runner es `ubuntu-22.04` y NO `ubuntu-latest`.** Un binario de Linux pide la glibc de
+la máquina donde se compiló *o una más nueva*: compilado en 24.04 exige glibc 2.39 y **no
+arranca** en Ubuntu 22.04 ni en Debian 12, que es la mitad de las máquinas donde esto se
+va a usar. El error dice `GLIBC_2.39 not found` y no menciona en ningún lado que el
+problema es dónde se compiló. Es el mismo criterio que ya se usaba para los binarios de la
+CLI (ver la tabla de Plataformas).
+
+> El día que GitHub retire ese runner —pasó con `macos-13`, y un job que pide un runner
+> retirado queda **encolado para siempre**— hay que subir al más viejo que quede y avisar
+> en el README que las distros anteriores se quedan sin app.
+
+**El binario `xtal` SÍ va adentro**, como en Windows y al revés que en macOS. En Linux no
+hay un gestor de paquetes de fábrica que pueda declarar la dependencia, así que bajar el
+`.deb` y abrirlo tiene que alcanzar para que la app haga algo. No hay dos copias peleando:
+la app **prefiere la CLI instalada en el sistema** y solo cae a la de adentro (ver
+`bundled()` en `app-win/src-tauri/src/xtal_cli.rs`).
+
+**`llama-server` NO va adentro**, al revés que en Windows: en Linux el autocomplete no se
+ofrece y la pestaña de Ajustes ni aparece. Lo decide `motor_disponible()` en `motor.rs`,
+que es una función y no un `if` en el frontend — el día que el paquete traiga el motor, se
+cambia ahí y la pestaña vuelve sola.
+
+**Los paquetes se arman también en cada push**, en el job `paquetes-linux` de `ci.yml`.
+Es el mismo argumento que ya justificaba el job `instalable` de Windows, y acá no es
+hipotético: la primera vez que se armaron de verdad, el `.deb` y el `.rpm` salieron bien y
+**el AppImage murió al final** por una dependencia que faltaba (`xdg-utils`), con todo lo
+demás en verde. Sin ese job, eso se descubre al taggear.
+
+**El job del release verifica que los paquetes sirvan, no que existan.** Un paquete truncado también
+existe. Se comprueba que los tres pesen más de 1 MB y, para el AppImage —que es el único
+que `install.sh` usa—, que **se pueda desempaquetar con `--appimage-extract`**, que traiga
+el `AppRun`, que traiga la CLI adentro, y que su `.desktop` declare
+`x-scheme-handler/xtal`. Ese último es el que hace que `xtal://` funcione: si se cae, el
+agente pierde el manejo de la app y **nada más lo delata**.
 
 ## Que las dos apps no se separen
 

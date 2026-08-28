@@ -133,6 +133,25 @@ pub fn ensure_one(bin: &str, kind: DepKind, pkgs: &PkgNames, interactive: bool) 
     println!("    {} {bin} — {tag}", style("✗").red().bold());
 
     if !interactive {
+        // **Se dice CÓMO conseguirlo igual, aunque no se instale nada.**
+        //
+        // Este es el camino de `install.sh` y de `install.ps1`, que corren
+        // `xtal setup --yes` al final: es el momento en que alguien acaba de instalar
+        // Xtal y se entera de que le falta el motor de LaTeX. Un «✗ falta tectonic» sin
+        // decir cómo obtenerlo lo deja exactamente igual que antes de leerlo.
+        //
+        // Que se imprima no toca el sistema, que es lo único que el modo no interactivo
+        // promete: se muestra el comando, lo corre quien quiera.
+        if let Some((m, pkg)) = detect_pkg_mgr().and_then(|m| pkgs.for_mgr(m).map(|p| (m, p))) {
+            let (cmd, cmd_args) = install_cmd(m, &pkg);
+            println!(
+                "      {} {}",
+                style("→ instalalo con:").dim(),
+                style(format!("{cmd} {}", cmd_args.join(" "))).cyan()
+            );
+        } else {
+            print_manual_hint(bin, pkgs);
+        }
         return Ok(false);
     }
 
@@ -185,7 +204,11 @@ fn run_install(cmd: &str, cmd_args: &[String], bin: &str) -> Result<bool> {
     }
 }
 
-/// Cuando no hay package manager, o el paquete no está mapeado, damos instrucciones.
+/// Cuando no hay package manager, o el que hay no trae el paquete, damos instrucciones.
+///
+/// El segundo caso no es raro: **Tectonic no está en apt**, así que en Debian y en Ubuntu
+/// —la mayoría de las máquinas con Linux— este es el camino normal para la dependencia
+/// principal del producto, y por eso tiene su propio texto.
 pub fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
     println!("      {} instalá {bin} a mano:", style("→").dim());
     if bin == "tectonic" {
@@ -200,6 +223,22 @@ pub fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
             println!(
                 "        {}",
                 style("o el .zip de x86_64-pc-windows-msvc de github.com/tectonic-typesetting/tectonic/releases").cyan()
+            );
+        } else if cfg!(target_os = "linux") {
+            // **Este es el caso que más se da y el que peor estaba.** Tectonic no está
+            // en apt, así que en Debian y en Ubuntu —la mayoría de las máquinas— el
+            // camino automático no existe y hay que decir cuál es el de a mano.
+            //
+            // Homebrew primero porque es el único que no pide root, y porque es el mismo
+            // comando que la doc ya usa en macOS: uno menos que aprender.
+            println!("        {}", style("brew install tectonic").cyan());
+            println!(
+                "        {}",
+                style("(sin brew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\")").dim()
+            );
+            println!(
+                "        {}",
+                style("o, con el compilador de Rust ya instalado: cargo install tectonic").cyan()
             );
         } else {
             println!("        {}", style("o: cargo install tectonic").cyan());
@@ -238,6 +277,28 @@ pub fn print_manual_hint(bin: &str, pkgs: &PkgNames) {
     if let Some(p) = pkgs.brew {
         println!("        {}", style(format!("brew install {p}")).cyan());
     }
+    // Las tres familias de Linux, no solo Debian: imprimir `apt-get` en una Fedora es un
+    // comando que no existe, y se lee como que la herramienta no sabe dónde está parada.
+    //
+    // Se imprimen las tres y no la de esta máquina porque acá se llega por dos caminos:
+    // que no haya ningún gestor conocido, o que el que hay **no traiga el paquete** —que
+    // es justo lo que pasa con Tectonic en Debian y Ubuntu—. En el segundo, decir solo lo
+    // del gestor local sería repetir el que ya sabemos que no sirve.
+    if cfg!(target_os = "linux") {
+        if let Some(p) = pkgs.apt {
+            println!(
+                "        {}",
+                style(format!("sudo apt-get install {p}")).cyan()
+            );
+        }
+        if let Some(p) = pkgs.dnf {
+            println!("        {}", style(format!("sudo dnf install {p}")).cyan());
+        }
+        if let Some(p) = pkgs.pacman {
+            println!("        {}", style(format!("sudo pacman -S {p}")).cyan());
+        }
+        return;
+    }
     if let Some(p) = pkgs.apt {
         println!(
             "        {}",
@@ -269,13 +330,26 @@ pub enum PkgMgr {
     Choco,
 }
 
-/// En macOS, Homebrew. En Linux, el primero que exista entre apt/dnf/pacman. En Windows,
-/// scoop → winget → chocolatey.
+/// En macOS, Homebrew. En Linux, brew → apt/dnf/pacman. En Windows, scoop → winget →
+/// chocolatey.
 ///
 /// **Ese orden en Windows no es alfabético, es a propósito**: scoop instala en el home
 /// del usuario y no pide permisos de administrador, y además es el único que tiene los
 /// tres paquetes que Xtal necesita. winget viene de fábrica en Windows 11 pero solo trae
 /// MiKTeX. Chocolatey los tiene todos y pide administrador, así que va último.
+///
+/// **En Linux, Homebrew va primero por la misma razón.** `brew` existe en Linux —es el
+/// mismo Homebrew, con su prefijo en `/home/linuxbrew/.linuxbrew`— y es el único gestor
+/// de los cuatro que **no pide root**: instala en el home del usuario. Es la misma regla
+/// que ya siguen `install.sh` y `install.ps1`, y la que hace que Xtal se pueda instalar
+/// en la máquina de una facultad.
+///
+/// Además es el único que trae **Tectonic en Debian y en Ubuntu**, donde no está en apt
+/// (ver `tectonic_pkgs`). Sin esta rama, la distro más usada del mundo se queda sin
+/// camino automático para la dependencia principal del producto.
+///
+/// Que esté instalado se pregunta corriéndolo, así que a nadie que no lo tenga le cambia
+/// nada: se sigue de largo a apt.
 pub fn detect_pkg_mgr() -> Option<PkgMgr> {
     if cfg!(target_os = "macos") {
         return is_available("brew").then_some(PkgMgr::Brew);
@@ -292,17 +366,25 @@ pub fn detect_pkg_mgr() -> Option<PkgMgr> {
         }
         return None;
     }
-    for (bin, mgr) in [
-        ("apt-get", PkgMgr::Apt),
-        ("dnf", PkgMgr::Dnf),
-        ("pacman", PkgMgr::Pacman),
-    ] {
+    for (bin, mgr) in MGRS_LINUX {
         if is_available(bin) {
-            return Some(mgr);
+            return Some(*mgr);
         }
     }
     None
 }
+
+/// Los gestores de Linux, **en el orden en que se prueban**.
+///
+/// El orden es la decisión, no la lista: `brew` primero porque es el único que no pide
+/// root y el único que trae Tectonic en Debian y en Ubuntu. Está acá afuera para que un
+/// test lo pueda fijar.
+pub const MGRS_LINUX: &[(&str, PkgMgr)] = &[
+    ("brew", PkgMgr::Brew),
+    ("apt-get", PkgMgr::Apt),
+    ("dnf", PkgMgr::Dnf),
+    ("pacman", PkgMgr::Pacman),
+];
 
 /// Comando de instalación (binario + args) para un manager y paquete.
 pub fn install_cmd(mgr: PkgMgr, pkg: &str) -> (String, Vec<String>) {
@@ -408,6 +490,36 @@ mod tests {
         let (_, args) = install_cmd(PkgMgr::Winget, "MiKTeX.MiKTeX");
         assert!(args.contains(&"--accept-source-agreements".to_string()));
         assert!(args.contains(&"--accept-package-agreements".to_string()));
+    }
+
+    #[test]
+    fn en_linux_brew_se_prueba_antes_que_apt() {
+        // No es cosmético: `brew` es el único de los cuatro que instala sin root, y el
+        // único que trae Tectonic en Debian y en Ubuntu. Si alguien ordena esta lista
+        // alfabéticamente, el que tenga brew igual termina en `sudo apt-get`, y en
+        // Ubuntu se queda directamente sin camino automático para Tectonic.
+        assert_eq!(MGRS_LINUX[0].1, PkgMgr::Brew);
+        assert_eq!(MGRS_LINUX[1].1, PkgMgr::Apt);
+        // El binario es `apt-get` y no `apt`: `apt` avisa que su interfaz no es estable
+        // para scripts, y no está garantizado en una instalación mínima.
+        assert_eq!(MGRS_LINUX[1].0, "apt-get");
+    }
+
+    #[test]
+    fn en_linux_hay_camino_para_las_tres_familias() {
+        // Un `sudo apt-get install ngspice` impreso en una Fedora es un comando que no
+        // existe. Las tres tienen ngspice y las tres tienen LaTeX.
+        for pkgs in [ngspice_pkgs(), texlive_pkgs()] {
+            assert!(pkgs.apt.is_some());
+            assert!(pkgs.dnf.is_some());
+            assert!(pkgs.pacman.is_some());
+        }
+        // Tectonic es la excepción conocida, y por eso tiene su propio texto en
+        // `print_manual_hint`.
+        assert!(tectonic_pkgs().apt.is_none());
+        assert!(tectonic_pkgs().dnf.is_some());
+        assert!(tectonic_pkgs().pacman.is_some());
+        assert!(tectonic_pkgs().brew.is_some());
     }
 
     #[test]

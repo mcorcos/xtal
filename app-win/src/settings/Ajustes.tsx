@@ -15,7 +15,7 @@
 import { useEffect, useState } from "react";
 import { Icono } from "../design/Icono";
 import { CLAVES, useAjuste } from "../core/ajustes";
-import { xtal, modelo, type Doctor, type EstadoModelo } from "../core/api";
+import { xtal, modelo, motor, type Doctor, type EstadoModelo } from "../core/api";
 import { listen } from "@tauri-apps/api/event";
 import * as autocomplete from "../editor/autocomplete";
 
@@ -31,10 +31,23 @@ const PANELES = [
 export function Ajustes({ cerrar }: { cerrar: () => void }) {
   const [panel, setPanel] = useState<string>("general");
   const [version, setVersion] = useState("");
+  // En Linux el paquete no trae `llama-server`, así que la pestaña de Autocomplete no
+  // se muestra: ver `motor_disponible` en `motor.rs`, que es quien lo decide. Arranca
+  // en `true` para que en Windows y macOS —donde siempre está— la lista no parpadee.
+  const [hayAutocomplete, setHayAutocomplete] = useState(true);
 
   useEffect(() => {
     void xtal.json<Doctor>(["doctor"]).then((d) => setVersion(d.version)).catch(() => {});
+    void motor.disponible().then(setHayAutocomplete).catch(() => {});
   }, []);
+
+  const paneles = PANELES.filter((p) => p.id !== "autocomplete" || hayAutocomplete);
+
+  // Si estabas parado en Autocomplete y resulta que no está, no puede quedar el panel
+  // vacío con la lista sin nada marcado.
+  useEffect(() => {
+    if (!hayAutocomplete && panel === "autocomplete") setPanel("general");
+  }, [hayAutocomplete, panel]);
 
   return (
     <div className="telon" onMouseDown={(e) => e.target === e.currentTarget && cerrar()}>
@@ -42,7 +55,7 @@ export function Ajustes({ cerrar }: { cerrar: () => void }) {
         onKeyDown={(e) => e.key === "Escape" && cerrar()}>
         <div className="ajustes">
           <div className="ajustes-lista">
-            {PANELES.map((p) => (
+            {paneles.map((p) => (
               <button key={p.id} className={`fila ${panel === p.id ? "activa" : ""}`}
                 onClick={() => setPanel(p.id)}>
                 <Icono nombre={p.icono} tam={14} />

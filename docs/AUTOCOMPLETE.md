@@ -40,6 +40,11 @@ función no lee el texto ni arranca un timer.
 
 ## El modelo
 
+> **En Linux esto no está**, y es una decisión de alcance, no una limitación: el motor de
+> abajo es el mismo `llama-server` que en Windows y este código lo arrancaría igual, pero
+> el paquete de Linux **no lo trae adentro**, así que la pestaña de Ajustes ni aparece.
+> Lo decide `motor_disponible()` en `motor.rs`. Ver [`APP-LINUX.md`](APP-LINUX.md).
+
 **Qwen2.5-Coder 1.5B**, cuantizado a 4 bits. El mismo en las dos apps; lo único que cambia
 es el formato, porque cambia el motor.
 

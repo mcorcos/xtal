@@ -16,6 +16,7 @@ Además de `CLAUDE.md`, leé lo que corresponda de `docs/`:
 | `docs/PIPELINE.md` | De un dato a un PDF, paso por paso |
 | `docs/APP.md` | La app de escritorio de macOS |
 | `docs/APP-WINDOWS.md` | La app de escritorio de Windows |
+| `docs/APP-LINUX.md` | La app de escritorio de Linux (es el mismo `app-win/`) |
 | `docs/AGENTES.md` | Cómo Xtal se enchufa a los agentes de IA |
 | `docs/RELEASING.md` | Cómo se publica una version |
 | `docs/MCP.md` | El server MCP |

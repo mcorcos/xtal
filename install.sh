@@ -9,14 +9,20 @@
 #   3. baja el tarball y VERIFICA su SHA256 contra el archivo SHA256SUMS del release,
 #   4. copia el binario a ~/.local/bin (o donde le digas),
 #   5. instala completions y man page si encuentra dónde,
-#   6. avisa si el directorio no está en el PATH y qué hacer después.
+#   6. en Linux, instala también la app de escritorio,
+#   7. avisa si el directorio no está en el PATH y qué hacer después.
 #
 # No pide sudo, no toca /usr/local salvo que se lo pidas explícitamente, y no
 # escribe en tus archivos de shell: solo te dice qué línea agregar.
 #
+# En macOS la app de escritorio NO la instala este script: va por Homebrew, con
+# `brew install --cask mcorcos/xtal/xtal-app`. Es lo que deja la `.app` en
+# /Applications, que es donde Spotlight y Launchpad la buscan.
+#
 # Variables de entorno:
 #   XTAL_VERSION      version a instalar (ej. 0.1.0). Default: la última.
 #   XTAL_INSTALL_DIR  dónde dejar el binario. Default: ~/.local/bin
+#   XTAL_SIN_APP=1    no instalar la app de escritorio (Linux).
 #
 # Está escrito en sh POSIX a propósito: tiene que correr igual en macOS (donde el
 # /bin/sh es bash 3.2 en modo POSIX) y en cualquier Linux con dash o busybox.
@@ -26,6 +32,7 @@ set -eu
 REPO="mcorcos/xtal"
 VERSION="${XTAL_VERSION:-}"
 INSTALL_DIR="${XTAL_INSTALL_DIR:-}"
+SIN_APP="${XTAL_SIN_APP:-}"
 TMPDIR_XTAL=""
 
 # ---------------------------------------------------------------------------
@@ -64,6 +71,7 @@ Uso:
 Opciones:
   --version <X.Y.Z>   Instala una version puntual (default: la última publicada).
   --dir <ruta>        Directorio donde dejar el binario (default: ~/.local/bin).
+  --sin-app           No instalar la app de escritorio (solo la CLI). Linux.
   -h, --help          Muestra esta ayuda.
 EOF
 }
@@ -72,6 +80,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="${2:?--version necesita un valor}"; shift 2 ;;
     --dir)     INSTALL_DIR="${2:?--dir necesita un valor}"; shift 2 ;;
+    --sin-app) SIN_APP=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "opción desconocida: $1 (probá --help)" ;;
   esac
@@ -171,26 +180,51 @@ fetch "${BASE_URL}/${NAME}.tar.gz" "${TMPDIR_XTAL}/${NAME}.tar.gz" \
 
 # El checksum no es opcional: si el archivo SHA256SUMS no está o no coincide,
 # abortamos. Bajar un binario de internet sin verificarlo no va.
+#
+# Se baja UNA vez y se usa para todo lo que baje después (la CLI y, en Linux, la app):
+# es un solo archivo firmado por el mismo release, y pedirlo dos veces solo agrega una
+# forma de que las dos verificaciones miren listas distintas.
+SUMS=""
 if fetch "${BASE_URL}/SHA256SUMS" "${TMPDIR_XTAL}/SHA256SUMS" 2>/dev/null; then
-  EXPECTED="$(grep " ${NAME}.tar.gz\$" "${TMPDIR_XTAL}/SHA256SUMS" | cut -d' ' -f1)"
-  [ -n "$EXPECTED" ] || die "el release no lista un checksum para ${NAME}.tar.gz."
-
-  if command -v sha256sum >/dev/null 2>&1; then
-    ACTUAL="$(sha256sum "${TMPDIR_XTAL}/${NAME}.tar.gz" | cut -d' ' -f1)"
-  elif command -v shasum >/dev/null 2>&1; then
-    ACTUAL="$(shasum -a 256 "${TMPDIR_XTAL}/${NAME}.tar.gz" | cut -d' ' -f1)"
-  else
-    ACTUAL=""
-    warn "no encontré sha256sum ni shasum: sigo sin verificar el checksum."
-  fi
-
-  if [ -n "$ACTUAL" ]; then
-    [ "$ACTUAL" = "$EXPECTED" ] || die "el checksum no coincide. Descarga corrupta o alterada; no instalo nada."
-    ok "checksum verificado"
-  fi
+  SUMS="${TMPDIR_XTAL}/SHA256SUMS"
 else
   warn "el release no publica SHA256SUMS: sigo sin verificar."
 fi
+
+# El SHA256 de un archivo, con la herramienta que haya. Vacío si no hay ninguna.
+sha256_de() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    printf ''
+  fi
+}
+
+# verificar <archivo> <nombre-en-SHA256SUMS>
+#
+# Muere si el hash no coincide. **No morir cuando el hash no está en la lista** es a
+# propósito para el caso de un release viejo que todavía no publicaba ese asset; si el
+# hash está y no coincide, ahí sí se corta: eso ya no es un release incompleto, es un
+# archivo que no es el que dice ser.
+verificar() {
+  [ -n "$SUMS" ] || return 0
+  _esp="$(grep " \*\{0,1\}$2\$" "$SUMS" | head -1 | cut -d' ' -f1)"
+  if [ -z "$_esp" ]; then
+    warn "el release no lista un checksum para $2: sigo sin verificar."
+    return 0
+  fi
+  _real="$(sha256_de "$1")"
+  if [ -z "$_real" ]; then
+    warn "no encontré sha256sum ni shasum: sigo sin verificar el checksum."
+    return 0
+  fi
+  [ "$_real" = "$_esp" ] || die "el checksum de $2 no coincide. Descarga corrupta o alterada; no instalo nada."
+  ok "checksum verificado ($2)"
+}
+
+verificar "${TMPDIR_XTAL}/${NAME}.tar.gz" "${NAME}.tar.gz"
 
 tar -xzf "${TMPDIR_XTAL}/${NAME}.tar.gz" -C "$TMPDIR_XTAL"
 SRC="${TMPDIR_XTAL}/${NAME}"
@@ -241,7 +275,128 @@ fi
 ok "completions y man page instalados"
 
 # ---------------------------------------------------------------------------
-# 6. chequeos finales y próximos pasos
+# 6. la app de escritorio (Linux)
+# ---------------------------------------------------------------------------
+#
+# Es la contraparte del paso 6 de `install.ps1`, que baja el instalador NSIS y lo corre
+# en silencio. Acá hay tres diferencias, y las tres salen de la misma regla que el resto
+# del script: **no se pide root**.
+#
+#   1. **AppImage y no `.deb`.** Instalar un `.deb` es `dpkg -i`, y `dpkg` pide root. En
+#      la máquina de una facultad no se tiene. El `.deb` y el `.rpm` se publican igual en
+#      la Release para quien prefiera el gestor de su distro; este script usa el AppImage.
+#
+#   2. **Se EXTRAE en vez de dejarlo entero.** Un AppImage sin extraer necesita FUSE 2
+#      para montarse, y en Ubuntu 22.04 en adelante `libfuse2` no viene instalado: el
+#      síntoma es «dlopen(): error loading libfuse.so.2», que no le dice a nadie que le
+#      falta un paquete (y que se arregla con... root). `--appimage-extract` no usa FUSE,
+#      así que extraer y correr el `AppRun` de adentro anda en cualquier lado.
+#
+#   3. **El `.desktop` lo escribimos nosotros.** Sin `dpkg` no hay nadie que lo instale, y
+#      sin él la app no aparece en el menú **y `xtal://` no funciona**, que es cómo el
+#      agente maneja la app (`xtal app ver pdf` y compañía). El `Exec=` se reescribe con
+#      la ruta absoluta del `AppRun`: el original dice `Exec=xtal-app`, que asume que
+#      está en el PATH, y acá no lo está. (Verificado extrayendo un AppImage de verdad;
+#      el archivo se llama `Xtal.desktop` y vive en la raíz del `squashfs-root`.)
+
+# La app se publica solo para x86_64, igual que en Windows. El aviso va antes de
+# cualquier descarga: enterarse de que no hay binario después de bajar 60 MB es peor.
+APP_INSTALADA=0
+if [ "$OS" = "Linux" ] && [ -z "$SIN_APP" ]; then
+  if [ "$ARCH_PART" != "x86_64" ]; then
+    warn "la app de escritorio se publica solo para x86_64; en ${ARCH_PART} queda la CLI sola."
+  else
+    INSTALAR_APP=1
+    # Con `curl … | sh` el stdin es el script, no una terminal: no hay a quién
+    # preguntarle. Ahí se instala, que es lo que hace que después no quede ningún paso
+    # manual. Si alguien bajó el script y lo corrió a mano, se le pregunta.
+    if [ -t 0 ]; then
+      printf '\n  ¿Instalo también la app de escritorio? [S/n] '
+      read -r RESP || RESP=""
+      case "$RESP" in
+        [nN]*) INSTALAR_APP=0 ;;
+      esac
+    fi
+
+    if [ "$INSTALAR_APP" = "1" ]; then
+      APPIMAGE="Xtal-${VERSION}-linux-x86_64.AppImage"
+      say ""
+      step "descargando ${APPIMAGE}"
+      if ! fetch "${BASE_URL}/${APPIMAGE}" "${TMPDIR_XTAL}/${APPIMAGE}" 2>/dev/null; then
+        warn "esta version no publica la app para Linux. Queda la CLI, que es lo que hace el trabajo."
+      else
+        verificar "${TMPDIR_XTAL}/${APPIMAGE}" "${APPIMAGE}"
+
+        chmod +x "${TMPDIR_XTAL}/${APPIMAGE}"
+        step "desempaquetando"
+        # `--appimage-extract` deja un `squashfs-root/` en el directorio actual, así que
+        # se corre parado adentro del temporal. El subshell es para no cambiarle el
+        # directorio al resto del script.
+        if ! (cd "$TMPDIR_XTAL" && "./${APPIMAGE}" --appimage-extract >/dev/null 2>&1); then
+          warn "no pude desempaquetar la app. Queda la CLI; el AppImage está en la Release."
+        else
+          RAIZ="${TMPDIR_XTAL}/squashfs-root"
+          DESTINO_APP="${DATA_HOME}/xtal/app"
+
+          mkdir -p "${DATA_HOME}/xtal"
+          # Se borra la anterior antes de mover: si quedaran las dos mezcladas, un
+          # archivo de la version vieja que ya no existe en la nueva seguiría ahí, y
+          # esa es la clase de instalación que falla de formas que no se entienden.
+          rm -rf "$DESTINO_APP"
+          mv "$RAIZ" "$DESTINO_APP"
+
+          # Un lanzador en el PATH, al lado del binario. Sirve para abrirla desde la
+          # terminal y es lo que `XTAL_APP` espera si alguien lo necesita.
+          ln -sf "${DESTINO_APP}/AppRun" "${INSTALL_DIR}/xtal-app"
+
+          # ---- el .desktop -------------------------------------------------
+          APPS_DIR="${DATA_HOME}/applications"
+          mkdir -p "$APPS_DIR"
+
+          # El nombre del archivo lo pone Tauri y no está garantizado: se busca en vez
+          # de asumirlo.
+          ORIGINAL="$(ls "${DESTINO_APP}"/*.desktop 2>/dev/null | head -1 || true)"
+          if [ -n "$ORIGINAL" ]; then
+            # Los íconos, primero: el `.desktop` los nombra y tienen que existir antes.
+            if [ -d "${DESTINO_APP}/usr/share/icons" ]; then
+              mkdir -p "${DATA_HOME}/icons"
+              cp -r "${DESTINO_APP}/usr/share/icons/." "${DATA_HOME}/icons/" 2>/dev/null || true
+            fi
+
+            # `Exec=` con la ruta absoluta del AppRun, conservando el `%U` que es lo que
+            # le pasa la URL a la app cuando alguien abre un `xtal://`.
+            sed -e "s|^Exec=.*|Exec=\"${DESTINO_APP}/AppRun\" %U|" \
+                -e "s|^TryExec=.*|TryExec=${DESTINO_APP}/AppRun|" \
+                "$ORIGINAL" > "${APPS_DIR}/xtal.desktop"
+
+            # Sin `MimeType` no hay `xtal://`, y sin `xtal://` el agente no puede manejar
+            # la app. Lo normal es que Tauri ya lo haya escrito (sale del esquema que
+            # declara `tauri.conf.json`); esto es el seguro de que esté.
+            grep -q '^MimeType=' "${APPS_DIR}/xtal.desktop" \
+              || printf 'MimeType=x-scheme-handler/xtal;\n' >> "${APPS_DIR}/xtal.desktop"
+
+            chmod +x "${APPS_DIR}/xtal.desktop"
+
+            # El índice que consulta `xdg-open`. Sin esto el `.desktop` está pero el
+            # escritorio todavía no sabe que existe, y `xtal app` falla en silencio.
+            command -v update-desktop-database >/dev/null 2>&1 \
+              && update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
+            command -v xdg-mime >/dev/null 2>&1 \
+              && xdg-mime default xtal.desktop x-scheme-handler/xtal >/dev/null 2>&1 || true
+          else
+            warn "la app no trae su archivo .desktop: no va a aparecer en el menú."
+          fi
+
+          APP_INSTALADA=1
+          ok "app instalada en ${DESTINO_APP}"
+        fi
+      fi
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 7. chequeos finales y próximos pasos
 # ---------------------------------------------------------------------------
 
 say ""
@@ -269,7 +424,7 @@ command -v tectonic >/dev/null 2>&1 || warn "falta tectonic (motor LaTeX). \`xta
 command -v ngspice  >/dev/null 2>&1 || warn "falta ngspice (simulación). Es opcional."
 
 # ---------------------------------------------------------------------------
-# 7. dejarlo configurado y enchufado, sin que el usuario tenga que saber nada
+# 8. dejarlo configurado y enchufado, sin que el usuario tenga que saber nada
 # ---------------------------------------------------------------------------
 # `xtal setup --yes` toma todos los defaults sin preguntar (no puede preguntar: este
 # script se corre por una tubería, no hay terminal del otro lado). Escribe la config
@@ -285,5 +440,9 @@ say ""
 say "  xtal example --open   ${DIM}# un informe de ejemplo, compilado y abierto${RESET}"
 say "  xtal new \"Mi TP\"      ${DIM}# tu primer proyecto${RESET}"
 say ""
+if [ "$APP_INSTALADA" = "1" ]; then
+  say "  ${DIM}La app está en el menú de aplicaciones como ${RESET}Xtal${DIM}, o con ${RESET}xtal-app${DIM} en la terminal.${RESET}"
+  say ""
+fi
 say "  ${DIM}Si usás Claude Code, ya sabe usar Xtal: pedile el informe y listo.${RESET}"
 say ""

@@ -300,9 +300,19 @@ jobs:
   # **No se arma el instalador acá**: eso tarda varios minutos y es trabajo del release.
   # Lo que sí se hace es todo lo que puede romperse sin que nadie se entere — que el
   # TypeScript tipe, que el bundle se arme, que el Rust compile y que sus tests pasen.
+  #
+  # **Corre en los dos sistemas, y no es por las dudas.** `app-win/` es el backend de la
+  # app de Windows **y el de la de Linux** —es el mismo Tauri—, y cada uno compila código
+  # que el otro ni mira: `#[cfg(windows)]` de un lado, `#[cfg(target_os = "linux")]` del
+  # otro. Con un solo runner, la mitad del archivo se publica sin que nadie la haya
+  # compilado nunca.
   app:
-    name: app de escritorio
-    runs-on: windows-latest
+    name: app de escritorio (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v5
 
@@ -311,11 +321,30 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # Tauri en Linux dibuja con **WebKitGTK**, no con WebView2, y eso no viene en el
+      # runner. Sin estos paquetes el build muere en `pkg-config` con un error que habla
+      # de `javascriptcoregtk-4.1` y no de que falta una librería del sistema.
+      #
+      # Es la misma lista que necesita cualquiera que quiera compilar la app en Linux:
+      # está copiada en `docs/APP-LINUX.md` para que no haya que leer un workflow.
+      - name: Dependencias del sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf xdg-utils
+
       - name: Cachear dependencias de Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app-win/src-tauri
-          key: app-ci
+          key: app-ci-${{ matrix.os }}
 
       - uses: actions/setup-node@v4
         with:
@@ -329,15 +358,31 @@ jobs:
 
       # `npm run build` corre `tsc --noEmit` primero: si un tipo no cierra, no llega a
       # empaquetar. Es lo que atrapa el 90% de lo que se rompe tocando el frontend.
+      #
+      # Solo en uno: el frontend es el mismo archivo y el mismo `tsc` en los dos, así que
+      # correrlo dos veces no puede encontrar nada nuevo.
       - name: Tipos y bundle
+        if: runner.os == 'Windows'
         working-directory: app-win
         run: npm run build
 
-      - name: fmt + clippy del backend
+      # En Linux igual hay que dejar el `dist/`: `tauri` no compila si no existe el
+      # frontend que va a empaquetar, aunque solo se le pida `clippy`.
+      - name: Bundle del frontend (Linux)
+        if: runner.os == 'Linux'
+        working-directory: app-win
+        run: npm run build
+
+      # `fmt` mira el archivo entero sin importar el `cfg`, así que con un runner alcanza.
+      # `clippy` no: compila lo que el `cfg` deja pasar, y por eso corre en los dos.
+      - name: fmt del backend
+        if: runner.os == 'Windows'
         working-directory: app-win/src-tauri
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --all-targets -- -D warnings
+        run: cargo fmt --all -- --check
+
+      - name: clippy del backend
+        working-directory: app-win/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: tests del backend
         working-directory: app-win/src-tauri
@@ -425,5 +470,113 @@ jobs:
           path: |
             app-win/src-tauri/target/release/bundle/nsis/*-setup.exe
             app-win/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Y los paquetes de Linux también
+  # ---------------------------------------------------------------------------
+  #
+  # Mismo argumento que el job de arriba, y **no es hipotético**: la primera vez que se
+  # armaron de verdad, el `.deb` y el `.rpm` salieron bien y **el AppImage murió al final**
+  # con «xdg-mime binary not found». Faltaba `xdg-utils`, que el bundler necesita porque la
+  # app declara el esquema `xtal://`. Todo lo demás —compilar, tipar, los tests— estaba en
+  # verde. Sin este job, eso se descubre al taggear.
+  #
+  # Y el AppImage es el que usa `install.sh`, así que se verifica además que **se pueda
+  # desempaquetar** y que su `.desktop` declare el esquema: si eso se cae, el agente pierde
+  # el manejo de la app y nada más lo delata.
+  paquetes-linux:
+    name: los paquetes de Linux se arman
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf rpm desktop-file-utils xdg-utils
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app-win/src-tauri
+          key: paquetes-linux
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-win/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: app-win
+        run: npm ci
+
+      # La CLI viaja adentro del paquete, igual que en Windows: es lo que hace que bajar
+      # el `.deb` alcance. Ver app-win/src-tauri/resources/LEEME.md.
+      - name: Compilar la CLI y meterla adentro
+        run: |
+          set -euo pipefail
+          cargo build --release --bin xtal
+          cp target/release/xtal app-win/src-tauri/resources/xtal
+          chmod +x app-win/src-tauri/resources/xtal
+
+      - name: Armar los tres paquetes
+        working-directory: app-win
+        run: npm run tauri build
+
+      - name: Verificar que sirven, no que existen
+        run: |
+          set -euo pipefail
+          OUT=app-win/src-tauri/target/release/bundle
+          for patron in "$OUT/deb/*.deb" "$OUT/rpm/*.rpm" "$OUT/appimage/*.AppImage"; do
+            archivo=$(ls $patron 2>/dev/null | head -1)
+            [ -n "$archivo" ] || { echo "::error::no se armó $patron"; exit 1; }
+            tam=$(stat -c%s "$archivo")
+            echo "$archivo — $((tam/1024/1024)) MB"
+            [ "$tam" -gt 1000000 ] || { echo "::error::$archivo pesa $((tam/1024)) KB, quedó cortado"; exit 1; }
+          done
+
+          # El `.deb` tiene que traer la CLI donde `bundled()` la busca, que NO es al lado
+          # del ejecutable como en Windows: es `usr/lib/<producto>/resources/`. Si Tauri
+          # cambiara ese lugar, la app diría que no encuentra `xtal` en una máquina donde
+          # el archivo sí está — un error imposible de entender desde afuera.
+          echo "--- la CLI adentro del .deb:"
+          dpkg-deb -c "$OUT"/deb/*.deb | grep -E "resources/xtal$" \
+            || { echo "::error::el .deb no trae la CLI en usr/lib/<producto>/resources/."; exit 1; }
+
+          # Y el AppImage, que es el que usa `install.sh`: se desempaqueta sin FUSE y su
+          # `.desktop` enruta `xtal://`.
+          cd "$OUT/appimage"
+          chmod +x ./*.AppImage
+          ./*.AppImage --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun || { echo "::error::el AppImage no trae AppRun."; exit 1; }
+          find squashfs-root -name xtal -type f | grep -q . \
+            || { echo "::error::el AppImage no trae la CLI adentro."; exit 1; }
+          grep -rq 'x-scheme-handler/xtal' squashfs-root --include='*.desktop' \
+            || { echo "::error::el .desktop no declara x-scheme-handler/xtal: xtal:// no va a andar."; exit 1; }
+          desktop-file-validate squashfs-root/*.desktop
+          rm -rf squashfs-root
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: paquetes-linux
+          path: |
+            app-win/src-tauri/target/release/bundle/deb/*.deb
+            app-win/src-tauri/target/release/bundle/rpm/*.rpm
+            app-win/src-tauri/target/release/bundle/appimage/*.AppImage
           retention-days: 7
           if-no-files-found: error
