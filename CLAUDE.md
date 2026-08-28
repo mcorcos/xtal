@@ -1304,11 +1304,87 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 `xtal new|init` · `plan [add|list|remove]` · `status` · `scan` · `meas import|formula|random|list|show` ·
 `plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
+(los de curva aceptan `--vary`, `--temp`, `--montecarlo`/`--tolerance`/`--seed`/`--mc-dist`
+y `--measure`; `tran` suma `--max-step` y `--uic`)
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update [--check] [--yes] [--channel estable|beta]` · `setup` · `agents [install|uninstall|add|remove]` ·
 `app [abrir|compilar|modo|ver|panel|terminal|frente]` (`ver pdf|errores|revision|terminal`) · `latex [consulta]` · `refs` · `uninstall` ·
 `mcp [serve|install]` · `completions` · `man`.
+
+### El `.step` de LTspice, y todo lo que faltaba para empatarlo — HECHO (2026-08-28), pedido de Manu
+`xtal sim` tenía once análisis (tres de los cuales LTspice **no** tiene: `disto`, `pz` y
+`sens`), pero le faltaba lo que más se usa en un TP: **variar un valor y sacar la familia
+de curvas**. Se veía en el propio ejemplo, que trae un `variante-q-alto.cir` — un netlist
+entero duplicado para cambiarle un número a una resistencia.
+
+- **El flag se llama `--vary`, no `--step`**, y no es capricho: `sim tran` y `sim dc` ya
+  tienen un `--step` (el paso de tiempo y el de barrido). Clap no lo detecta al compilar
+  —revienta recién al construir ese subcomando— y el binario pasaba los tests, el
+  `--help` y el `doctor`: lo agarró **`xtal completions zsh` en el smoke del CI**, que es
+  el primer comando que arma todos los subcomandos de una. Ahora hay un test
+  (`Cli::command().debug_assert()` en `cli.rs`) que lo atrapa en `cargo test`.
+- **ngspice no tiene `.step`.** Lo que tiene es el intérprete adentro del `.control`,
+  donde se puede alterar el circuito y volver a correr. Todo eso vive en
+  `crates/xtal-sim/src/variation.rs`, que arma una lista de `Run`s: cada una son las
+  líneas que dejan el circuito como tiene que estar antes de correr el análisis.
+- **Las N corridas van en UN solo `ngspice -b`.** Es lo que el intérprete sabe hacer y
+  evita pagar el arranque N veces.
+- **Tres perillas, y no son la misma** (esto es lo que hay que saber si se toca):
+  1. un componente se cambia con `alter R1 = 4k7`;
+  2. un `.param` **no** — hace falta `alterparam` + `reset`, que re-arma el circuito
+     evaluando la expresión de nuevo. Sin el `reset`, el cambio no llega a los
+     componentes y **las dos curvas salen idénticas**, que se lee como que el barrido no
+     anda. Hay un test de integración que justamente compara dos curvas de un `.param`;
+  3. la temperatura no es ni una ni la otra: va con `option temp = 50`.
+  Cuál se usa lo deduce `Knob::detect` mirando el deck, así que se escribe
+  `--vary R1=...` o `--vary rval=...` igual.
+- **La temperatura va DESPUÉS de alterar**, no antes: si la perilla es un `.param`, sus
+  líneas terminan en `reset`, que se llevaría puesta una opción puesta antes.
+- **El Monte Carlo le pregunta a ngspice cuánto vale cada componente** (`op` +
+  `print @r1[resistance]`) en vez de leer el número del netlist. Es una corrida de más y
+  vale la pena: así funciona igual si el valor viene de un `.param`, de una expresión
+  `{...}` o con sufijos (`4k7`, `1meg`), **sin que Xtal tenga que implementar el parser
+  de valores de SPICE** — que sería una segunda verdad sobre cuánto vale un componente.
+- **Se puede repetir, y esa es la condición para que sirva en un informe.** La misma
+  `--seed` da exactamente las mismas curvas, y el valor que le tocó a cada componente
+  queda escrito en el `.toml` de su medición (`knobs`). Se formatea con `{:.6e}`: con
+  `{}` a secas un capacitor sale `0.00000023472221895291228`, ilegible justo en el
+  archivo al que uno va a mirar qué valor salió.
+- **`--measure` es el `.meas`.** Se pasa la línea de ngspice sin el `meas` del principio.
+  **Trampa que costó**: un `meas` que no encuentra lo que busca imprime
+  `Error: measure ... failed!`, y `has_fatal_error` lo tomaba como simulación rota →
+  abortaba y tiraba a la basura **las curvas que sí se habían calculado**. Ahora esa
+  línea está exceptuada a mano, con su test.
+- **Las mediciones se atribuyen a su corrida con marcas en el log** (`echo
+  --xtal-corrida-N--`). Como todo va en un solo `ngspice -b`, dos `meas` que se llaman
+  igual son indistinguibles; sin las marcas, "el ancho de banda para cada R" no se puede
+  armar.
+- **Con varias corridas, cada curva trae su leyenda puesta** (`R1 = 4k7`,
+  `Monte Carlo #3`). Ocho curvas sin nombre en un gráfico no le sirven a nadie, y es
+  justo el tipo de cosa que la persona no va a escribir a mano ocho veces.
+- **Los ids nuevos no rompen los viejos**: sin `--vary` el sufijo es vacío, así que un
+  `xtal sim` de siempre deja exactamente los mismos ids. Y los campos nuevos de `SimSpec`
+  y de `Tran` van con `skip_serializing_if`, así el `.toml` de una medición sin variación
+  queda **byte a byte igual** al que escribían las versiones anteriores (misma disciplina
+  que `preserve_order` en la provenance).
+- **`--vary` y `--montecarlo` no se combinan**, y el error lo dice: son dos formas de
+  variar el mismo circuito.
+- **`tran` suma `--max-step` (el `dTmax`) y `--uic`.** Ojo con el orden: en ngspice el
+  paso máximo es el **cuarto** argumento posicional, así que sin `start` no hay dónde
+  ponerlo — mandamos `start = 0`, que es el default y no cambia nada.
+- **`--temp` también en los reportes** (`op`, `tf`, `sens`, `pz`, `four`).
+- **Verificado contra ngspice-47 de verdad**, no con mocks: ocho tests de integración
+  nuevos (barrido de componente y de `.param`, temperatura con `tc1` —con una R ideal el
+  flag no se notaría y el test no probaría nada—, Monte Carlo reproducible y adentro de
+  la banda, `--measure` dando fc ≈ 159 Hz en un RC de 1k/1µ, la medición fallida que no
+  se lleva puestas las curvas, y `uic` arrancando el capacitor en 0 V). Y end-to-end:
+  `--vary R1=100,330,1k` sobre el ejemplo deja tres mediciones, entran a un gráfico y
+  **sale el PDF con la familia de Q y su leyenda**.
+- **Lo que sigue faltando contra LTspice, y hay que decirlo**: el `.step` **anidado**
+  (barrer dos cosas a la vez) y el `.step` sobre nombres de modelo (`altermod`). Los
+  modificadores de `.tran` que no son `uic` (`steady`, `startup`, `nodiscard`) tampoco
+  están.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
 `xtal raw import <archivo.raw>` lee el resultado de una corrida hecha en **LTspice/ngspice**

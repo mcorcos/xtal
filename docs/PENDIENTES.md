@@ -304,7 +304,31 @@ caché, así que es su propia tanda.
 
 ## Backlog de producto (esto ya no es pulido)
 
-### 10. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
+### 10. Barrer parámetros y Monte Carlo — HECHO (28 de agosto de 2026), pedido de Manu
+
+Era el hueco más grande contra LTspice: `xtal sim` tenía once análisis pero no sabía
+**variar un valor y sacar la familia de curvas**, que es lo que más se usa en un TP. Se
+notaba en el propio ejemplo, que trae un `variante-q-alto.cir` — un netlist duplicado
+entero para cambiarle un número a una resistencia.
+
+Ahora los análisis de curva aceptan:
+
+- `--vary R1=1k,2k2,4k7` — una curva por valor, con su leyenda. Anda igual sobre un
+  `.param` del netlist o sobre `temp`.
+- `--temp 85` — temperatura fija, también en `op`/`tf`/`sens`/`pz`/`four`.
+- `--montecarlo N --tolerance R1=5%` (`--seed`, `--mc-dist uniform|gauss`).
+- `--measure "ac fc when vdb(out)=-3"` — el `.meas` de LTspice, repetible.
+- `tran` suma `--max-step` (el `dTmax`) y `--uic`.
+
+Todo en `crates/xtal-sim/src/variation.rs`, verificado con ocho tests de integración
+contra ngspice-47 real. El detalle de las decisiones está en el `CLAUDE.md`.
+
+**Lo que sigue faltando contra LTspice:** el `.step` **anidado** (dos dimensiones a la
+vez), el `.step` sobre nombres de modelo (`altermod`), y los modificadores de `.tran`
+que no son `uic` (`steady`, `startup`, `nodiscard`). Ninguno bloquea un TP; el anidado
+es el que más probablemente aparezca.
+
+### 11. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
 
 Que `xtal circuit import` acepte el `.asc` que dibujás en LTspice y lo convierta a
 netlist. Hoy solo toma netlists ya en texto.
@@ -318,11 +342,11 @@ escribir a ciegas: hay que probar el `-netlist` de punta a punta. Instalarlo y l
 
 El "re-netlistar al guardar el `.asc`" (watch) va junto con esto.
 
-### 11. Capa 2 — ensamblar circuitos desde bloques curados
+### 12. Capa 2 — ensamblar circuitos desde bloques curados
 
 Bloques con puertos declarados que se conectan entre sí. Está en `cristal-spec.md`.
 
-### 12. Capa 3 — diseñar desde una especificación
+### 13. Capa 3 — diseñar desde una especificación
 
 Loop de LLM + ngspice, donde **ngspice es el juez, no la IA**. Investigación, no
 producto.

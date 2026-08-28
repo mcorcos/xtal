@@ -31,6 +31,18 @@ pub struct SimSpec {
     pub vector: String,
     /// Qué cantidad es esta serie.
     pub quantity: Quantity,
+    /// Qué se alteró en ESTA corrida, en la forma `R1=4k7`. Vacío en una simulación
+    /// normal; con `--vary` o Monte Carlo, es lo que distingue esta curva de sus
+    /// hermanas. Los valores de Monte Carlo son los que se usaron de verdad, así que la
+    /// curva se puede reproducir aunque la semilla cambie.
+    ///
+    /// `skip_serializing_if` mantiene el `.toml` de una medición sin variación **byte a
+    /// byte igual** al que escribían las versiones anteriores.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub knobs: Vec<String>,
+    /// Temperatura de simulación, si se pidió distinta de los 27 °C de ngspice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp: Option<f64>,
 }
 
 /// Provenance de una medición importada de un **rawfile externo** (LTspice/ngspice).

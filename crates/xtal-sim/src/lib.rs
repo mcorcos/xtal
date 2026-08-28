@@ -9,6 +9,7 @@
 //! y de sus errores. El núcleo es una cañería **netlist → ngspice → wrdata → Measurement**,
 //! así el dato simulado entra al graficador igual que un CSV de osciloscopio o una fórmula.
 
+use std::fmt::Write as _;
 use std::path::Path;
 
 use xtal_model::{Measurement, MeasurementKind, Source};
@@ -21,13 +22,16 @@ pub mod netlist;
 pub mod parse;
 pub mod raw;
 pub mod spec;
+pub mod variation;
 
 pub use analysis::{Ac, Analysis, Dc, Disto, Four, Noise, Pz, Sp, Sweep, Tf, Tran};
 pub use engine::is_available;
 pub use error::{Result, SimError};
 pub use ltspice::netlist_asc;
+pub use parse::MeasureResult;
 pub use raw::{kind_to_unit, RawColumn, RawFile, RawVar};
 pub use spec::{Quantity, RawSpec, SimSpec};
+pub use variation::{Dist, McSpec, RunOptions, StepSpec};
 
 use parse::Column;
 
@@ -48,6 +52,21 @@ pub struct CurveMeta {
     pub label: Option<String>,
 }
 
+/// Lo que sale de correr un análisis de curva: las mediciones y, si se pidieron, las
+/// mediciones automáticas de ngspice (`--measure`).
+#[derive(Debug, Clone, Default)]
+pub struct CurveRun {
+    pub measurements: Vec<SimMeasurement>,
+    pub measures: Vec<MeasureResult>,
+}
+
+/// Marca que separa una corrida de la siguiente en el log de ngspice.
+///
+/// Todas las corridas de un `--vary` van en UN solo `ngspice -b` (es mucho más rápido y
+/// es lo que el intérprete del `.control` sabe hacer), así que el log viene todo junto.
+/// Sin una marca, dos `meas` con el mismo nombre son indistinguibles.
+const RUN_MARK: &str = "--xtal-corrida-";
+
 /// Corre un análisis que produce **curvas** y devuelve las mediciones resultantes.
 ///
 /// - `circuit_id` / `circuit_text`: id y contenido del `.cir` del proyecto.
@@ -55,10 +74,16 @@ pub struct CurveMeta {
 /// - `vectors`: vectores a volcar (ej. `["v(out)"]`). Si está vacío, se usan los
 ///   default del análisis (ruido).
 /// - `base_id`: id base de la(s) medición(es). Con un solo vector se usa tal cual.
+/// - `opts`: variación del circuito (`--vary`, Monte Carlo), temperatura y mediciones.
 /// - `workdir`: directorio donde se escriben el netlist aumentado y los datos de wrdata.
 ///
 /// Para análisis complejos (AC/disto/sp) cada vector produce DOS mediciones: magnitud
-/// (dB) y fase (grados). Para reales, una por vector.
+/// (dB) y fase (grados). Para reales, una por vector. Y con `--vary` o Monte Carlo, todo
+/// eso **por cada corrida**: N valores × M vectores.
+// Ocho argumentos es uno más de lo que clippy tolera. Agruparlos en un struct no
+// aclararía nada: son cuatro cosas distintas (qué circuito, qué análisis, cómo se llama
+// lo que sale, y cómo se varía), y meterlas en una bolsa sola las mezcla.
+#[allow(clippy::too_many_arguments)]
 pub fn simulate_curve(
     circuit_id: &str,
     circuit_text: &str,
@@ -66,8 +91,9 @@ pub fn simulate_curve(
     vectors: &[String],
     base_id: &str,
     meta: &CurveMeta,
+    opts: &RunOptions,
     workdir: &Path,
-) -> Result<Vec<SimMeasurement>> {
+) -> Result<CurveRun> {
     debug_assert!(analysis.is_curve());
 
     // Resolvemos los vectores: explícitos del usuario, o los default del análisis.
@@ -82,101 +108,176 @@ pub fn simulate_curve(
         ));
     }
 
-    // Un archivo de datos por vector (nombre relativo al workdir; ngspice corre ahí).
-    let data_files: Vec<String> = vectors
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format!("{base_id}__{i}.dat"))
-        .collect();
+    // Qué corridas hay que hacer. Sin `--vary` ni Monte Carlo es una sola, sin sufijo:
+    // así un `xtal sim` de siempre deja exactamente los mismos ids que antes.
+    let runs = variation::plan_runs(circuit_text, opts, workdir)?;
 
-    // Líneas de control: el análisis + un wrdata por vector.
-    // OJO: ngspice NO saca las comillas del nombre de archivo (las toma literales), así
-    // que el nombre va SIN comillas. Por eso los nombres son slugs sin espacios.
-    let mut control = analysis.run_commands();
-    for (vec, file) in vectors.iter().zip(&data_files) {
-        control.push(format!("wrdata {file} {vec}"));
+    // Un archivo de datos por (corrida, vector). Nombre relativo al workdir: ngspice
+    // corre ahí. OJO: ngspice NO saca las comillas del nombre de archivo (las toma
+    // literales), así que el nombre va SIN comillas y por eso son slugs sin espacios.
+    let data_file = |ri: usize, vi: usize| format!("{base_id}__{ri}_{vi}.dat");
+
+    let mut control = Vec::new();
+    for (ri, run) in runs.iter().enumerate() {
+        control.push(format!("echo {RUN_MARK}{ri}--"));
+        control.extend(run.setup.iter().cloned());
+        control.extend(analysis.run_commands());
+        for (vi, vec) in vectors.iter().enumerate() {
+            control.push(format!("wrdata {} {vec}", data_file(ri, vi)));
+        }
+        for expr in &opts.measures {
+            control.push(format!("meas {expr}"));
+        }
     }
 
     // Armamos, escribimos y corremos el netlist.
     let netlist = netlist::build_netlist(circuit_text, &control);
     let net_path = workdir.join(format!("{base_id}.cir"));
     write_file(&net_path, &netlist)?;
-    engine::run_batch(&net_path, workdir)?;
+    let log = engine::run_batch(&net_path, workdir)?;
+
+    // Las mediciones automáticas, atribuidas a su corrida por las marcas del log.
+    let mut measures = Vec::new();
+    if !opts.measures.is_empty() {
+        for (ri, run) in runs.iter().enumerate() {
+            let trozo = run_slice(&log, ri);
+            measures.extend(parse::parse_measures(
+                trozo,
+                &opts.measures,
+                run.note.as_deref(),
+            ));
+        }
+    }
 
     // Parseamos cada archivo de datos y construimos las mediciones.
-    let single = vectors.len() == 1;
+    let single_vector = vectors.len() == 1;
     let mut out = Vec::new();
-    for (vec, file) in vectors.iter().zip(&data_files) {
-        let path = workdir.join(file);
-        if !path.is_file() {
-            return Err(SimError::OutputMissing(path));
-        }
-        let text = read_file(&path)?;
-        let column = parse::parse_wrdata(&text)?;
-        // Id base de esta serie: con un vector, el base_id pelado; con varios, sufijado.
-        let vid = if single {
-            base_id.to_string()
-        } else {
-            format!("{base_id}_{}", slug_vector(vec))
-        };
-        match column {
-            Column::Real(data) => {
-                let m = build_measurement(
-                    &vid,
-                    data,
-                    analysis.x_unit(),
-                    default_y_unit(analysis),
-                    meta,
-                );
-                out.push(sim_measurement(
-                    m,
-                    circuit_id,
-                    analysis,
-                    vec,
-                    Quantity::Value,
-                ));
+    for (ri, run) in runs.iter().enumerate() {
+        for (vi, vec) in vectors.iter().enumerate() {
+            let path = workdir.join(data_file(ri, vi));
+            if !path.is_file() {
+                return Err(SimError::OutputMissing(path));
             }
-            Column::Complex(rows) => {
-                let (db, phase) = parse::to_db_phase(&rows);
-                // Magnitud en dB.
-                let m_db = build_measurement(&vid, db, analysis.x_unit(), Some("dB"), meta);
-                out.push(sim_measurement(
-                    m_db,
-                    circuit_id,
-                    analysis,
-                    vec,
-                    Quantity::Magnitude,
-                ));
-                // Fase en grados (id con sufijo _fase). No hereda la unidad Y del usuario.
-                let phase_id = format!("{vid}_fase");
-                let phase_meta = CurveMeta {
-                    y_unit: None,
-                    ..meta.clone()
-                };
-                let m_ph = build_measurement(
-                    &phase_id,
-                    phase,
-                    analysis.x_unit(),
-                    Some("deg"),
-                    &phase_meta,
-                );
-                out.push(sim_measurement(
-                    m_ph,
-                    circuit_id,
-                    analysis,
-                    vec,
-                    Quantity::Phase,
-                ));
+            let text = read_file(&path)?;
+            let column = parse::parse_wrdata(&text)?;
+            // Id de esta serie: base + vector (si hay varios) + corrida (si hay varias).
+            let mut vid = base_id.to_string();
+            if !single_vector {
+                let _ = write!(vid, "_{}", slug_vector(vec));
+            }
+            if !run.suffix.is_empty() {
+                let _ = write!(vid, "_{}", run.suffix);
+            }
+            // La leyenda: con varias corridas, cada curva dice qué la distingue. Es la
+            // diferencia entre un gráfico que se entiende y ocho curvas sin nombre.
+            let run_meta = CurveMeta {
+                label: legend(meta.label.as_deref(), run.note.as_deref()),
+                ..meta.clone()
+            };
+            match column {
+                Column::Real(data) => {
+                    let m = build_measurement(
+                        &vid,
+                        data,
+                        analysis.x_unit(),
+                        default_y_unit(analysis),
+                        &run_meta,
+                    );
+                    out.push(sim_measurement(
+                        m,
+                        circuit_id,
+                        analysis,
+                        vec,
+                        Quantity::Value,
+                        run,
+                        opts.temp,
+                    ));
+                }
+                Column::Complex(rows) => {
+                    let (db, phase) = parse::to_db_phase(&rows);
+                    // Magnitud en dB.
+                    let m_db =
+                        build_measurement(&vid, db, analysis.x_unit(), Some("dB"), &run_meta);
+                    out.push(sim_measurement(
+                        m_db,
+                        circuit_id,
+                        analysis,
+                        vec,
+                        Quantity::Magnitude,
+                        run,
+                        opts.temp,
+                    ));
+                    // Fase en grados (id con sufijo _fase). No hereda la unidad Y del usuario.
+                    let phase_id = format!("{vid}_fase");
+                    let phase_meta = CurveMeta {
+                        y_unit: None,
+                        ..run_meta.clone()
+                    };
+                    let m_ph = build_measurement(
+                        &phase_id,
+                        phase,
+                        analysis.x_unit(),
+                        Some("deg"),
+                        &phase_meta,
+                    );
+                    out.push(sim_measurement(
+                        m_ph,
+                        circuit_id,
+                        analysis,
+                        vec,
+                        Quantity::Phase,
+                        run,
+                        opts.temp,
+                    ));
+                }
             }
         }
     }
-    Ok(out)
+    Ok(CurveRun {
+        measurements: out,
+        measures,
+    })
+}
+
+/// El pedazo del log que corresponde a la corrida `ri`: de su marca hasta la siguiente.
+fn run_slice(log: &str, ri: usize) -> &str {
+    let mark = format!("{RUN_MARK}{ri}--");
+    let Some(start) = log.find(&mark) else {
+        // Sin marca (no debería pasar) devolvemos el log entero: es preferible atribuir
+        // mal una medición a perderla.
+        return log;
+    };
+    let rest = &log[start + mark.len()..];
+    match rest.find(RUN_MARK) {
+        Some(end) => &rest[..end],
+        None => rest,
+    }
+}
+
+/// La etiqueta de leyenda de una curva: la del usuario, la de la corrida, o las dos.
+fn legend(user: Option<&str>, note: Option<&str>) -> Option<String> {
+    match (user, note) {
+        (Some(u), Some(n)) => Some(format!("{u} · {n}")),
+        (Some(u), None) => Some(u.to_string()),
+        (None, Some(n)) => Some(n.to_string()),
+        (None, None) => None,
+    }
 }
 
 /// Corre un análisis de **reporte** (op, tf, sens, pz, four) y devuelve el texto que
 /// imprime ngspice (las tensiones de nodo, la ganancia, los polos/ceros, etc.).
-pub fn simulate_report(circuit_text: &str, analysis: &Analysis, workdir: &Path) -> Result<String> {
-    let mut control = analysis.run_commands();
+pub fn simulate_report(
+    circuit_text: &str,
+    analysis: &Analysis,
+    temp: Option<f64>,
+    workdir: &Path,
+) -> Result<String> {
+    let mut control = Vec::new();
+    // La temperatura va antes del análisis: es una opción del simulador, no del deck.
+    if let Some(t) = temp {
+        control.push(format!("option temp = {t}"));
+    }
+    control.extend(analysis.run_commands());
     if let Some(print) = analysis.report_print() {
         control.push(print);
     }
@@ -375,12 +476,15 @@ fn build_measurement(
     m
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sim_measurement(
     measurement: Measurement,
     circuit_id: &str,
     analysis: &Analysis,
     vector: &str,
     quantity: Quantity,
+    run: &variation::Run,
+    temp: Option<f64>,
 ) -> SimMeasurement {
     SimMeasurement {
         measurement,
@@ -389,6 +493,8 @@ fn sim_measurement(
             analysis: analysis.clone(),
             vector: vector.to_string(),
             quantity,
+            knobs: run.knobs.clone(),
+            temp,
         },
     }
 }
@@ -442,7 +548,7 @@ fn clean_report(stdout: &str) -> String {
         .join("\n")
 }
 
-fn write_file(path: &Path, text: &str) -> Result<()> {
+pub(crate) fn write_file(path: &Path, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| SimError::Io {
             path: parent.to_path_buf(),
@@ -478,6 +584,27 @@ mod tests {
     fn clean_report_strips_banner() {
         let raw = "******\n** ngspice-46\nNote: starting\nv(out) = 1.5\n\n";
         assert_eq!(clean_report(raw), "v(out) = 1.5");
+    }
+
+    #[test]
+    fn el_log_se_parte_por_corrida() {
+        let log = "banner\n--xtal-corrida-0--\nbw = 1\n--xtal-corrida-1--\nbw = 2\n";
+        assert!(run_slice(log, 0).contains("bw = 1"));
+        assert!(!run_slice(log, 0).contains("bw = 2"));
+        assert!(run_slice(log, 1).contains("bw = 2"));
+        // Sin marca, devolvemos todo antes que perder la medición.
+        assert_eq!(run_slice("sin marcas", 0), "sin marcas");
+    }
+
+    #[test]
+    fn la_leyenda_junta_lo_del_usuario_y_lo_de_la_corrida() {
+        assert_eq!(legend(None, None), None);
+        assert_eq!(legend(Some("Simulada"), None).as_deref(), Some("Simulada"));
+        assert_eq!(legend(None, Some("R1 = 4k7")).as_deref(), Some("R1 = 4k7"));
+        assert_eq!(
+            legend(Some("Simulada"), Some("R1 = 4k7")).as_deref(),
+            Some("Simulada · R1 = 4k7")
+        );
     }
 
     // El test end-to-end contra ngspice real vive en tests/integration.rs (gateado por

@@ -862,6 +862,49 @@ pub struct CurveCommon {
     /// Etiqueta de leyenda.
     #[arg(long)]
     pub label: Option<String>,
+
+    // --- Variar el circuito entre corridas (el `.step` de LTspice) ---
+    /// Barre un componente, un `.param` o la temperatura y deja una curva por valor:
+    /// `--vary R1=1k,2k2,4k7`. Los valores van con los sufijos de SPICE que quieras.
+    ///
+    /// Es el `.step` de LTspice, pero **no se puede llamar `--step`**: en `sim tran` y
+    /// en `sim dc` ese nombre ya es el paso (de tiempo y de barrido). Dos cosas
+    /// distintas con el mismo nombre según el subcomando es peor que un nombre propio.
+    #[arg(long, value_name = "OBJETIVO=V1,V2,...")]
+    pub vary: Option<String>,
+    /// Temperatura de simulación en °C (ngspice usa 27 si no se dice nada).
+    #[arg(long)]
+    pub temp: Option<f64>,
+
+    // --- Monte Carlo ---
+    /// Cuántas corridas de Monte Carlo, cada una con los componentes sorteados dentro
+    /// de su tolerancia. Necesita al menos un `--tolerance`.
+    #[arg(long = "montecarlo", value_name = "N")]
+    pub montecarlo: Option<usize>,
+    /// Tolerancia de un componente, repetible: `--tolerance R1=5% --tolerance C1=10%`.
+    #[arg(long = "tolerance", value_name = "COMP=PCT")]
+    pub tolerances: Vec<String>,
+    /// Semilla del sorteo. La misma semilla da las mismas curvas.
+    #[arg(long, default_value = "1")]
+    pub seed: u64,
+    /// Cómo se reparte el valor adentro de la tolerancia.
+    #[arg(long = "mc-dist", value_enum, default_value = "uniform")]
+    pub mc_dist: DistArg,
+
+    // --- Mediciones automáticas (el `.meas` de LTspice) ---
+    /// Medición automática de ngspice, sin el `meas` del principio y repetible:
+    /// `--measure "ac bw when vdb(out)=-3"`. Se imprime (y sale en `--json`).
+    #[arg(long = "measure", value_name = "EXPR")]
+    pub measures: Vec<String>,
+}
+
+/// Cómo se reparte el valor de un componente adentro de su tolerancia.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum DistArg {
+    /// Cualquier punto de la banda con la misma probabilidad (el `mc()` de LTspice).
+    Uniform,
+    /// Campana con la tolerancia a 3σ (el `gauss()` de LTspice).
+    Gauss,
 }
 
 #[derive(Debug, Subcommand)]
@@ -921,6 +964,13 @@ pub struct SimTranArgs {
     /// Tiempo inicial de registro (s, opcional).
     #[arg(long)]
     pub start: Option<f64>,
+    /// Paso máximo de integración (s). Es el `dTmax` de LTspice: le pone un techo al
+    /// paso para que no se saltee un flanco angosto.
+    #[arg(long = "max-step")]
+    pub max_step: Option<f64>,
+    /// Arranca de las condiciones iniciales y saltea el punto de operación (`uic`).
+    #[arg(long)]
+    pub uic: bool,
 }
 
 #[derive(Debug, Args)]
@@ -997,6 +1047,9 @@ pub struct SimSpArgs {
 pub struct SimReportArgs {
     /// Id del circuito del proyecto.
     pub circuit: String,
+    /// Temperatura de simulación en °C (ngspice usa 27 si no se dice nada).
+    #[arg(long)]
+    pub temp: Option<f64>,
 }
 
 #[derive(Debug, Args)]
@@ -1008,6 +1061,9 @@ pub struct SimTfArgs {
     /// Fuente de entrada (ej. V1).
     #[arg(long)]
     pub input: String,
+    /// Temperatura de simulación en °C.
+    #[arg(long)]
+    pub temp: Option<f64>,
 }
 
 #[derive(Debug, Args)]
@@ -1016,6 +1072,9 @@ pub struct SimSensArgs {
     /// Salida cuya sensibilidad se calcula (ej. v(out)).
     #[arg(long)]
     pub output: String,
+    /// Temperatura de simulación en °C.
+    #[arg(long)]
+    pub temp: Option<f64>,
 }
 
 #[derive(Debug, Args)]
@@ -1039,6 +1098,9 @@ pub struct SimPzArgs {
     /// Qué calcular: pz (polos y ceros), pol (solo polos) o zer (solo ceros).
     #[arg(long, default_value = "pz")]
     pub kind: String,
+    /// Temperatura de simulación en °C.
+    #[arg(long)]
+    pub temp: Option<f64>,
 }
 
 #[derive(Debug, Args)]
@@ -1056,6 +1118,9 @@ pub struct SimFourArgs {
     /// Tiempo final del transitorio previo (s).
     #[arg(long)]
     pub stop: f64,
+    /// Temperatura de simulación en °C.
+    #[arg(long)]
+    pub temp: Option<f64>,
 }
 
 // ===========================================================================
@@ -1195,4 +1260,23 @@ pub enum PanelAppArg {
     Terminal,
     /// Qué falta y las secciones, a la izquierda (modo agente).
     Informe,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    /// La verificación que clap trae para esto: arma el árbol entero de comandos y se
+    /// queja de ids repetidos, nombres cortos que chocan y demás.
+    ///
+    /// Existe porque un choque de nombres **no se ve al compilar**: revienta recién al
+    /// construir ese subcomando. `--step` para barrer un valor chocó con el `--step` que
+    /// `sim tran` y `sim dc` ya tenían, y el binario pasó los tests, el `--help` y el
+    /// `doctor`; lo agarró `xtal completions zsh` en el smoke del CI, que es el primer
+    /// comando que arma todos los subcomandos de una.
+    #[test]
+    fn el_arbol_de_comandos_es_valido() {
+        Cli::command().debug_assert();
+    }
 }

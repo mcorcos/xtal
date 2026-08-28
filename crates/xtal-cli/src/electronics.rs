@@ -23,13 +23,22 @@ use anyhow::{bail, Context, Result};
 use xtal_data::{store, Provenance};
 use xtal_model::{Panel, Plot, PlotKind, Series};
 use xtal_sim::analysis::{Ac, Dc, Disto, Four, Noise, Pz, Sp, Tf, Tran};
-use xtal_sim::{Analysis, CurveMeta, Quantity, RawFile};
+use xtal_sim::{Analysis, CurveMeta, Dist, McSpec, Quantity, RawFile, RunOptions, StepSpec};
 
 use crate::cli::*;
 use crate::ctx;
 
 /// `SweepArg` -> `Sweep`. Vive acá y no en `convert.rs` porque `Sweep` es del
 /// simulador, y `convert.rs` no puede verlo.
+impl From<DistArg> for Dist {
+    fn from(d: DistArg) -> Self {
+        match d {
+            DistArg::Uniform => Dist::Uniform,
+            DistArg::Gauss => Dist::Gauss,
+        }
+    }
+}
+
 impl From<SweepArg> for xtal_sim::Sweep {
     fn from(s: SweepArg) -> Self {
         match s {
@@ -158,6 +167,8 @@ pub fn cmd_sim(cmd: SimCmd, project: &Option<PathBuf>, json: bool) -> Result<()>
                 step: a.step,
                 stop: a.stop,
                 start: a.start,
+                max_step: a.max_step,
+                uic: a.uic,
             });
             run_curve_cmd(&root, &a.common, an, json)
         }
@@ -200,17 +211,21 @@ pub fn cmd_sim(cmd: SimCmd, project: &Option<PathBuf>, json: bool) -> Result<()>
             });
             run_curve_cmd(&root, &a.common, an, json)
         }
-        SimCmd::Op(a) => run_report_cmd(&root, &a.circuit, Analysis::Op, json),
+        SimCmd::Op(a) => run_report_cmd(&root, &a.circuit, Analysis::Op, a.temp, json),
         SimCmd::Tf(a) => {
             let an = Analysis::Tf(Tf {
                 output: a.output,
                 input: a.input,
             });
-            run_report_cmd(&root, &a.circuit, an, json)
+            run_report_cmd(&root, &a.circuit, an, a.temp, json)
         }
-        SimCmd::Sens(a) => {
-            run_report_cmd(&root, &a.circuit, Analysis::Sens { output: a.output }, json)
-        }
+        SimCmd::Sens(a) => run_report_cmd(
+            &root,
+            &a.circuit,
+            Analysis::Sens { output: a.output },
+            a.temp,
+            json,
+        ),
         SimCmd::Pz(a) => {
             let an = Analysis::Pz(Pz {
                 in_pos: a.in_pos,
@@ -220,7 +235,7 @@ pub fn cmd_sim(cmd: SimCmd, project: &Option<PathBuf>, json: bool) -> Result<()>
                 transfer: a.transfer,
                 kind: a.kind,
             });
-            run_report_cmd(&root, &a.circuit, an, json)
+            run_report_cmd(&root, &a.circuit, an, a.temp, json)
         }
         SimCmd::Four(a) => {
             let an = Analysis::Four(Four {
@@ -229,10 +244,12 @@ pub fn cmd_sim(cmd: SimCmd, project: &Option<PathBuf>, json: bool) -> Result<()>
                     step: a.step,
                     stop: a.stop,
                     start: None,
+                    max_step: None,
+                    uic: false,
                 },
                 vector: a.node,
             });
-            run_report_cmd(&root, &a.circuit, an, json)
+            run_report_cmd(&root, &a.circuit, an, a.temp, json)
         }
     }
 }
@@ -245,29 +262,68 @@ fn sim_workdir(root: &Path) -> Result<PathBuf> {
     Ok(dir)
 }
 
+/// Traduce los flags de variación de la línea de comandos a [`RunOptions`].
+///
+/// Los `--vary` y `--tolerance` se parsean acá (y no en clap) porque su forma
+/// `objetivo=valores` necesita un mensaje de error que diga qué se esperaba.
+fn curve_options(common: &CurveCommon) -> Result<RunOptions> {
+    let vary = match &common.vary {
+        Some(s) => Some(StepSpec::parse(s).map_err(anyhow::Error::msg)?),
+        None => None,
+    };
+    let mc = match common.montecarlo {
+        Some(runs) => {
+            let mut tolerances = Vec::new();
+            for t in &common.tolerances {
+                tolerances.push(McSpec::parse_tolerance(t).map_err(anyhow::Error::msg)?);
+            }
+            Some(McSpec {
+                runs,
+                tolerances,
+                seed: common.seed,
+                dist: common.mc_dist.into(),
+            })
+        }
+        None => {
+            if !common.tolerances.is_empty() {
+                bail!("--tolerance sin --montecarlo no hace nada: agregá `--montecarlo N`");
+            }
+            None
+        }
+    };
+    Ok(RunOptions {
+        step: vary,
+        mc,
+        temp: common.temp,
+        measures: common.measures.clone(),
+    })
+}
+
 /// Corre un análisis de curva y guarda la(s) medición(es) resultante(s).
 fn run_curve_cmd(root: &Path, common: &CurveCommon, analysis: Analysis, json: bool) -> Result<()> {
     let circuit_text = store::load_circuit(root, &common.circuit)?;
     let workdir = sim_workdir(root)?;
+    let opts = curve_options(common)?;
     let meta = CurveMeta {
         x_unit: common.x_unit.clone(),
         y_unit: common.y_unit.clone(),
         label: common.label.clone(),
         ..Default::default()
     };
-    let results = xtal_sim::simulate_curve(
+    let run = xtal_sim::simulate_curve(
         &common.circuit,
         &circuit_text,
         &analysis,
         &common.nodes,
         &common.id,
         &meta,
+        &opts,
         &workdir,
     )
     .with_context(|| format!("simulando {} sobre '{}'", analysis.name(), common.circuit))?;
 
     let mut ids = Vec::new();
-    for r in &results {
+    for r in &run.measurements {
         store::save_measurement(
             root,
             &r.measurement,
@@ -276,24 +332,64 @@ fn run_curve_cmd(root: &Path, common: &CurveCommon, analysis: Analysis, json: bo
         ids.push(r.measurement.id.clone());
     }
     if json {
-        println!("{}", serde_json::json!({ "measurements": ids }));
+        let measures: Vec<_> = run
+            .measures
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "name": m.name, "value": m.value, "at": m.at, "run": m.run,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({ "measurements": ids, "measures": measures })
+        );
     } else {
-        for r in &results {
+        for r in &run.measurements {
             println!(
                 "✓ Medición '{}' guardada ({} puntos)",
                 r.measurement.id,
                 r.measurement.data.len()
             );
         }
+        print_measures(&run.measures);
     }
     Ok(())
 }
 
+/// Imprime las mediciones automáticas de ngspice (`--measure`).
+///
+/// Una que no encontró lo que buscaba se dice, no se esconde: es la diferencia entre
+/// "el ancho de banda no existe en este rango" y "me olvidé de pedirlo".
+fn print_measures(measures: &[xtal_sim::MeasureResult]) {
+    for m in measures {
+        let donde = m
+            .run
+            .as_deref()
+            .map(|r| format!("  [{r}]"))
+            .unwrap_or_default();
+        match m.value {
+            Some(v) => {
+                let at = m.at.map(|a| format!(" en {a}")).unwrap_or_default();
+                println!("  {} = {v}{at}{donde}", m.name);
+            }
+            None => println!("  {} = (no se pudo medir){donde}", m.name),
+        }
+    }
+}
+
 /// Corre un análisis de reporte (op/tf/sens/pz/four) e imprime su resultado.
-fn run_report_cmd(root: &Path, circuit: &str, analysis: Analysis, json: bool) -> Result<()> {
+fn run_report_cmd(
+    root: &Path,
+    circuit: &str,
+    analysis: Analysis,
+    temp: Option<f64>,
+    json: bool,
+) -> Result<()> {
     let circuit_text = store::load_circuit(root, circuit)?;
     let workdir = sim_workdir(root)?;
-    let report = xtal_sim::simulate_report(&circuit_text, &analysis, &workdir)
+    let report = xtal_sim::simulate_report(&circuit_text, &analysis, temp, &workdir)
         .with_context(|| format!("corriendo {} sobre '{}'", analysis.name(), circuit))?;
     if json {
         println!(
