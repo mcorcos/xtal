@@ -14,8 +14,13 @@ public final class Proyecto {
     public private(set) var nombre: String
 
     /// Los archivos que tiene sentido abrir en el editor.
+    ///
+    /// **Es una lista para consultar, no la selección del editor.** Lo que está abierto
+    /// lo mandan `Arbol` y `Secciones`, y esto no tiene que volver a saberlo: acá vivía
+    /// un `seleccionado` que `recargar()` reasignaba, y como `recargar()` corre después
+    /// de cada compilación, el editor se recargaba solo en medio de lo que estabas
+    /// escribiendo y te devolvía el texto de antes.
     public private(set) var archivos: [Archivo] = []
-    public var seleccionado: Archivo?
 
     /// El PDF compilado, si ya existe.
     public private(set) var pdf: URL?
@@ -121,10 +126,6 @@ public final class Proyecto {
         archivos = encontrados.sorted {
             if $0.grupo != $1.grupo { return $0.grupo < $1.grupo }
             return $0.nombre < $1.nombre
-        }
-
-        if seleccionado == nil || !archivos.contains(where: { $0.id == seleccionado?.id }) {
-            seleccionado = archivos.first
         }
 
         let posiblePdf = carpeta.appendingPathComponent("salida/main.pdf")

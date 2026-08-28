@@ -61,15 +61,45 @@ Un archivo se escribe en el acto. El cuerpo de una sección va por la CLI y con 
 retraso, porque mandar un proceso por cada tecla es absurdo.
 
 Lo único que ⌘S puede agregar entonces es **ver el resultado**, y por eso el comando se
-llama «Guardar y compilar» y no «Guardar». Con *Compilar al guardar* prendido (que es el
-default) ni eso hace falta: recompila solo 1,2 s después de la última tecla.
+llama «Guardar y compilar» y no «Guardar».
 
-**La trampa que esto tiene, y que ya costó datos una vez:** el editor no puede distinguir
-«el usuario tecleó» de «la app cargó un archivo». Si no se distingue, abrir algo que
-devuelve vacío —el archivo todavía no está, la CLI falló— guarda ese vacío arriba de lo
-que había. Pasó: las cuatro secciones del ejemplo quedaron en un salto de línea. La regla
-es una sola y está implementada en las dos apps: **al disco solo va lo que alguien
-tecleó**.
+**El compilado automático viene apagado.** Estuvo prendido y era un enredo: cualquier
+pausa de un par de segundos mientras escribías disparaba una compilación entera —Tectonic,
+el PDF que se recarga, la barra que parpadea— y no había forma de escribir tranquilo. Se
+prende en *Ajustes → General → Compilar al guardar*, que es donde sirve: un informe chico.
+
+De paso salió que **el default estaba escrito dos veces y no coincidía**: Ajustes decía
+`false` y el workspace decía `true`, los dos sobre la misma clave. Hasta que alguien
+tocara el interruptor, la app compilaba sola mientras el interruptor se veía apagado.
+Ahora el valor de fábrica vive en un solo lugar (`Pref` en Swift, `POR_DEFECTO` en
+TypeScript).
+
+**Las tres trampas del guardado**, las tres cosas que hacen que «lo escribí y no se
+guardó» sea posible. Están resueltas y conviene no deshacerlas:
+
+1. **El editor no puede distinguir «el usuario tecleó» de «la app cargó un archivo».** Si
+   no se distingue, abrir algo que devuelve vacío —el archivo todavía no está, la CLI
+   falló— guarda ese vacío arriba de lo que había. Pasó: las cuatro secciones del ejemplo
+   quedaron en un salto de línea. La regla es una sola y está en las dos apps: **al disco
+   solo va lo que alguien tecleó** (`cargandoTexto`).
+
+2. **Los 600 ms del guardado de una sección son una ventana en la que el texto existe solo
+   en memoria.** Si en esa ventana pasás a otra sección, agregás una, o cerrás, ese texto
+   se pierde. Por eso hay un `pendiente`: lo último que se mandó a guardar y todavía no
+   llegó al disco. Cualquier cosa que vuelva a leer el `xtal.toml` lo escribe primero
+   (`descargar()`), y en Mac cerrar la app lo escribe **bloqueando**
+   (`XtalCLI.correrYEsperar`), porque ahí no hay un después.
+
+3. **El cuerpo de una sección es un archivo, y la app lo abre por dos caminos**: la lista
+   de secciones y el árbol de archivos. Además lo tocan el agente desde la terminal y
+   `xtal run`. La copia en memoria se queda vieja apenas pasa cualquiera de esas cosas, y
+   mostrarla es lo que hace que escribir arriba borre lo de antes. Por eso la sección lleva
+   su `body_file` y **abrir una lee el disco**, no la lista.
+
+Y una cosa que se sacó, que era la misma familia: `Proyecto` tenía su propia selección y la
+reasignaba en cada `recargar()`. Como `recargar()` corre después de cada compilación, el
+editor se recargaba solo en medio de lo que estabas escribiendo. Lo que está abierto lo
+dicen `Arbol` y `Secciones`, y nadie más.
 
 Qué se compila, en orden: el `.tex` que estás editando; si no, un `main.tex` tuyo en la
 raíz —la señal de «acá el LaTeX lo escribo yo», que Xtal no genera ni pisa—; y si no hay

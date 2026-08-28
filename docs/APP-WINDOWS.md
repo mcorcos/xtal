@@ -240,7 +240,7 @@ se hizo con cada una.
 |---|---|---|---|
 | 1 | El lateral del modo editor llevaba «Qué falta» arriba del árbol | En Mac es **solo el árbol**; «Qué falta» es el lateral del modo agente | Se sacó. Los dos laterales miden 240 fijos y tienen su pie «Ver en el Explorador» |
 | 2 | Las secciones se leían como archivos `secciones/*.tex` | Son `[[sections]]` del `xtal.toml`: **título de verdad**, figuras, subsecciones | `secciones.rs`: `xtal section list/set/add/rename/remove` |
-| 3 | El editor guardaba solo con Ctrl+S, con estado «sucio» | En Mac **escribe al disco en cada tecla** y recompila 1,2 s después | Guardado directo + autocompilado + el ajuste para apagarlo |
+| 3 | El editor guardaba solo con Ctrl+S, con estado «sucio» | En Mac **escribe al disco en cada tecla**. El autocompilado existe, pero desde entonces **viene apagado** en las dos apps: ver `APP.md` | Guardado directo + autocompilado + el ajuste para prenderlo |
 | 4 | No estaba el guard de carga | `cargandoTexto`: al disco solo va lo que alguien tecleó | Implementado. Es una protección contra pérdida de datos que ya costó las cuatro secciones del ejemplo |
 | 5 | El modo agente listaba nombres de archivo | Lista **títulos**, con las figuras debajo y menú contextual | Hecho |
 

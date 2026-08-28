@@ -68,56 +68,68 @@ public enum XtalCLI {
     /// Es `async` para no congelar la ventana: compilar un PDF con Tectonic puede tardar
     /// segundos, y una app que se traba mientras tanto se siente rota.
     public static func correr(_ args: [String], en carpeta: URL? = nil) async throws -> Salida {
-        guard let bin = rutaBinario() else { throw Falla.sinBinario }
-
         return try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: bin)
-                p.arguments = args
-                if let carpeta { p.currentDirectoryURL = carpeta }
-
-                // El PATH de la app no incluye Homebrew, y `xtal run` necesita encontrar
-                // `tectonic` y `ngspice`. Sin esto, compilar falla adentro de la app y
-                // anda en la terminal, que es el bug más confuso posible.
-                var env = ProcessInfo.processInfo.environment
-                // `/Library/TeX/texbin` es donde MacTeX deja pdflatex y compañía, y no
-                // está en el PATH de una app de GUI. Sin esta línea, `xtal doctor`
-                // decía que no tenés TeX Live aunque lo tuvieras instalado.
-                let extra = [
-                    "/opt/homebrew/bin",
-                    "/usr/local/bin",
-                    "/Library/TeX/texbin",
-                    NSHomeDirectory() + "/.local/bin",
-                ]
-                env["PATH"] = (extra + [env["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
-                p.environment = env
-
-                let salida = Pipe(), error = Pipe()
-                p.standardOutput = salida
-                p.standardError = error
-
                 do {
-                    try p.run()
+                    cont.resume(returning: try correrYEsperar(args, en: carpeta))
                 } catch {
                     cont.resume(throwing: error)
-                    return
                 }
-
-                // Leer ANTES de esperar: si el proceso escribe más de lo que entra en el
-                // buffer del pipe, se bloquea escribiendo y nunca termina. Es el clásico
-                // deadlock de Process, y con `xtal run` (que escribe bastante) pasa.
-                let dSalida = salida.fileHandleForReading.readDataToEndOfFile()
-                let dError = error.fileHandleForReading.readDataToEndOfFile()
-                p.waitUntilExit()
-
-                cont.resume(returning: Salida(
-                    codigo: p.terminationStatus,
-                    stdout: String(decoding: dSalida, as: UTF8.self),
-                    stderr: String(decoding: dError, as: UTF8.self)
-                ))
             }
         }
+    }
+
+    /// Lo mismo, pero **bloqueando el hilo que lo llama**.
+    ///
+    /// Existe por un solo caso y conviene no usarlo para nada más: **cuando la app se
+    /// está cerrando**. En `applicationWillTerminate` no hay un después — el proceso se
+    /// muere apenas volvés—, así que un `Task` no llega a correr nunca y lo último que
+    /// alguien escribió se pierde. Ahí hay que esperar de verdad.
+    ///
+    /// En cualquier otro momento va `correr`: bloquear el hilo principal congela la
+    /// ventana, que es justo lo que la versión `async` viene a evitar.
+    public static func correrYEsperar(_ args: [String], en carpeta: URL? = nil) throws -> Salida {
+        guard let bin = rutaBinario() else { throw Falla.sinBinario }
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: bin)
+        p.arguments = args
+        if let carpeta { p.currentDirectoryURL = carpeta }
+
+        // El PATH de la app no incluye Homebrew, y `xtal run` necesita encontrar
+        // `tectonic` y `ngspice`. Sin esto, compilar falla adentro de la app y
+        // anda en la terminal, que es el bug más confuso posible.
+        var env = ProcessInfo.processInfo.environment
+        // `/Library/TeX/texbin` es donde MacTeX deja pdflatex y compañía, y no
+        // está en el PATH de una app de GUI. Sin esta línea, `xtal doctor`
+        // decía que no tenés TeX Live aunque lo tuvieras instalado.
+        let extra = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/Library/TeX/texbin",
+            NSHomeDirectory() + "/.local/bin",
+        ]
+        env["PATH"] = (extra + [env["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
+        p.environment = env
+
+        let salida = Pipe(), error = Pipe()
+        p.standardOutput = salida
+        p.standardError = error
+
+        try p.run()
+
+        // Leer ANTES de esperar: si el proceso escribe más de lo que entra en el
+        // buffer del pipe, se bloquea escribiendo y nunca termina. Es el clásico
+        // deadlock de Process, y con `xtal run` (que escribe bastante) pasa.
+        let dSalida = salida.fileHandleForReading.readDataToEndOfFile()
+        let dError = error.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+
+        return Salida(
+            codigo: p.terminationStatus,
+            stdout: String(decoding: dSalida, as: UTF8.self),
+            stderr: String(decoding: dError, as: UTF8.self)
+        )
     }
 
     /// Lo mismo, pero decodificando el `--json` que exponen todos los comandos.

@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Icono, iconoDe } from "../design/Icono";
-import { CLAVES, useAjuste } from "../core/ajustes";
+import { CLAVES, POR_DEFECTO, useAjuste } from "../core/ajustes";
 import { AVISO, escuchar } from "../core/ordenes";
 import {
   claseDe,
@@ -82,7 +82,19 @@ export function Workspace({
   const [verInforme, setVerInforme] = useAjuste(CLAVES.panelInforme, false);
   const [anchoPdf, setAnchoPdf] = useAjuste(CLAVES.anchoPdf, 520);
   const [altoTerminal, setAltoTerminal] = useAjuste(CLAVES.altoTerminal, 260);
-  const [compilarAlGuardar] = useAjuste(CLAVES.compilarAlGuardar, true);
+  /**
+   * **Apagado por default.** El PDF se rehace con Ctrl+S, cuando vos lo pedís.
+   *
+   * Estuvo prendido y era un enredo: cualquier pausa de un par de segundos mientras
+   * escribías disparaba una compilación entera —Tectonic, el PDF que se recarga, la
+   * barra que parpadea— y no había forma de escribir tranquilo. Se prende en
+   * Ajustes → General para un informe chico, que es donde de verdad sirve.
+   *
+   * El default vive en `POR_DEFECTO` y no acá: estaba escrito dos veces, que es como en
+   * la app de Mac los dos lados terminaron diciendo cosas distintas.
+   */
+  const [compilarAlGuardar] = useAjuste(
+    CLAVES.compilarAlGuardar, POR_DEFECTO.compilarAlGuardar);
   const [letraEditor] = useAjuste(CLAVES.letraEditor, 12.5);
   const [ajustarLinea] = useAjuste(CLAVES.ajustarLinea, true);
   const [coloresEditor] = useAjuste(CLAVES.coloresEditor, true);
@@ -140,6 +152,24 @@ export function Workspace({
    */
   const cargandoTexto = useRef(false);
   const guardadoSeccion = useRef<number | null>(null);
+  /**
+   * **Lo último que se mandó a guardar y todavía no llegó al disco.**
+   *
+   * El retraso abre una ventana de medio segundo en la que lo escrito existe solo en
+   * memoria. Si en esa ventana cerrás el proyecto, o pasás a otra sección, o agregás una
+   * y la lista se recarga, ese texto se pierde y el síntoma es el peor que puede tener un
+   * editor: «lo escribí y no se guardó». Con esto siempre se sabe qué falta escribir, y
+   * `descargar()` lo escribe. Contraparte de `Secciones.pendiente` en la app de Mac.
+   */
+  const pendiente = useRef<{ titulo: string; cuerpo: string } | null>(null);
+  /**
+   * Las escrituras que salieron sin esperar el retraso, encadenadas.
+   *
+   * Van en fila y no en paralelo: cada `section set` lee el `xtal.toml`, le cambia un
+   * bloque y lo vuelve a escribir entero. Dos corriendo a la vez sobre el mismo archivo
+   * es la receta para que una pise a la otra.
+   */
+  const filaEscritura = useRef<Promise<void>>(Promise.resolve());
   const compiladoPendiente = useRef<number | null>(null);
   const pedidoLectura = useRef(0);
 
@@ -150,10 +180,66 @@ export function Workspace({
   const recargarArbol = useCallback(async () => setNodos(await disco.arbol(carpeta)), [carpeta]);
   const recargarGit = useCallback(async () => setGit(await apiGit.estado(carpeta)), [carpeta]);
 
+  // Cerrar el proyecto con el guardado a medio camino perdía lo último que se escribió.
+  //
+  // **Esto cubre volver al inicio, no cerrar la app entera**: al cerrar la ventana, Tauri
+  // se lleva puesto el webview y este efecto no llega a correr. La app de Mac sí lo cubre
+  // (`NSApplication.willTerminateNotification` + una escritura que bloquea); acá haría
+  // falta atajar `onCloseRequested` y demorar el cierre, y una app que no cierra es peor
+  // que medio segundo de texto perdido. Queda anotado.
+  const descargarRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => () => void descargarRef.current(), []);
+
+  /** Pone una escritura al final de la fila. Ver `filaEscritura`. */
+  const escribirSeccion = useCallback(
+    (titulo: string, cuerpo: string) => {
+      filaEscritura.current = filaEscritura.current.then(() =>
+        apiSecciones.guardar(carpeta, titulo, cuerpo).catch(() => {}),
+      );
+      return filaEscritura.current;
+    },
+    [carpeta],
+  );
+
+  /**
+   * Deja en memoria lo que se acaba de escribir, sin tocar el disco.
+   *
+   * **Sin esto, la lista queda vieja y eso borra trabajo.** El cuerpo de una sección se
+   * lee de la lista cada vez que se la vuelve a abrir. Si el guardado va al disco pero no
+   * acá, editar una sección, irse a otra y volver te devuelve el texto de antes de
+   * escribir — y la próxima tecla guarda ESE texto arriba del bueno.
+   */
+  const recordar = useCallback((titulo: string, cuerpo: string) => {
+    setLista((l) => l.map((s) => (s.titulo === titulo ? { ...s, cuerpo } : s)));
+  }, []);
+
+  /**
+   * Escribe lo que quedó a medio camino, si quedó algo.
+   *
+   * Se llama antes de cualquier cosa que vuelva a leer el disco —abrir un archivo, abrir
+   * una sección, agregar una, cerrar el proyecto—: si no, el disco todavía no tiene lo
+   * último y lo que se lee es la versión vieja.
+   */
+  const descargar = useCallback(async () => {
+    const p = pendiente.current;
+    if (!p) {
+      // Igual hay que esperar la fila: puede haber una escritura recién largada.
+      await filaEscritura.current;
+      return;
+    }
+    if (guardadoSeccion.current) clearTimeout(guardadoSeccion.current);
+    pendiente.current = null;
+    await escribirSeccion(p.titulo, p.cuerpo);
+  }, [escribirSeccion]);
+  descargarRef.current = descargar;
+
   const recargarSecciones = useCallback(async () => {
+    // Lo pendiente al disco primero: la lista se rehace con lo que diga el `xtal.toml`,
+    // y sin esto una recarga a destiempo devuelve el texto de antes de escribir.
+    await descargar();
     setLista(await apiSecciones.listar(carpeta));
     setCargandoSecciones(false);
-  }, [carpeta]);
+  }, [carpeta, descargar]);
 
   const buscarPdf = useCallback(async () => {
     const p = unir(carpeta, "salida", "main.pdf");
@@ -237,6 +323,10 @@ export function Workspace({
   const abrirArchivo = useCallback(
     async (ruta: string) => {
       const n = ++pedidoLectura.current;
+      // Lo pendiente al disco antes de leerlo: el `.tex` de una sección que venías
+      // editando desde la lista puede tener el guardado a medio camino, y ahí el disco
+      // todavía dice lo de antes.
+      await descargar();
       const t = claseDe(ruta) === "texto" ? await disco.leer(ruta).catch(() => "") : "";
       // Si mientras se leía se abrió otro archivo, este ya no importa: escribirlo ahora
       // pondría el contenido de uno adentro del otro.
@@ -244,15 +334,45 @@ export function Workspace({
       setResaltados([]);
       mostrar(t, { tipo: "archivo", ruta });
     },
-    [mostrar],
+    [mostrar, descargar],
   );
 
+  /**
+   * Abre una sección, y **corrige lo que muestra con lo que de verdad hay en el disco**.
+   *
+   * El cuerpo de una sección vive en `secciones/NN-loquesea.tex`, y la app abre ese
+   * archivo por dos caminos: esta lista y el árbol de archivos. Además lo tocan el agente
+   * desde la terminal y `xtal run`. La copia en memoria se queda vieja apenas pasa
+   * cualquiera de esas cosas, y mostrarla es lo que hace que escribir arriba borre lo de
+   * antes.
+   *
+   * Va en dos tiempos —primero lo de memoria, después lo del disco— porque antes de leer
+   * hay que terminar de escribir lo pendiente: dejar el editor en blanco mientras tanto
+   * se ve peor que corregirlo un instante después.
+   */
   const elegirSeccion = useCallback(
     (sec: Seccion) => {
       setResaltados([]);
-      mostrar(sec.cuerpo, { tipo: "seccion", titulo: sec.titulo });
+      // Se busca de nuevo en la lista en vez de creerle al parámetro: ahí está lo último
+      // que se escribió, y el `sec` que llegó puede ser de antes.
+      const actual = listaRef.current.find((s) => s.titulo === sec.titulo) ?? sec;
+      const mostrado = actual.cuerpo;
+      mostrar(mostrado, { tipo: "seccion", titulo: actual.titulo });
+      if (!actual.archivo) return;
+      const ruta = unir(carpeta, ...actual.archivo.split("/"));
+      void descargar().then(async () => {
+        // Si mientras tanto cambiaste de archivo o escribiste algo, no se toca nada:
+        // corregir el texto abajo de los dedos de alguien es peor que mostrar algo viejo.
+        const a = abiertoRef.current;
+        if (a.tipo !== "seccion" || a.titulo !== actual.titulo) return;
+        if (textoRef.current !== mostrado) return;
+        const enDisco = await disco.leer(ruta).catch(() => null);
+        if (enDisco === null || enDisco === mostrado) return;
+        if (abiertoRef.current.tipo !== "seccion" || textoRef.current !== mostrado) return;
+        mostrar(enDisco, { tipo: "seccion", titulo: actual.titulo });
+      });
     },
-    [mostrar],
+    [mostrar, descargar, carpeta],
   );
 
   /** Ir al editor con algo abierto. **Un click que no hace nada es peor que un botón
@@ -282,11 +402,25 @@ export function Workspace({
     }
     const a = abiertoRef.current;
     if (a.tipo === "seccion") {
-      if (guardadoSeccion.current) clearTimeout(guardadoSeccion.current);
       const titulo = a.titulo;
       const cuerpo = texto;
+      // La copia en memoria se actualiza YA, sin esperar el retraso. Ver `recordar`.
+      recordar(titulo, cuerpo);
+      // Si lo que quedaba pendiente era de OTRA sección, se escribe ahora mismo en vez de
+      // cancelarlo. Escribir en una, pasar a la siguiente y seguir escribiendo cancelaba
+      // el guardado de la primera y lo perdía entero.
+      const anterior = pendiente.current;
+      if (anterior && anterior.titulo !== titulo) {
+        void escribirSeccion(anterior.titulo, anterior.cuerpo);
+      }
+      if (guardadoSeccion.current) clearTimeout(guardadoSeccion.current);
+      pendiente.current = { titulo, cuerpo };
       guardadoSeccion.current = window.setTimeout(() => {
-        void apiSecciones.guardar(carpeta, titulo, cuerpo);
+        // Se compara el cuerpo además del título: borrarlo por el título solo dejaría
+        // sin dueño a un texto más nuevo que hubiera entrado mientras tanto.
+        const p = pendiente.current;
+        if (p?.titulo === titulo && p.cuerpo === cuerpo) pendiente.current = null;
+        void escribirSeccion(titulo, cuerpo);
       }, 600);
     } else if (a.tipo === "archivo" && claseDe(a.ruta) === "texto" && !esGenerado(a.ruta)) {
       // Lo de `salida/` no se guarda nunca: se pisa en la próxima compilación, y dejar
@@ -308,11 +442,13 @@ export function Workspace({
     const a = abiertoRef.current;
     if (guardadoSeccion.current) clearTimeout(guardadoSeccion.current);
     if (a.tipo === "seccion") {
-      await apiSecciones.guardar(carpeta, a.titulo, textoRef.current);
+      recordar(a.titulo, textoRef.current);
+      pendiente.current = null;
+      await escribirSeccion(a.titulo, textoRef.current);
     } else if (a.tipo === "archivo" && claseDe(a.ruta) === "texto" && !esGenerado(a.ruta)) {
       await disco.escribir(a.ruta, textoRef.current);
     }
-  }, [carpeta]);
+  }, [escribirSeccion, recordar]);
 
   // ------------------------------------------------------------------
   // Compilar

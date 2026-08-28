@@ -78,7 +78,8 @@ function arbol(dir, raiz) {
 /** `xtal section list` devuelve un árbol; la app lo aplana con su nivel. */
 function aplanar(crudas, nivel = 0) {
   return crudas.flatMap((c) => [
-    { titulo: c.title, cuerpo: c.body, figuras: c.figures ?? [], nivel },
+    { titulo: c.title, cuerpo: c.body, figuras: c.figures ?? [], nivel,
+      archivo: c.body_file ?? null },
     ...aplanar(c.subsections ?? [], nivel + 1),
   ]);
 }
