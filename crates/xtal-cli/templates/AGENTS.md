@@ -105,7 +105,9 @@ xtal raw import barrido.raw --as simulada --inspect       # ver qué trae el arc
 
 ```bash
 xtal sim ac filtro --as barrido --node "v(out)" --from 10 --to 1e5 \
-  --vary R1=1k,2k2,4k7                       # también un .param, o temp=0,27,85
+  --vary R1=1k,2k2,4k7        # tambien M1.w, MIDIODO.is, un .param, o temp=0,27,85
+xtal sim ac filtro --as mapa --node "v(out)" --from 10 --to 1e5 \
+  --vary R1=1k,4k7 --vary C1=100n,1u         # repetible: corre el producto
 xtal sim ac filtro --as tolerancias --node "v(out)" --from 10 --to 1e5 \
   --montecarlo 30 --tolerance R1=5% --tolerance C1=10%
 ```

@@ -24,6 +24,14 @@ pub enum SimError {
     #[error("no pude parsear la salida de la simulación: {0}")]
     Parse(String),
 
+    /// Lo que se pidió no tiene sentido, y se ve **antes** de correr nada: un `--vary`
+    /// mal escrito, un Monte Carlo sin tolerancias, demasiadas corridas. Va aparte de
+    /// `Parse` porque el prefijo de ese ("no pude parsear la salida de la simulación")
+    /// manda a buscar el problema adentro de ngspice, y el problema está en lo que se
+    /// pidió.
+    #[error("{0}")]
+    Invalid(String),
+
     /// No se pudo parsear un rawfile de SPICE (LTspice/ngspice).
     #[error("no pude leer el rawfile: {0}")]
     RawParse(String),

@@ -47,12 +47,22 @@ use crate::{engine, netlist};
 // ---------------------------------------------------------------------------
 
 /// Cómo se altera el circuito para llegar a un valor dado.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Las cinco formas que ngspice necesita, y **no son intercambiables**: cuál se usa lo
+/// deduce [`Knob::detect`] mirando el deck, así que la persona escribe siempre
+/// `objetivo=valores` y no tiene que saber nada de esto.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Knob {
-    /// Un componente del netlist (`R1`, `C2`, `V1`): `alter`.
-    Device,
+    /// El valor de un componente (`R1`): `alter R1 = 4k7`.
+    Device(String),
+    /// Un parámetro de un componente (`M1.w`): `alter M1 w = 1u`. Es lo que hace falta
+    /// para dimensionar un transistor, donde "el valor" no es uno solo.
+    DeviceParam { device: String, param: String },
+    /// Un parámetro de un `.model` (`MIDIODO.is`): `altermod MIDIODO is = 1e-14`.
+    /// Cambia el modelo, así que le pega a **todos** los componentes que lo usan.
+    Model { model: String, param: String },
     /// Un `.param` del deck: `alterparam` + `reset`.
-    Param,
+    Param(String),
     /// La temperatura de simulación: `option temp`.
     Temp,
 }
@@ -60,30 +70,62 @@ pub enum Knob {
 impl Knob {
     /// Deduce qué perilla es `target` mirando el deck.
     ///
-    /// El orden importa: `temp` es palabra reservada, un `.param` declarado le gana a la
-    /// interpretación de componente (si alguien llamó `R1` a un `.param`, quiso decir el
-    /// `.param`), y todo lo demás es un componente. Si el componente no existe, ngspice
-    /// contesta `no such device or model name`, que ya se convierte en un error legible.
+    /// El orden importa: `temp` es palabra reservada; un `objetivo.parametro` es de un
+    /// `.model` si el deck declara ese modelo y de un componente si no (un nombre de
+    /// componente en SPICE no puede tener un punto, así que el punto no es ambiguo); un
+    /// `.param` declarado le gana a la interpretación de componente; y todo lo demás es
+    /// un componente. Si no existe, ngspice contesta `no such device or model name`, que
+    /// ya se convierte en un error legible.
     pub fn detect(deck: &str, target: &str) -> Knob {
         if target.eq_ignore_ascii_case("temp") {
             return Knob::Temp;
         }
-        if declares_param(deck, target) {
-            return Knob::Param;
+        if let Some((nombre, param)) = target.split_once('.') {
+            if declares_model(deck, nombre) {
+                return Knob::Model {
+                    model: nombre.to_string(),
+                    param: param.to_string(),
+                };
+            }
+            return Knob::DeviceParam {
+                device: nombre.to_string(),
+                param: param.to_string(),
+            };
         }
-        Knob::Device
+        if declares_param(deck, target) {
+            return Knob::Param(target.to_string());
+        }
+        Knob::Device(target.to_string())
     }
 
-    /// Las líneas de control que llevan `target` a `value`.
-    pub fn alter_lines(self, target: &str, value: &str) -> Vec<String> {
+    /// En qué orden se emiten las perillas de una misma corrida.
+    ///
+    /// **`reset` borra un `alter` anterior** (verificado con ngspice-47: después de
+    /// `alter R1 = 9k` + `alterparam` + `reset`, R1 vuelve a valer lo del netlist). Como
+    /// `alterparam` obliga a un `reset`, los `.param` tienen que ir **primero** o se
+    /// llevan puesto lo demás. Y la temperatura va última, por lo mismo.
+    ///
+    /// Solo se nota barriendo dos cosas a la vez, que es justo lo que no se prueba a
+    /// mano. Hay un test de integración contra ngspice real que lo fija.
+    fn orden(&self) -> u8 {
         match self {
-            Knob::Device => vec![format!("alter {target} = {value}")],
+            Knob::Param(_) => 0,
+            Knob::Model { .. } | Knob::DeviceParam { .. } | Knob::Device(_) => 1,
+            Knob::Temp => 2,
+        }
+    }
+
+    /// Las líneas de control que llevan esta perilla a `value`.
+    pub fn alter_lines(&self, value: &str) -> Vec<String> {
+        match self {
+            Knob::Device(d) => vec![format!("alter {d} = {value}")],
+            Knob::DeviceParam { device, param } => {
+                vec![format!("alter {device} {param} = {value}")]
+            }
+            Knob::Model { model, param } => vec![format!("altermod {model} {param} = {value}")],
             // `reset` re-arma el circuito con el parámetro nuevo. Sin él, `alterparam`
             // cambia la tabla de parámetros y los componentes siguen con el valor viejo.
-            Knob::Param => vec![
-                format!("alterparam {target} = {value}"),
-                "reset".to_string(),
-            ],
+            Knob::Param(p) => vec![format!("alterparam {p} = {value}"), "reset".to_string()],
             Knob::Temp => vec![format!("option temp = {value}")],
         }
     }
@@ -106,6 +148,17 @@ fn declares_param(deck: &str, name: &str) -> bool {
         }
     }
     false
+}
+
+/// ¿El deck declara `.model <name> ...`?
+fn declares_model(deck: &str, name: &str) -> bool {
+    deck.lines().any(|line| {
+        let t = line.trim_start();
+        t.to_ascii_lowercase().starts_with(".model")
+            && t.split_whitespace()
+                .nth(1)
+                .is_some_and(|n| n.eq_ignore_ascii_case(name))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -214,14 +267,14 @@ fn device_param(name: &str) -> Result<&'static str> {
     let c = name
         .chars()
         .next()
-        .ok_or_else(|| SimError::Parse("nombre de componente vacío".into()))?
+        .ok_or_else(|| SimError::Invalid("nombre de componente vacío".into()))?
         .to_ascii_lowercase();
     match c {
         'r' => Ok("resistance"),
         'c' => Ok("capacitance"),
         'l' => Ok("inductance"),
         'v' | 'i' => Ok("dc"),
-        _ => Err(SimError::Parse(format!(
+        _ => Err(SimError::Invalid(format!(
             "no sé qué variar de '{name}': Monte Carlo soporta R (resistencia), C \
              (capacidad), L (inductancia) y V/I (valor de continua)"
         ))),
@@ -349,7 +402,14 @@ pub struct Run {
     pub note: Option<String>,
     /// Lo alterado, en la forma `R1=4k7`, para la provenance del `.toml`.
     pub knobs: Vec<String>,
+    /// Las perillas de esta corrida antes de convertirse en líneas. Se guardan para
+    /// poder **ordenarlas** recién al final: con varias dimensiones, el orden en que se
+    /// emiten cambia el resultado (ver [`Knob::orden`]).
+    perillas: Vec<(Knob, String)>,
 }
+
+/// Techo de corridas de un `--vary` (o de varios multiplicados).
+const MAX_CORRIDAS: usize = 200;
 
 impl Run {
     /// La corrida sola, sin variar nada.
@@ -359,6 +419,7 @@ impl Run {
             suffix: String::new(),
             note: None,
             knobs: Vec::new(),
+            perillas: Vec::new(),
         }
     }
 }
@@ -366,8 +427,9 @@ impl Run {
 /// Todo lo que modula una corrida más allá del análisis en sí.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RunOptions {
-    /// Barrido de un parámetro (`--vary`).
-    pub step: Option<StepSpec>,
+    /// Barridos (`--vary`, repetible). Con más de uno se hace el **producto**: dos
+    /// dimensiones de tres valores son nueve corridas. Es el `.step` anidado de LTspice.
+    pub steps: Vec<StepSpec>,
     /// Monte Carlo (`--montecarlo`).
     pub mc: Option<McSpec>,
     /// Temperatura fija distinta de los 27 °C de ngspice (`--temp`).
@@ -379,54 +441,95 @@ pub struct RunOptions {
 impl RunOptions {
     /// ¿Hay algo que hacer más allá de correr el análisis pelado?
     pub fn is_plain(&self) -> bool {
-        self.step.is_none() && self.mc.is_none() && self.temp.is_none()
+        self.steps.is_empty() && self.mc.is_none() && self.temp.is_none()
     }
 }
 
 /// Arma la lista de corridas. Puede correr ngspice una vez de más: el Monte Carlo
 /// necesita leer los valores nominales antes de poder sortear los suyos.
 pub fn plan_runs(deck: &str, opts: &RunOptions, workdir: &Path) -> Result<Vec<Run>> {
-    if opts.step.is_some() && opts.mc.is_some() {
-        return Err(SimError::Parse(
+    if !opts.steps.is_empty() && opts.mc.is_some() {
+        return Err(SimError::Invalid(
             "--vary y --montecarlo no se pueden combinar: son dos formas distintas de \
              variar el mismo circuito. Corré una y después la otra."
                 .into(),
         ));
     }
 
-    // La temperatura fija es un prefijo común a todas las corridas.
+    // La temperatura fija es un sufijo común a todas las corridas: va última porque
+    // `reset` (el que arrastra `alterparam`) re-arma el circuito.
     let temp_setup: Vec<String> = match opts.temp {
         Some(t) => vec![format!("option temp = {t}")],
         None => Vec::new(),
     };
 
-    if let Some(step) = &opts.step {
-        let knob = Knob::detect(deck, &step.target);
-        let mut runs = Vec::with_capacity(step.values.len());
-        for value in &step.values {
-            // La temperatura va DESPUÉS de alterar: si la perilla es un `.param`, sus
-            // líneas terminan en `reset`, que re-arma el circuito y se llevaría puesta
-            // una opción puesta antes.
-            let mut setup = knob.alter_lines(&step.target, value);
-            setup.extend(temp_setup.clone());
-            runs.push(Run {
-                setup,
-                suffix: slug_value(value),
-                note: Some(format!("{} = {}", step.target, value)),
-                knobs: vec![format!("{}={}", step.target, value)],
-            });
+    if !opts.steps.is_empty() {
+        // Una perilla por dimensión, resuelta una sola vez.
+        let knobs: Vec<Knob> = opts
+            .steps
+            .iter()
+            .map(|s| Knob::detect(deck, &s.target))
+            .collect();
+
+        // Cuántas corridas van a salir. Se chequea ANTES de armarlas: tres dimensiones
+        // con un typo en los valores generan miles de archivos y de mediciones en disco,
+        // y para cuando se nota ya están escritas.
+        let total: usize = opts.steps.iter().map(|s| s.values.len()).product();
+        if total > MAX_CORRIDAS {
+            return Err(SimError::Invalid(format!(
+                "{} dimensiones de --vary dan {total} corridas (el máximo es {MAX_CORRIDAS}). \
+                 Cada una deja su medición en disco: achicá la lista de valores o corré \
+                 una dimensión por vez.",
+                opts.steps.len()
+            )));
+        }
+
+        // Producto cartesiano, con la PRIMERA dimensión como bucle de afuera (es como
+        // se lee `--vary R1=... --vary C1=...`: R1 cambia despacio, C1 rápido).
+        let mut runs: Vec<Run> = vec![Run::plain()];
+        for (step, knob) in opts.steps.iter().zip(&knobs) {
+            let mut siguiente = Vec::with_capacity(runs.len() * step.values.len());
+            for base in &runs {
+                for value in &step.values {
+                    let mut r = base.clone();
+                    r.perillas.push((knob.clone(), value.clone()));
+                    if !r.suffix.is_empty() {
+                        r.suffix.push('_');
+                    }
+                    r.suffix.push_str(&slug_value(value));
+                    r.knobs.push(format!("{}={}", step.target, value));
+                    r.note = Some(match r.note.take() {
+                        Some(n) => format!("{n}, {} = {}", step.target, value),
+                        None => format!("{} = {}", step.target, value),
+                    });
+                    siguiente.push(r);
+                }
+            }
+            runs = siguiente;
+        }
+
+        // Recién acá se emiten las líneas, ya ordenadas: los `.param` primero (terminan
+        // en `reset`, que borra lo anterior), después el resto, y la temperatura al final.
+        for r in &mut runs {
+            r.perillas.sort_by_key(|(k, _)| k.orden());
+            r.setup = r
+                .perillas
+                .iter()
+                .flat_map(|(k, v)| k.alter_lines(v))
+                .chain(temp_setup.iter().cloned())
+                .collect();
         }
         return Ok(runs);
     }
 
     if let Some(mc) = &opts.mc {
         if mc.runs == 0 {
-            return Err(SimError::Parse(
+            return Err(SimError::Invalid(
                 "--montecarlo pide al menos una corrida".into(),
             ));
         }
         if mc.tolerances.is_empty() {
-            return Err(SimError::Parse(
+            return Err(SimError::Invalid(
                 "Monte Carlo sin ninguna --tolerance no varía nada: agregá al menos una \
                  (ej. --tolerance R1=5%)"
                     .into(),
@@ -459,6 +562,7 @@ pub fn plan_runs(deck: &str, opts: &RunOptions, workdir: &Path) -> Result<Vec<Ru
                 note: Some(format!("Monte Carlo #{}", i + 1)),
                 setup,
                 knobs,
+                perillas: Vec::new(),
             });
         }
         return Ok(runs);
@@ -493,34 +597,71 @@ mod tests {
     use super::*;
 
     const DECK_PARAM: &str = "titulo\n.param rval=1k rotro=2\nR1 in out {rval}\n";
+    const DECK_MODELO: &str =
+        "titulo\n.model MIDIODO D(is=1e-14)\nD1 a 0 MIDIODO\nM1 a b c d NMOS\n";
     const DECK_PLANO: &str = "titulo\nR1 in out 1k\nC1 out 0 100n\n";
 
     #[test]
     fn detecta_la_perilla() {
-        assert_eq!(Knob::detect(DECK_PLANO, "R1"), Knob::Device);
-        assert_eq!(Knob::detect(DECK_PARAM, "rval"), Knob::Param);
+        let d = |t| Knob::detect(DECK_PLANO, t);
+        let p = |t| Knob::detect(DECK_PARAM, t);
+        assert_eq!(d("R1"), Knob::Device("R1".into()));
+        assert_eq!(p("rval"), Knob::Param("rval".into()));
         // Declarado en la misma línea, segundo lugar.
-        assert_eq!(Knob::detect(DECK_PARAM, "rotro"), Knob::Param);
+        assert_eq!(p("rotro"), Knob::Param("rotro".into()));
         // Un componente sigue siendo componente aunque el deck tenga .param.
-        assert_eq!(Knob::detect(DECK_PARAM, "R1"), Knob::Device);
-        assert_eq!(Knob::detect(DECK_PLANO, "temp"), Knob::Temp);
-        assert_eq!(Knob::detect(DECK_PLANO, "TEMP"), Knob::Temp);
+        assert_eq!(p("R1"), Knob::Device("R1".into()));
+        assert_eq!(d("temp"), Knob::Temp);
+        assert_eq!(d("TEMP"), Knob::Temp);
+    }
+
+    #[test]
+    fn el_punto_distingue_modelo_de_componente() {
+        // El deck declara `.model MIDIODO`, así que `MIDIODO.is` es del modelo…
+        assert_eq!(
+            Knob::detect(DECK_MODELO, "MIDIODO.is"),
+            Knob::Model {
+                model: "MIDIODO".into(),
+                param: "is".into()
+            }
+        );
+        // …y `M1.w` no, porque no hay ningún `.model M1`.
+        assert_eq!(
+            Knob::detect(DECK_MODELO, "M1.w"),
+            Knob::DeviceParam {
+                device: "M1".into(),
+                param: "w".into()
+            }
+        );
     }
 
     #[test]
     fn el_param_lleva_reset() {
         assert_eq!(
-            Knob::Device.alter_lines("R1", "4k7"),
+            Knob::Device("R1".into()).alter_lines("4k7"),
             vec!["alter R1 = 4k7"]
         );
         assert_eq!(
-            Knob::Param.alter_lines("rval", "4k7"),
-            vec!["alterparam rval = 4k7", "reset"]
+            Knob::DeviceParam {
+                device: "M1".into(),
+                param: "w".into()
+            }
+            .alter_lines("1u"),
+            vec!["alter M1 w = 1u"]
         );
         assert_eq!(
-            Knob::Temp.alter_lines("temp", "50"),
-            vec!["option temp = 50"]
+            Knob::Model {
+                model: "MIDIODO".into(),
+                param: "is".into()
+            }
+            .alter_lines("1e-14"),
+            vec!["altermod MIDIODO is = 1e-14"]
         );
+        assert_eq!(
+            Knob::Param("rval".into()).alter_lines("4k7"),
+            vec!["alterparam rval = 4k7", "reset"]
+        );
+        assert_eq!(Knob::Temp.alter_lines("50"), vec!["option temp = 50"]);
     }
 
     #[test]
@@ -572,7 +713,7 @@ mod tests {
     #[test]
     fn el_plan_del_step_alterna_y_nombra() {
         let opts = RunOptions {
-            step: Some(StepSpec::parse("R1=1k,4k7").unwrap()),
+            steps: vec![StepSpec::parse("R1=1k,4k7").unwrap()],
             ..Default::default()
         };
         let runs = plan_runs(DECK_PLANO, &opts, Path::new("/tmp")).unwrap();
@@ -586,7 +727,7 @@ mod tests {
     #[test]
     fn la_temperatura_va_en_todas_las_corridas() {
         let opts = RunOptions {
-            step: Some(StepSpec::parse("R1=1k,2k").unwrap()),
+            steps: vec![StepSpec::parse("R1=1k,2k").unwrap()],
             temp: Some(85.0),
             ..Default::default()
         };
@@ -607,7 +748,7 @@ mod tests {
     #[test]
     fn step_y_montecarlo_no_conviven() {
         let opts = RunOptions {
-            step: Some(StepSpec::parse("R1=1k").unwrap()),
+            steps: vec![StepSpec::parse("R1=1k").unwrap()],
             mc: Some(McSpec {
                 runs: 3,
                 tolerances: vec![("R1".into(), 0.05)],
@@ -617,6 +758,65 @@ mod tests {
             ..Default::default()
         };
         assert!(plan_runs(DECK_PLANO, &opts, Path::new("/tmp")).is_err());
+    }
+
+    #[test]
+    fn dos_dimensiones_dan_el_producto() {
+        let opts = RunOptions {
+            steps: vec![
+                StepSpec::parse("R1=1k,10k").unwrap(),
+                StepSpec::parse("C1=100n,1u,10u").unwrap(),
+            ],
+            ..Default::default()
+        };
+        let runs = plan_runs(DECK_PLANO, &opts, Path::new("/tmp")).unwrap();
+        assert_eq!(runs.len(), 6);
+        // La PRIMERA dimensión es el bucle de afuera: R1 cambia despacio.
+        assert_eq!(runs[0].suffix, "1k_100n");
+        assert_eq!(runs[1].suffix, "1k_1u");
+        assert_eq!(runs[3].suffix, "10k_100n");
+        assert_eq!(runs[0].note.as_deref(), Some("R1 = 1k, C1 = 100n"));
+        assert_eq!(runs[0].knobs, vec!["R1=1k", "C1=100n"]);
+        assert_eq!(runs[0].setup, vec!["alter R1 = 1k", "alter C1 = 100n"]);
+    }
+
+    #[test]
+    fn el_param_se_emite_antes_que_el_componente() {
+        // `reset` (que arrastra `alterparam`) borra un `alter` anterior, así que el
+        // `.param` tiene que salir primero aunque se haya pedido segundo.
+        let opts = RunOptions {
+            steps: vec![
+                StepSpec::parse("R1=1k").unwrap(),
+                StepSpec::parse("rval=2k").unwrap(),
+            ],
+            temp: Some(85.0),
+            ..Default::default()
+        };
+        let runs = plan_runs(DECK_PARAM, &opts, Path::new("/tmp")).unwrap();
+        assert_eq!(
+            runs[0].setup,
+            vec![
+                "alterparam rval = 2k",
+                "reset",
+                "alter R1 = 1k",
+                "option temp = 85",
+            ]
+        );
+    }
+
+    #[test]
+    fn demasiadas_corridas_se_frenan_antes_de_escribir_nada() {
+        let muchos: Vec<String> = (0..30).map(|i| i.to_string()).collect();
+        let lista = muchos.join(",");
+        let opts = RunOptions {
+            steps: vec![
+                StepSpec::parse(&format!("R1={lista}")).unwrap(),
+                StepSpec::parse(&format!("C1={lista}")).unwrap(),
+            ],
+            ..Default::default()
+        };
+        let err = plan_runs(DECK_PLANO, &opts, Path::new("/tmp")).unwrap_err();
+        assert!(err.to_string().contains("900 corridas"), "{err}");
     }
 
     #[test]

@@ -864,14 +864,21 @@ pub struct CurveCommon {
     pub label: Option<String>,
 
     // --- Variar el circuito entre corridas (el `.step` de LTspice) ---
-    /// Barre un componente, un `.param` o la temperatura y deja una curva por valor:
-    /// `--vary R1=1k,2k2,4k7`. Los valores van con los sufijos de SPICE que quieras.
+    /// Barre algo del circuito y deja una curva por valor: `--vary R1=1k,2k2,4k7`.
+    /// Los valores van con los sufijos de SPICE que quieras.
+    ///
+    /// El objetivo puede ser un componente (`R1`), un parámetro de un componente
+    /// (`M1.w`), un parámetro de un `.model` (`MIDIODO.is`), un `.param` del netlist
+    /// (`rval`) o `temp`. Cuál es lo deduce Xtal mirando el netlist.
+    ///
+    /// **Es repetible**: con dos `--vary` se corre el producto (el `.step` anidado de
+    /// LTspice). La primera dimensión es el bucle de afuera.
     ///
     /// Es el `.step` de LTspice, pero **no se puede llamar `--step`**: en `sim tran` y
     /// en `sim dc` ese nombre ya es el paso (de tiempo y de barrido). Dos cosas
     /// distintas con el mismo nombre según el subcomando es peor que un nombre propio.
     #[arg(long, value_name = "OBJETIVO=V1,V2,...")]
-    pub vary: Option<String>,
+    pub vary: Vec<String>,
     /// Temperatura de simulación en °C (ngspice usa 27 si no se dice nada).
     #[arg(long)]
     pub temp: Option<f64>,

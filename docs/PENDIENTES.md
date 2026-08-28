@@ -313,8 +313,10 @@ entero para cambiarle un número a una resistencia.
 
 Ahora los análisis de curva aceptan:
 
-- `--vary R1=1k,2k2,4k7` — una curva por valor, con su leyenda. Anda igual sobre un
-  `.param` del netlist o sobre `temp`.
+- `--vary R1=1k,2k2,4k7` — una curva por valor, con su leyenda. El objetivo puede ser un
+  componente, un parámetro suyo (`M1.w`), un parámetro de un `.model` (`MIDIODO.is`), un
+  `.param` del netlist o `temp`. **Repetible**: dos `--vary` corren el producto (el
+  `.step` anidado).
 - `--temp 85` — temperatura fija, también en `op`/`tf`/`sens`/`pz`/`four`.
 - `--montecarlo N --tolerance R1=5%` (`--seed`, `--mc-dist uniform|gauss`).
 - `--measure "ac fc when vdb(out)=-3"` — el `.meas` de LTspice, repetible.
@@ -323,10 +325,10 @@ Ahora los análisis de curva aceptan:
 Todo en `crates/xtal-sim/src/variation.rs`, verificado con ocho tests de integración
 contra ngspice-47 real. El detalle de las decisiones está en el `CLAUDE.md`.
 
-**Lo que sigue faltando contra LTspice:** el `.step` **anidado** (dos dimensiones a la
-vez), el `.step` sobre nombres de modelo (`altermod`), y los modificadores de `.tran`
-que no son `uic` (`steady`, `startup`, `nodiscard`). Ninguno bloquea un TP; el anidado
-es el que más probablemente aparezca.
+**Con esto la paridad con el `.step` de LTspice queda cerrada.** Lo único que no está
+son los modificadores de `.tran` que no son `uic` (`startup`, `steady`, `nodiscard`), y
+**no se pueden agregar**: ngspice no los tiene (contesta `unknown parameter on .tran -
+ignored`). Habría que cambiar de motor.
 
 ### 11. Ingesta de esquemáticos `.asc` de LTspice — pedido de Manu, BLOQUEADO
 
