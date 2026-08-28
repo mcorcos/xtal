@@ -1304,8 +1304,9 @@ de TeX Live— y baja cada paquete la primera vez que un documento lo usa, cache
 `xtal new|init` · `plan [add|list|remove]` · `status` · `scan` · `meas import|formula|random|list|show` ·
 `plot new|add-series|list|show|preview`
 · `section add|list` · `circuit import|list|show` · `sim ac|tran|dc|noise|disto|sp|op|tf|sens|pz|four`
-(los de curva aceptan `--vary`, `--temp`, `--montecarlo`/`--tolerance`/`--seed`/`--mc-dist`
-y `--measure`; `tran` suma `--max-step` y `--uic`)
+(los de curva aceptan `--vary` (repetible), `--temp`,
+`--montecarlo`/`--tolerance`/`--seed`/`--mc-dist` y `--measure`; `tran` suma
+`--max-step` y `--uic`)
 · `raw import [--node ...] [--inspect] [--plot ...]` · `export` · `compile [archivo]` · `run [--open] [--monochrome]
 [--pdflatex]` · `watch` · `config get|set|list [--global] [--resolved]` · `doctor [--fix]` ·
 `example` · `update [--check] [--yes] [--channel estable|beta]` · `setup` · `agents [install|uninstall|add|remove]` ·
@@ -1381,10 +1382,37 @@ entero duplicado para cambiarle un número a una resistencia.
   se lleva puestas las curvas, y `uic` arrancando el capacitor en 0 V). Y end-to-end:
   `--vary R1=100,330,1k` sobre el ejemplo deja tres mediciones, entran a un gráfico y
   **sale el PDF con la familia de Q y su leyenda**.
-- **Lo que sigue faltando contra LTspice, y hay que decirlo**: el `.step` **anidado**
-  (barrer dos cosas a la vez) y el `.step` sobre nombres de modelo (`altermod`). Los
-  modificadores de `.tran` que no son `uic` (`steady`, `startup`, `nodiscard`) tampoco
-  están.
+- **`--vary` es repetible: el `.step` anidado.** Dos dimensiones corren el producto, con
+  la primera como bucle de afuera. Dos cosas que salieron de acá:
+  1. **El orden de las líneas cambia el resultado, y no se ve con una sola dimensión.**
+     `reset` (el que arrastra `alterparam`) **borra un `alter` anterior** — verificado
+     con ngspice-47: después de `alter R1 = 9k` + `alterparam` + `reset`, R1 vuelve a
+     valer lo del netlist. Por eso las perillas se ordenan antes de emitirse
+     (`Knob::orden`): los `.param` primero, después el resto, la temperatura al final.
+     Barrer un componente y un `.param` a la vez con el orden al revés deja las dos
+     corridas del componente **idénticas**, que se lee como que el barrido no anda. Hay
+     un test de integración con ese caso exacto.
+  2. **Techo de 200 corridas**, chequeado antes de armar nada: dos listas con un typo
+     dan miles de mediciones escritas en disco, y para cuando se nota ya están.
+  - **Trampa del test, no del código**: la primera versión del test del producto pedía
+    que las cuatro curvas fueran distintas, y fallaba. Es física: la respuesta de un RC
+    depende del **producto** R·C, así que `(1k, 10u)` y `(10k, 1u)` dan exactamente la
+    misma curva. Los valores del test se eligieron para que los productos no se repitan.
+- **Un punto en el objetivo abre las otras dos formas**: `--vary M1.w=1u,2u` es un
+  parámetro de un componente (`alter M1 w = 1u`, lo que hace falta para dimensionar un
+  MOS) y `--vary MIDIODO.is=1e-14,1e-12` es un parámetro de un `.model`
+  (`altermod`, que le pega a todos los componentes que lo usan). Cuál de las dos lo dice
+  el deck: si declara `.model <nombre>`, es del modelo. Un nombre de componente en SPICE
+  no puede llevar un punto, así que el punto no es ambiguo.
+- **Un error de lo que se pidió no se disfraza de error de ngspice.** `SimError::Invalid`
+  existe porque el prefijo de `Parse` —"no pude parsear la salida de la simulación"—
+  manda a buscar el problema adentro del simulador cuando el problema es el `--vary` mal
+  escrito.
+- **Lo que sigue faltando contra LTspice, y hay que decirlo**: los modificadores de
+  `.tran` que no son `uic` (`startup`, `steady`, `nodiscard`) **no existen en ngspice**
+  —verificado: contesta `unknown parameter on .tran - ignored`—, así que no es algo que
+  se pueda agregar sin cambiar de motor. Con eso, la paridad con el `.step` de LTspice
+  está cerrada.
 
 ### Import de rawfiles externos (`raw`) — HECHO (2026-06-23)
 `xtal raw import <archivo.raw>` lee el resultado de una corrida hecha en **LTspice/ngspice**

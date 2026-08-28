@@ -131,8 +131,10 @@ Su superficie evoluciona; consultá `xtal circuit --help` y `xtal sim --help`.
 
 **Variar el circuito** (lo que en LTspice es `.step`), en los análisis de curva:
 
-- `--vary R1=1k,2k2,4k7` — una curva por valor, con la leyenda ya puesta. Sirve igual
-  sobre un `.param` del netlist (`--vary rval=...`) o sobre `temp`.
+- `--vary R1=1k,2k2,4k7` — una curva por valor, con la leyenda ya puesta. El objetivo
+  puede ser un componente, un parámetro suyo (`M1.w`), un parámetro de un `.model`
+  (`MIDIODO.is`), un `.param` del netlist (`rval`) o `temp`. **Es repetible**: dos
+  `--vary` corren el producto (el `.step` anidado de LTspice), con techo de 200 corridas.
 - `--temp 85` — temperatura fija en °C (ngspice usa 27). También en `op`/`tf`/`sens`/`pz`/`four`.
 - `--montecarlo 50 --tolerance R1=5% --tolerance C1=10% [--seed 7] [--mc-dist gauss]` —
   sortea cada componente adentro de su tolerancia. **La misma semilla da las mismas
@@ -140,7 +142,8 @@ Su superficie evoluciona; consultá `xtal circuit --help` y `xtal sim --help`.
 - `--measure "ac fc when vdb(out)=-3"` — el `.meas` de LTspice, repetible. Es la sintaxis
   de `meas` de ngspice sin el `meas` del principio. Con `--vary` sale una vez por corrida.
   Una medición que no encuentra nada se reporta y **no aborta la simulación**.
-- `tran` suma `--max-step` (el `dTmax` de LTspice) y `--uic`.
+- `tran` suma `--max-step` (el `dTmax` de LTspice) y `--uic`. Los otros modificadores
+  del `.tran` de LTspice (`startup`, `steady`, `nodiscard`) **no existen en ngspice**.
 
 `--vary` y `--montecarlo` no se combinan: son dos formas de variar el mismo circuito.
 

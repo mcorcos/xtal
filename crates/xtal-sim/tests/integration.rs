@@ -306,7 +306,7 @@ fn step_deja_una_curva_por_valor() {
     }
     let dir = workdir("step");
     let opts = RunOptions {
-        step: Some(StepSpec::parse("R1=1k,10k").unwrap()),
+        steps: vec![StepSpec::parse("R1=1k,10k").unwrap()],
         ..Default::default()
     };
     let res = correr(RC, &opts, &dir).measurements;
@@ -359,7 +359,7 @@ C1 out 0 1u
 .end
 ";
     let opts = RunOptions {
-        step: Some(StepSpec::parse("rval=1k,10k").unwrap()),
+        steps: vec![StepSpec::parse("rval=1k,10k").unwrap()],
         ..Default::default()
     };
     let res = correr(net, &opts, &dir).measurements;
@@ -497,7 +497,7 @@ fn measure_se_atribuye_a_su_corrida() {
     }
     let dir = workdir("measure_step");
     let opts = RunOptions {
-        step: Some(StepSpec::parse("R1=1k,10k").unwrap()),
+        steps: vec![StepSpec::parse("R1=1k,10k").unwrap()],
         measures: vec!["ac fc when vdb(out)=-3".to_string()],
         ..Default::default()
     };
@@ -567,5 +567,145 @@ C1 out 0 1u
     assert!(
         v0_sin > 0.9,
         "sin uic debería arrancar del régimen, fue {v0_sin}"
+    );
+}
+
+#[test]
+fn dos_dimensiones_dan_el_producto_contra_ngspice() {
+    if !xtal_sim::is_available() {
+        eprintln!("ngspice no disponible: salteando test de --vary anidado");
+        return;
+    }
+    let dir = workdir("vary_anidado");
+    let opts = RunOptions {
+        steps: vec![
+            StepSpec::parse("R1=1k,10k").unwrap(),
+            // 1u y 22u, no 1u y 10u: la respuesta de un RC depende del PRODUCTO R·C,
+            // así que con 10u las corridas (1k, 10u) y (10k, 1u) darían la misma curva
+            // y el test no distinguiría "las dos dimensiones se aplicaron" de "una sola".
+            StepSpec::parse("C1=1u,22u").unwrap(),
+        ],
+        ..Default::default()
+    };
+    let res = correr(RC, &opts, &dir).measurements;
+
+    // 2 × 2 corridas × (magnitud + fase).
+    assert_eq!(res.len(), 8);
+    let ids: Vec<&str> = res
+        .iter()
+        .map(|m| m.measurement.id.as_str())
+        .filter(|id| !id.ends_with("_fase"))
+        .collect();
+    assert_eq!(
+        ids,
+        ["bode_1k_1u", "bode_1k_22u", "bode_10k_1u", "bode_10k_22u"]
+    );
+    assert_eq!(
+        res[0].measurement.label.as_deref(),
+        Some("R1 = 1k, C1 = 1u")
+    );
+    assert_eq!(res[0].spec.knobs, vec!["R1=1k", "C1=1u"]);
+
+    // Las cuatro son distintas: si alguna dimensión no se aplicara, dos saldrían iguales.
+    let curvas: Vec<_> = res
+        .iter()
+        .filter(|m| !m.measurement.id.ends_with("_fase"))
+        .map(|m| m.measurement.data.clone())
+        .collect();
+    for i in 0..curvas.len() {
+        for j in (i + 1)..curvas.len() {
+            assert_ne!(
+                curvas[i], curvas[j],
+                "las corridas {i} y {j} salieron iguales"
+            );
+        }
+    }
+}
+
+#[test]
+fn un_param_y_un_componente_a_la_vez_no_se_pisan() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    // El caso que rompe si el orden está mal: `alterparam` termina en `reset`, que
+    // **borra** un `alter` anterior (verificado con ngspice-47). Barriendo las dos cosas
+    // a la vez, si el `.param` no se emite primero, el valor del componente se pierde y
+    // las dos corridas de R1 salen idénticas.
+    let net = "\
+RC mixto
+.param cval=1u
+V1 in 0 dc 0 ac 1
+R1 in out 1k
+C1 out 0 {cval}
+.end
+";
+    let dir = workdir("vary_mixto");
+    let opts = RunOptions {
+        steps: vec![
+            StepSpec::parse("R1=1k,10k").unwrap(),
+            StepSpec::parse("cval=1u").unwrap(),
+        ],
+        ..Default::default()
+    };
+    let res = correr(net, &opts, &dir).measurements;
+    assert_eq!(res.len(), 4);
+    let mag: Vec<_> = res
+        .iter()
+        .filter(|m| !m.measurement.id.ends_with("_fase"))
+        .map(|m| m.measurement.data.last().unwrap().1)
+        .collect();
+    assert!(
+        (mag[0] - mag[1]).abs() > 10.0,
+        "el alter de R1 se perdió con el reset del .param: {mag:?}"
+    );
+}
+
+#[test]
+fn barrer_un_parametro_de_un_modelo() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    // `altermod`: cambia el `.model`, no el componente. Es lo que hace falta para barrer
+    // la corriente de saturación de un diodo o el Vth de un MOS.
+    let net = "\
+diodo
+.model MIDIODO D(is=1e-14 n=1)
+V1 in 0 dc 0.5
+R1 in out 1k
+D1 out 0 MIDIODO
+.end
+";
+    let dir = workdir("vary_modelo");
+    let res = simulate_curve(
+        "d",
+        net,
+        &Analysis::Dc(Dc {
+            source: "V1".to_string(),
+            start: 0.0,
+            stop: 1.0,
+            step: 0.05,
+        }),
+        &["v(out)".to_string()],
+        "diodo",
+        &CurveMeta::default(),
+        &RunOptions {
+            steps: vec![StepSpec::parse("MIDIODO.is=1e-18,1e-10").unwrap()],
+            ..Default::default()
+        },
+        &dir,
+    )
+    .expect("el barrido del modelo debería correr")
+    .measurements;
+
+    assert_eq!(res.len(), 2);
+    assert_eq!(res[0].measurement.id, "diodo_1em18");
+    // Con is mil millones de veces más grande el diodo conduce mucho antes, así que a
+    // 1 V la tensión sobre él es bastante menor.
+    let v_final = |i: usize| res[i].measurement.data.last().unwrap().1;
+    assert!(
+        v_final(1) < v_final(0) - 0.1,
+        "altermod no cambió el modelo: {} vs {}",
+        v_final(0),
+        v_final(1)
     );
 }

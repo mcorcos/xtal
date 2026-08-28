@@ -477,6 +477,8 @@ su propia curva, con su leyenda puesta, listas para entrar todas al mismo gráfi
 | Flag | Qué hace |
 |---|---|
 | `--vary R1=1k,2k2,4k7` | Barre un componente. Una curva por valor |
+| `--vary M1.w=1u,2u,5u` | Barre un **parámetro** de un componente (dimensionar un MOS) |
+| `--vary MIDIODO.is=1e-14,1e-12` | Barre un parámetro de un `.model` (le pega a todos los que lo usan) |
 | `--vary rval=1k,10k` | Lo mismo sobre un `.param` del netlist (usa `alterparam` + `reset`) |
 | `--vary temp=0,27,85` | Lo mismo sobre la temperatura |
 | `--temp 85` | Una temperatura fija (ngspice usa 27 °C). También en `op`, `tf`, `sens`, `pz` y `four` |
@@ -487,6 +489,16 @@ su propia curva, con su leyenda puesta, listas para entrar todas al mismo gráfi
 # Ocho curvas de un mismo Bode, una por valor de R.
 xtal sim ac filtro --as barrido --node "v(out)" --from 10 --to 1e5 \
   --vary R1=470,1k,2k2,4k7,10k,22k,47k,100k
+```
+
+**`--vary` es repetible**: con dos, se corre el producto — es el `.step` anidado de
+LTspice. La primera dimensión es el bucle de afuera, y cada curva queda con las dos
+cosas en la leyenda (`R1 = 1k, C1 = 220n`). Hay un techo de 200 corridas: un typo en dos
+listas genera miles de mediciones en disco y para cuando se nota ya están escritas.
+
+```bash
+xtal sim ac filtro --as mapa --node "v(out)" --from 300 --to 4000 \
+  --vary R1=100,330 --vary C1=220n,470n
 ```
 
 **El Monte Carlo se repite**: la misma `--seed` da exactamente las mismas curvas, y el
@@ -514,6 +526,10 @@ las curvas que sí se calcularon quedan guardadas.
 `tran` acepta además `--max-step` (el `dTmax` de LTspice: le pone un techo al paso para
 que no se saltee un flanco angosto) y `--uic` (arranca de las condiciones iniciales y
 saltea el punto de operación).
+
+Los otros modificadores del `.tran` de LTspice —`startup`, `steady`, `nodiscard`— **no
+existen en ngspice**: pasárselos da `unknown parameter on .tran - ignored`. No es algo
+que Xtal pueda agregar sin cambiar de motor.
 
 ### Salida
 | Comando | Descripción |

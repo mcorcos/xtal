@@ -267,10 +267,10 @@ fn sim_workdir(root: &Path) -> Result<PathBuf> {
 /// Los `--vary` y `--tolerance` se parsean acá (y no en clap) porque su forma
 /// `objetivo=valores` necesita un mensaje de error que diga qué se esperaba.
 fn curve_options(common: &CurveCommon) -> Result<RunOptions> {
-    let vary = match &common.vary {
-        Some(s) => Some(StepSpec::parse(s).map_err(anyhow::Error::msg)?),
-        None => None,
-    };
+    let mut steps = Vec::new();
+    for v in &common.vary {
+        steps.push(StepSpec::parse(v).map_err(anyhow::Error::msg)?);
+    }
     let mc = match common.montecarlo {
         Some(runs) => {
             let mut tolerances = Vec::new();
@@ -292,7 +292,7 @@ fn curve_options(common: &CurveCommon) -> Result<RunOptions> {
         }
     };
     Ok(RunOptions {
-        step: vary,
+        steps,
         mc,
         temp: common.temp,
         measures: common.measures.clone(),

@@ -103,7 +103,7 @@ pub fn simulate_curve(
         vectors.to_vec()
     };
     if vectors.is_empty() {
-        return Err(SimError::Parse(
+        return Err(SimError::Invalid(
             "este análisis necesita al menos un vector (--node)".to_string(),
         ));
     }
