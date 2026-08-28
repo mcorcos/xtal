@@ -119,3 +119,121 @@ mod tests {
         assert!((db3[0].1 - (-6.0206)).abs() < 1e-3);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Mediciones automáticas (`meas`)
+// ---------------------------------------------------------------------------
+
+/// El resultado de un `meas` de ngspice.
+///
+/// Es el equivalente del `.meas` de LTspice: en vez de mirar el gráfico y estimar a ojo
+/// dónde cae el -3 dB, se lo pedís al simulador y sale un número.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasureResult {
+    /// Nombre que le puso la persona (`bw`, `tr`, `gmax`).
+    pub name: String,
+    /// El valor. `None` cuando la medición no encontró lo que buscaba (ngspice dice
+    /// `failed!`), que es un resultado y no un error de simulación.
+    pub value: Option<f64>,
+    /// Dónde ocurrió, para los `max`/`min`/`when` que lo reportan (el `at=` de ngspice).
+    pub at: Option<f64>,
+    /// Qué corrida lo produjo (`R1 = 4k7`), cuando hubo `--vary` o Monte Carlo.
+    pub run: Option<String>,
+}
+
+/// El nombre que ngspice le va a poner al resultado de una línea de `meas`.
+///
+/// La persona escribe `ac bw when vdb(out)=-3` (sin el `meas`), así que el nombre es el
+/// **segundo** token: `<tipo> <nombre> <resto>`.
+pub fn measure_name(expr: &str) -> Option<&str> {
+    expr.split_whitespace().nth(1)
+}
+
+/// Busca en el log de ngspice el resultado de cada medición pedida.
+///
+/// Se busca por nombre y no "cualquier línea con un `=`" a propósito: el propio banner
+/// de ngspice trae líneas como `Doing analysis at TEMP = 27.000000`, que si no se
+/// filtran entran como si fueran una medición.
+pub fn parse_measures(log: &str, exprs: &[String], run: Option<&str>) -> Vec<MeasureResult> {
+    let mut out = Vec::new();
+    for expr in exprs {
+        let Some(name) = measure_name(expr) else {
+            continue;
+        };
+        let mut result = MeasureResult {
+            name: name.to_string(),
+            value: None,
+            at: None,
+            run: run.map(str::to_string),
+        };
+        for line in log.lines() {
+            let t = line.trim();
+            // La línea del valor: `bw                  =  1.58778e+03 [at=  1.0e+01]`.
+            let Some((lhs, rhs)) = t.split_once('=') else {
+                continue;
+            };
+            if !lhs.trim().eq_ignore_ascii_case(name) {
+                continue;
+            }
+            let mut it = rhs.split_whitespace();
+            result.value = it.next().and_then(|v| v.parse::<f64>().ok());
+            // `at=` puede venir pegado al número o separado por espacios (ngspice-47
+            // lo escribe separado): cortamos después del `=` y tomamos el primer token.
+            if let Some(pos) = rhs.find("at=") {
+                result.at = rhs[pos + 3..]
+                    .split_whitespace()
+                    .next()
+                    .and_then(|v| v.parse::<f64>().ok());
+            }
+            break;
+        }
+        out.push(result);
+    }
+    out
+}
+
+#[cfg(test)]
+mod measure_tests {
+    use super::*;
+
+    #[test]
+    fn saca_el_nombre_de_la_expresion() {
+        assert_eq!(measure_name("ac bw when vdb(out)=-3"), Some("bw"));
+        assert_eq!(measure_name("tran tr trig v(out) val=0.1"), Some("tr"));
+        assert_eq!(measure_name(""), None);
+    }
+
+    #[test]
+    fn lee_el_valor_y_el_punto() {
+        let log = "Doing analysis at TEMP = 27.000000 and TNOM = 27.000000\n                   bw                  =  1.58778e+03\n                   gmax                =  -1.71449e-04 at=  1.00000e+01\n";
+        let exprs = vec![
+            "ac bw when vdb(out)=-3".to_string(),
+            "ac gmax max vdb(out)".to_string(),
+        ];
+        let r = parse_measures(log, &exprs, Some("R1 = 1k"));
+        assert_eq!(r[0].value, Some(1587.78));
+        assert_eq!(r[0].at, None);
+        assert_eq!(r[0].run.as_deref(), Some("R1 = 1k"));
+        assert_eq!(r[1].value, Some(-1.71449e-4));
+        assert_eq!(r[1].at, Some(10.0));
+    }
+
+    #[test]
+    fn una_medicion_que_no_encontro_nada_no_es_un_error() {
+        let log = "Error: measure  bw  when(WHEN) : out of interval\n meas ac bw ... failed!\n";
+        let r = parse_measures(log, &["ac bw when vdb(out)=-300".to_string()], None);
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].value, None);
+    }
+
+    #[test]
+    fn el_banner_no_se_cuela_como_medicion() {
+        // "TEMP" no es ninguna medición pedida, así que no aparece.
+        let log = "Doing analysis at TEMP = 27.000000\n";
+        assert!(
+            parse_measures(log, &["ac bw when v(out)=1".to_string()], None)[0]
+                .value
+                .is_none()
+        );
+    }
+}

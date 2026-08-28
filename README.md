@@ -463,6 +463,58 @@ mediciones:
 | `sp` | Parámetros S (requiere puertos declarados) |
 | `op` · `tf` · `sens` · `pz` · `four` | Punto de operación, función de transferencia, sensibilidad, polos y ceros, Fourier |
 
+**`disto`, `sens` y `pz` no existen en LTspice**: son de ngspice. (`sp` sí tiene su
+equivalente allá, el `.net`.)
+
+#### Variar el circuito entre corridas
+
+Lo que en LTspice se escribe `.step`, acá son flags de la misma corrida. Cada valor deja
+su propia curva, con su leyenda puesta, listas para entrar todas al mismo gráfico.
+
+> El flag se llama `--vary` y no `--step` porque en `sim tran` y en `sim dc` ese nombre
+> ya es el paso (de tiempo y de barrido).
+
+| Flag | Qué hace |
+|---|---|
+| `--vary R1=1k,2k2,4k7` | Barre un componente. Una curva por valor |
+| `--vary rval=1k,10k` | Lo mismo sobre un `.param` del netlist (usa `alterparam` + `reset`) |
+| `--vary temp=0,27,85` | Lo mismo sobre la temperatura |
+| `--temp 85` | Una temperatura fija (ngspice usa 27 °C). También en `op`, `tf`, `sens`, `pz` y `four` |
+| `--montecarlo 50 --tolerance R1=5% --tolerance C1=10%` | Sortea cada componente adentro de su tolerancia, 50 veces |
+| `--seed 7` · `--mc-dist uniform\|gauss` | La semilla del sorteo y cómo se reparte (uniforme, o campana con la tolerancia a 3σ) |
+
+```bash
+# Ocho curvas de un mismo Bode, una por valor de R.
+xtal sim ac filtro --as barrido --node "v(out)" --from 10 --to 1e5 \
+  --vary R1=470,1k,2k2,4k7,10k,22k,47k,100k
+```
+
+**El Monte Carlo se repite**: la misma `--seed` da exactamente las mismas curvas, y el
+valor que le tocó a cada componente queda escrito en el `.toml` de su medición. Un
+Monte Carlo que no se puede reproducir no sirve para un informe.
+
+#### Medir sobre el resultado — `--measure`
+
+El `.meas` de LTspice: en vez de mirar el gráfico y estimar el -3 dB a ojo, se lo pedís
+al simulador. Es la sintaxis de `meas` de ngspice sin el `meas` del principio, y es
+repetible.
+
+```bash
+xtal sim ac filtro --as bode --node "v(out)" --from 10 --to 1e5 \
+  --measure "ac fc when vdb(out)=-3" \
+  --measure "ac gmax max vdb(out)"
+```
+
+Con `--vary`, cada medición sale una vez por corrida y dice a cuál pertenece. Una
+medición que no encuentra lo que busca se reporta como tal y **no aborta la simulación**:
+las curvas que sí se calcularon quedan guardadas.
+
+#### Transitorio
+
+`tran` acepta además `--max-step` (el `dTmax` de LTspice: le pone un techo al paso para
+que no se saltee un flanco angosto) y `--uic` (arranca de las condiciones iniciales y
+saltea el punto de operación).
+
 ### Salida
 | Comando | Descripción |
 |---|---|

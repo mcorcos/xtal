@@ -129,6 +129,21 @@ xtal run --open
 Para correr simulaciones (ngspice) sobre un `.cir` y traer la curva como una medición más.
 Su superficie evoluciona; consultá `xtal circuit --help` y `xtal sim --help`.
 
+**Variar el circuito** (lo que en LTspice es `.step`), en los análisis de curva:
+
+- `--vary R1=1k,2k2,4k7` — una curva por valor, con la leyenda ya puesta. Sirve igual
+  sobre un `.param` del netlist (`--vary rval=...`) o sobre `temp`.
+- `--temp 85` — temperatura fija en °C (ngspice usa 27). También en `op`/`tf`/`sens`/`pz`/`four`.
+- `--montecarlo 50 --tolerance R1=5% --tolerance C1=10% [--seed 7] [--mc-dist gauss]` —
+  sortea cada componente adentro de su tolerancia. **La misma semilla da las mismas
+  curvas**, y el valor sorteado queda en el `.toml` de cada medición.
+- `--measure "ac fc when vdb(out)=-3"` — el `.meas` de LTspice, repetible. Es la sintaxis
+  de `meas` de ngspice sin el `meas` del principio. Con `--vary` sale una vez por corrida.
+  Una medición que no encuentra nada se reporta y **no aborta la simulación**.
+- `tran` suma `--max-step` (el `dTmax` de LTspice) y `--uic`.
+
+`--vary` y `--montecarlo` no se combinan: son dos formas de variar el mismo circuito.
+
 ### Importar una corrida externa (`raw`) — el flujo LTspice
 
 Cuando la persona corre el esquemático en **su** simulador (LTspice, típicamente) y obtiene

@@ -117,6 +117,19 @@ xtal sim ac filtro --as simulada --node "v(out)" --from 10 --to 1e5
 xtal raw import barrido.raw --as simulada --inspect
 ```
 
+**Barrer un valor** (el `.step` de LTspice) deja una curva por valor, con su leyenda:
+
+```bash
+xtal sim ac filtro --as barrido --node "v(out)" --from 10 --to 1e5 \
+  --vary R1=1k,2k2,4k7                       # también un .param, o temp=0,27,85
+xtal sim ac filtro --as tolerancias --node "v(out)" --from 10 --to 1e5 \
+  --montecarlo 30 --tolerance R1=5% --tolerance C1=10%
+```
+
+Y `--measure "ac fc when vdb(out)=-3"` pide el número en vez de estimarlo del gráfico
+(es el `.meas` de LTspice). `--temp 85` fija la temperatura; `tran` suma `--max-step`
+y `--uic`.
+
 ---
 
 ## Armar y compilar

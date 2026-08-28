@@ -5,7 +5,8 @@
 
 use xtal_sim::analysis::{Ac, Dc, Sweep, Tran};
 use xtal_sim::{
-    raw_to_measurements, simulate_curve, simulate_report, Analysis, CurveMeta, RawColumn, RawFile,
+    raw_to_measurements, simulate_curve, simulate_report, Analysis, CurveMeta, Dist, McSpec,
+    RawColumn, RawFile, RunOptions, StepSpec,
 };
 
 // --- Rawfiles reales (fixtures generados con ngspice, commiteados en tests/fixtures) ---
@@ -145,9 +146,11 @@ fn ac_produces_magnitude_and_phase() {
         &["v(out)".to_string()],
         "bode",
         &CurveMeta::default(),
+        &RunOptions::default(),
         &dir,
     )
-    .expect("la simulación AC debería correr");
+    .expect("la simulación AC debería correr")
+    .measurements;
 
     // Dos mediciones: magnitud + fase.
     assert_eq!(res.len(), 2);
@@ -188,6 +191,8 @@ C1 out 0 1u
         step: 1e-5,
         stop: 2e-3,
         start: None,
+        max_step: None,
+        uic: false,
     });
     let res = simulate_curve(
         "rc",
@@ -196,9 +201,11 @@ C1 out 0 1u
         &["v(out)".to_string()],
         "step",
         &CurveMeta::default(),
+        &RunOptions::default(),
         &dir,
     )
-    .expect("la simulación tran debería correr");
+    .expect("la simulación tran debería correr")
+    .measurements;
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].measurement.x_unit.as_deref(), Some("s"));
     assert!(!res[0].measurement.data.is_empty());
@@ -230,9 +237,11 @@ R2 out 0 1k
         &["v(out)".to_string()],
         "transfer",
         &CurveMeta::default(),
+        &RunOptions::default(),
         &dir,
     )
-    .expect("la simulación dc debería correr");
+    .expect("la simulación dc debería correr")
+    .measurements;
     assert_eq!(res.len(), 1);
     // Divisor 1:2 → v(out) = vin/2. En vin=5 → 2.5.
     let last = res[0].measurement.data.last().unwrap();
@@ -252,10 +261,311 @@ R1 in out 1k
 R2 out 0 1k
 .end
 ";
-    let report = simulate_report(net, &Analysis::Op, &dir).expect("op debería correr");
+    let report = simulate_report(net, &Analysis::Op, None, &dir).expect("op debería correr");
     // El reporte debería mencionar el nodo de salida.
     assert!(
         report.to_lowercase().contains("out"),
         "reporte op sin nodo out:\n{report}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Variar el circuito: `--vary`, temperatura y Monte Carlo (contra ngspice real)
+// ---------------------------------------------------------------------------
+
+/// El AC de siempre sobre el RC, para no repetirlo en cada test.
+fn ac_rc() -> Analysis {
+    Analysis::Ac(Ac {
+        sweep: Sweep::Dec,
+        points: 20,
+        fstart: 1.0,
+        fstop: 1e5,
+    })
+}
+
+/// Corre el RC con las opciones dadas y devuelve el resultado completo.
+fn correr(net: &str, opts: &RunOptions, dir: &std::path::Path) -> xtal_sim::CurveRun {
+    simulate_curve(
+        "rc",
+        net,
+        &ac_rc(),
+        &["v(out)".to_string()],
+        "bode",
+        &CurveMeta::default(),
+        opts,
+        dir,
+    )
+    .expect("la simulación debería correr")
+}
+
+#[test]
+fn step_deja_una_curva_por_valor() {
+    if !xtal_sim::is_available() {
+        eprintln!("ngspice no disponible: salteando test de --vary");
+        return;
+    }
+    let dir = workdir("step");
+    let opts = RunOptions {
+        step: Some(StepSpec::parse("R1=1k,10k").unwrap()),
+        ..Default::default()
+    };
+    let res = correr(RC, &opts, &dir).measurements;
+
+    // Dos valores × (magnitud + fase).
+    assert_eq!(res.len(), 4);
+    let ids: Vec<&str> = res.iter().map(|m| m.measurement.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["bode_1k", "bode_1k_fase", "bode_10k", "bode_10k_fase"]
+    );
+
+    // La leyenda dice qué distingue a cada curva: sin eso son cuatro curvas sin nombre.
+    assert_eq!(res[0].measurement.label.as_deref(), Some("R1 = 1k"));
+    // Y la provenance guarda lo que se alteró, para poder reproducirla.
+    assert_eq!(res[2].spec.knobs, vec!["R1=10k"]);
+
+    // Con R diez veces más grande, fc baja: a 100 Hz el segundo tiene que estar más
+    // atenuado que el primero. Es el chequeo de que `alter` cambió el circuito de verdad.
+    let a_100 = |m: &xtal_sim::SimMeasurement| {
+        m.measurement
+            .data
+            .iter()
+            .min_by(|a, b| (a.0 - 100.0).abs().total_cmp(&(b.0 - 100.0).abs()))
+            .unwrap()
+            .1
+    };
+    assert!(
+        a_100(&res[2]) < a_100(&res[0]) - 10.0,
+        "R=10k debería atenuar mucho más: {} vs {}",
+        a_100(&res[2]),
+        a_100(&res[0])
+    );
+}
+
+#[test]
+fn step_de_un_param_pasa_por_alterparam() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let dir = workdir("step_param");
+    // El valor del componente sale de un `.param`: `alter` no alcanza, hace falta
+    // `alterparam` + `reset`. Si eso estuviera mal, las dos curvas saldrían iguales.
+    let net = "\
+RC parametrico
+.param rval=1k
+V1 in 0 dc 0 ac 1
+R1 in out {rval}
+C1 out 0 1u
+.end
+";
+    let opts = RunOptions {
+        step: Some(StepSpec::parse("rval=1k,10k").unwrap()),
+        ..Default::default()
+    };
+    let res = correr(net, &opts, &dir).measurements;
+    assert_eq!(res.len(), 4);
+    let ultimo = |i: usize| res[i].measurement.data.last().unwrap().1;
+    assert!(
+        (ultimo(0) - ultimo(2)).abs() > 10.0,
+        "las dos curvas salieron iguales: el .param no se alteró ({} vs {})",
+        ultimo(0),
+        ultimo(2)
+    );
+}
+
+#[test]
+fn la_temperatura_llega_a_ngspice() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let dir = workdir("temp");
+    // Resistencia con coeficiente de temperatura: a 127 °C vale el doble que a 27 °C,
+    // así que la respuesta cambia de verdad. Con una R ideal, `--temp` no se notaría y
+    // el test no probaría nada.
+    let net = "\
+RC con tempco
+V1 in 0 dc 0 ac 1
+R1 in out 1k tc1=0.01
+C1 out 0 1u
+.end
+";
+    let frio = correr(net, &RunOptions::default(), &dir).measurements;
+    let caliente = correr(
+        net,
+        &RunOptions {
+            temp: Some(127.0),
+            ..Default::default()
+        },
+        &workdir("temp2"),
+    )
+    .measurements;
+    let ultimo = |m: &[xtal_sim::SimMeasurement]| m[0].measurement.data.last().unwrap().1;
+    assert!(
+        ultimo(&caliente) < ultimo(&frio) - 3.0,
+        "la temperatura no cambió nada: {} vs {}",
+        ultimo(&caliente),
+        ultimo(&frio)
+    );
+    assert_eq!(caliente[0].spec.temp, Some(127.0));
+}
+
+#[test]
+fn montecarlo_sortea_alrededor_del_nominal_y_se_repite() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let mc = |seed| McSpec {
+        runs: 4,
+        tolerances: vec![("R1".to_string(), 0.10)],
+        seed,
+        dist: Dist::Uniform,
+    };
+    let opts = |seed| RunOptions {
+        mc: Some(mc(seed)),
+        ..Default::default()
+    };
+    let a = correr(RC, &opts(7), &workdir("mc_a")).measurements;
+    let b = correr(RC, &opts(7), &workdir("mc_b")).measurements;
+    let c = correr(RC, &opts(8), &workdir("mc_c")).measurements;
+
+    // Cuatro corridas × (magnitud + fase).
+    assert_eq!(a.len(), 8);
+    assert_eq!(a[0].measurement.id, "bode_mc1");
+    assert_eq!(a[0].measurement.label.as_deref(), Some("Monte Carlo #1"));
+
+    // La misma semilla da exactamente las mismas curvas. Un Monte Carlo que no se puede
+    // repetir no sirve para un informe.
+    let curva = |m: &[xtal_sim::SimMeasurement], i: usize| m[i].measurement.data.clone();
+    assert_eq!(curva(&a, 0), curva(&b, 0));
+    assert_ne!(curva(&a, 0), curva(&c, 0));
+    // Y las cuatro corridas de una misma semilla son distintas entre sí.
+    assert_ne!(curva(&a, 0), curva(&a, 2));
+
+    // El valor sorteado queda en la provenance, y cae adentro de la tolerancia pedida.
+    let v: f64 = a[0].spec.knobs[0]
+        .split_once('=')
+        .unwrap()
+        .1
+        .parse()
+        .unwrap();
+    assert!(
+        (900.0..=1100.0).contains(&v),
+        "R1 sorteada fuera de banda: {v}"
+    );
+}
+
+#[test]
+fn measure_calcula_el_ancho_de_banda() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let dir = workdir("measure");
+    let opts = RunOptions {
+        // RC con R=1k y C=1u → fc = 1/(2·pi·R·C) ≈ 159 Hz.
+        measures: vec!["ac fc when vdb(out)=-3".to_string()],
+        ..Default::default()
+    };
+    let run = correr(RC, &opts, &dir);
+    assert_eq!(run.measures.len(), 1);
+    let fc = run.measures[0].value.expect("fc debería medirse");
+    assert!((fc - 159.0).abs() < 10.0, "fc medida = {fc}, esperaba ~159");
+}
+
+#[test]
+fn una_medicion_que_falla_no_se_lleva_puestas_las_curvas() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let dir = workdir("measure_falla");
+    let opts = RunOptions {
+        // -300 dB no existe en este barrido: ngspice dice `failed!` por stderr.
+        measures: vec!["ac fc when vdb(out)=-300".to_string()],
+        ..Default::default()
+    };
+    let run = correr(RC, &opts, &dir);
+    assert_eq!(run.measures[0].value, None);
+    // Y las curvas siguen ahí: era una medición que no encontró nada, no una
+    // simulación rota.
+    assert_eq!(run.measurements.len(), 2);
+    assert!(!run.measurements[0].measurement.data.is_empty());
+}
+
+#[test]
+fn measure_se_atribuye_a_su_corrida() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let dir = workdir("measure_step");
+    let opts = RunOptions {
+        step: Some(StepSpec::parse("R1=1k,10k").unwrap()),
+        measures: vec!["ac fc when vdb(out)=-3".to_string()],
+        ..Default::default()
+    };
+    let run = correr(RC, &opts, &dir);
+    assert_eq!(run.measures.len(), 2);
+    assert_eq!(run.measures[0].run.as_deref(), Some("R1 = 1k"));
+    assert_eq!(run.measures[1].run.as_deref(), Some("R1 = 10k"));
+    // Diez veces más R, diez veces menos ancho de banda. Sin las marcas en el log, las
+    // dos mediciones se llaman igual y no habría forma de distinguirlas.
+    let (a, b) = (
+        run.measures[0].value.unwrap(),
+        run.measures[1].value.unwrap(),
+    );
+    assert!(b < a / 5.0, "fc no bajó con R más grande: {a} → {b}");
+}
+
+#[test]
+fn tran_respeta_el_paso_maximo_y_uic() {
+    if !xtal_sim::is_available() {
+        return;
+    }
+    let net = "\
+carga de un capacitor
+V1 in 0 dc 1
+R1 in out 1k
+C1 out 0 1u
+.end
+";
+    let correr_tran = |max_step, uic, dir: &std::path::Path| {
+        simulate_curve(
+            "rc",
+            net,
+            &Analysis::Tran(Tran {
+                step: 1e-4,
+                stop: 5e-3,
+                start: None,
+                max_step,
+                uic,
+            }),
+            &["v(out)".to_string()],
+            "carga",
+            &CurveMeta::default(),
+            &RunOptions::default(),
+            dir,
+        )
+        .expect("el transitorio debería correr")
+        .measurements
+    };
+    let normal = correr_tran(None, false, &workdir("tran_normal"));
+    let fino = correr_tran(Some(1e-5), false, &workdir("tran_fino"));
+    assert!(
+        fino[0].measurement.data.len() > normal[0].measurement.data.len(),
+        "el paso máximo no achicó el paso: {} puntos vs {}",
+        fino[0].measurement.data.len(),
+        normal[0].measurement.data.len()
+    );
+
+    // Con `uic` se saltea el punto de operación: el capacitor arranca descargado y la
+    // primera muestra es ~0 V. Sin `uic`, ngspice arranca del régimen (1 V).
+    let con_uic = correr_tran(None, true, &workdir("tran_uic"));
+    let v0 = con_uic[0].measurement.data.first().unwrap().1;
+    assert!(
+        v0.abs() < 0.1,
+        "con uic el capacitor debería arrancar en 0, fue {v0}"
+    );
+    let v0_sin = normal[0].measurement.data.first().unwrap().1;
+    assert!(
+        v0_sin > 0.9,
+        "sin uic debería arrancar del régimen, fue {v0_sin}"
     );
 }

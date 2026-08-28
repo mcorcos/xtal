@@ -58,6 +58,24 @@ pub struct Tran {
     pub step: f64,
     pub stop: f64,
     pub start: Option<f64>,
+    /// Paso máximo de integración (el `dTmax` de LTspice). Sin esto, ngspice elige el
+    /// paso solo y puede saltearse un flanco angosto; con esto se le pone un techo.
+    ///
+    /// `skip_serializing_if` no es cosmético: el `.toml` de una medición vieja no tiene
+    /// este campo, y no escribirlo cuando no se pidió mantiene el archivo **byte a byte
+    /// igual** que antes (misma razón que `preserve_order` en la provenance).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_step: Option<f64>,
+    /// `uic`: arrancar de las condiciones iniciales (`ic=` / `.ic`) y **saltear el punto
+    /// de operación**. Es lo que uno quiere para ver el arranque de un oscilador o la
+    /// carga de un capacitor desde cero.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub uic: bool,
+}
+
+/// Helper de `skip_serializing_if` para los bool que por default son `false`.
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Barrido DC de una fuente (salida real).
@@ -275,12 +293,24 @@ impl Analysis {
     }
 }
 
-/// Comando de transitorio: `tran <step> <stop> [start]`.
+/// Comando de transitorio: `tran <step> <stop> [start [maxstep]] [uic]`.
+///
+/// OJO con el orden: en ngspice el paso máximo es el **cuarto** argumento posicional, así
+/// que sin `start` no hay dónde ponerlo. Si pidieron paso máximo y no tiempo inicial,
+/// mandamos `start = 0`, que es el default de ngspice y no cambia el resultado.
 fn tran_command(t: &Tran) -> String {
-    match t.start {
-        Some(start) => format!("tran {} {} {}", n(t.step), n(t.stop), n(start)),
-        None => format!("tran {} {}", n(t.step), n(t.stop)),
+    let mut cmd = format!("tran {} {}", n(t.step), n(t.stop));
+    let start = t.start.or_else(|| t.max_step.map(|_| 0.0));
+    if let Some(start) = start {
+        let _ = write!(cmd, " {}", n(start));
     }
+    if let Some(max) = t.max_step {
+        let _ = write!(cmd, " {}", n(max));
+    }
+    if t.uic {
+        cmd.push_str(" uic");
+    }
+    cmd
 }
 
 #[cfg(test)]
@@ -307,13 +337,34 @@ mod tests {
             step: 1e-6,
             stop: 1e-3,
             start: None,
+            max_step: None,
+            uic: false,
         };
         assert_eq!(tran_command(&t), "tran 0.000001 0.001");
         let t2 = Tran {
             start: Some(0.0),
-            ..t
+            ..t.clone()
         };
         assert_eq!(tran_command(&t2), "tran 0.000001 0.001 0");
+    }
+
+    #[test]
+    fn tran_command_with_max_step_and_uic() {
+        let t = Tran {
+            step: 1e-6,
+            stop: 1e-3,
+            start: None,
+            max_step: Some(2e-6),
+            uic: true,
+        };
+        // Sin `start`, el paso máximo obliga a mandar un 0 en el tercer lugar.
+        assert_eq!(tran_command(&t), "tran 0.000001 0.001 0 0.000002 uic");
+        let t2 = Tran {
+            start: Some(1e-4),
+            uic: false,
+            ..t
+        };
+        assert_eq!(tran_command(&t2), "tran 0.000001 0.001 0.0001 0.000002");
     }
 
     #[test]

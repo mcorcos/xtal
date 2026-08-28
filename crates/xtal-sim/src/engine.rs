@@ -56,6 +56,14 @@ pub fn run_batch(netlist_path: &Path, workdir: &Path) -> Result<String> {
 fn has_fatal_error(log: &str) -> bool {
     log.lines().any(|l| {
         let low = l.to_ascii_lowercase();
+        // Un `meas` que no encuentra lo que busca dice `Error: measure ... failed!`, y
+        // eso NO es una simulación rota: el análisis corrió y las curvas están. Abortar
+        // acá tiraría a la basura todo lo que sí se calculó porque un -3 dB no existe.
+        if low.trim_start().starts_with("error: measure")
+            || low.contains("meas ") && low.contains("failed")
+        {
+            return false;
+        }
         low.contains("fatal")
             || low.contains("aborted")
             || low.starts_with("error")
@@ -105,6 +113,19 @@ mod tests {
         assert!(has_fatal_error("blah\nError: no such node v(out)\nmore"));
         assert!(has_fatal_error("fatal error during setup"));
         assert!(!has_fatal_error("Circuit: rc lowpass\nNo errors here"));
+    }
+
+    #[test]
+    fn una_medicion_fallida_no_aborta_la_corrida() {
+        // Salida real de ngspice-47 con `meas ac bw when vdb(out)=-300`.
+        let log = "No. of Data Rows : 101\n\
+                   Error: measure  bw  when(WHEN) : out of interval\n\
+                   \x20meas ac bw when vdb(out)=-3.000000e+02 failed!\n";
+        assert!(!has_fatal_error(log));
+        // Pero un error de verdad en la misma corrida sí aborta.
+        assert!(has_fatal_error(&format!(
+            "{log}Error: no such device or model name r9\n"
+        )));
     }
 
     #[test]
