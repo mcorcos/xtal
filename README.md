@@ -1,93 +1,50 @@
 # Xtal
 
-**Análisis de circuitos electrónicos y consolidación de datos en informes LaTeX.**
+**Los informes de electrónica, sin pelearse con el formato.**
 
-Xtal es una herramienta de línea de comandos que toma las tres fuentes de un ensayo de
-electrónica — **teórica**, **simulada** y **medida** — las consolida en un mismo modelo de
-datos y produce gráficos e informes de calidad de publicación en **LaTeX / PGFPlots / TikZ**.
+Xtal junta las tres fuentes de un ensayo — la **teórica**, la **simulada** y la
+**medida** — en un mismo gráfico prolijo, y arma con eso un PDF de calidad de
+publicación hecho en LaTeX.
 
-El dolor que resuelve no es simular: es **juntar** esas tres curvas en un gráfico prolijo y
-entregable, sin pelearse con el formato.
+El dolor que resuelve no es simular. Es **juntar** esas tres curvas y que quede lindo.
 
-> Xtal **no** es un editor de LaTeX ni un "Overleaf local". LaTeX es solamente el formato de
-> salida. El núcleo es análisis de circuitos y consolidación de datos.
+Viene en dos formas, la misma herramienta por debajo:
 
----
+- **La app de escritorio** — Windows, macOS y Linux. Editor, PDF al lado, y un agente
+  de IA adentro.
+- **El comando `xtal`** — para la terminal, y para que un agente de IA lo maneje.
 
-## Ideas de diseño
-
-- **Medición ≠ Gráfico.** Una *medición* es dato crudo X/Y con metadata, y es inmutable. Un
-  *gráfico* es una receta (escala, colores, estilos) sobre una o más mediciones. La relación
-  es muchos-a-muchos.
-- **El proyecto es una carpeta de archivos planos**, como un repo LaTeX: versionable con git,
-  inspeccionable y portable. Xtal no hace control de versiones ni multiusuario.
-- **Salida siempre LaTeX.** No hay backend de imágenes; el PDF es LaTeX compilado.
-- **Defaults con buen gusto, todo override-able.** Teórica sólida, simulada con markers,
-  medida punteada; entrada amarilla, salida verde. Bode en escala logarítmica por default.
-  Los ejes lineales eligen su prefijo SI solos (un transitorio se rotula en ms, no en
-  `·10⁻³`), y la leyenda se ubica en la esquina más despejada — o afuera del eje si los
-  datos no dejan ninguna libre, para no taparlos nunca.
-- **Themes como paquete, no como código.** La identidad de una institución (logos, colores,
-  carátulas) es un theme; el motor no sabe de ninguna en particular. Vienen tres:
-  `itba`, `uca` (con su logo en la carátula) y `generico` (sin institución, para el que
-  no es de ninguna facultad o no quiere membrete). Para el de la tuya, copiá
-  `themes/generico/` y cambiale el nombre y el color: ver [docs/THEMES.md](docs/THEMES.md).
-- **Config en cascada**, modelo git: defaults del binario → global del usuario → proyecto → flag.
-- **Pensado para ser orquestado por una IA.** Cada comando es atómico y determinístico, y
-  todos aceptan `--json` para que la salida se parsee sin ambigüedad.
+> Xtal **no** es un editor de LaTeX ni un "Overleaf local". LaTeX es solo el formato de
+> salida.
 
 ---
 
-## Requisitos
+# Instalación
 
-| Dependencia | Para qué | Obligatoria |
+| Sistema | Un comando | Qué deja |
 |---|---|---|
-| [Tectonic](https://tectonic-typesetting.github.io/) | Compilar LaTeX a PDF | Sí (o `pdflatex` como fallback) |
-| [ngspice](https://ngspice.sourceforge.io/) | Simular circuitos (`xtal sim`) | Solo para simulación |
+| **macOS** | `brew install --cask mcorcos/xtal/xtal-app` | App + comando + LaTeX + simulador |
+| **Windows** | Bajar el `.exe` de la [última Release](https://github.com/mcorcos/xtal/releases/latest) | App + comando |
+| **Linux** | `curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh \| sh` | App + comando |
 
-Verificá el entorno con:
+Ninguno de los tres pide permisos de administrador. Abajo está cada uno en detalle.
 
-```bash
-xtal doctor
-```
+## macOS
 
-## Instalación
-
-**Windows** — dos caminos, los dos **sin permisos de administrador**:
-
-```powershell
-# 1. El instalador de la app: bajás el .exe de la Release y listo.
-#    Trae el comando `xtal` adentro, así que con eso solo ya funciona todo.
-
-# 2. Una línea, que deja la CLI y la app:
-irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex
-```
-
-Solo la CLI, sin la app: `install.ps1 -SinApp`.
-
-> **Todavía no por winget ni por scoop.** Los manifiestos de los dos se generan solos en
-> cada release y viajan adentro de `manifiestos-<version>.tar.gz`, pero falta el paso de
-> publicarlos: winget se publica por pull request en el repo de Microsoft, y el bucket de
-> scoop todavía no está creado. Hasta entonces `winget install UNIT.Xtal` y
-> `scoop install xtal` no existen.
-
-`install.ps1` baja el binario, verifica el checksum, lo deja en
-`%LOCALAPPDATA%\Programs\xtal` y lo agrega al PATH del usuario.
-
-**macOS** — **un comando y ya está**, en una Mac recién sacada de la caja:
+Un solo comando, en una Mac recién sacada de la caja:
 
 ```bash
 brew install --cask mcorcos/xtal/xtal-app
 ```
 
-Eso deja **todo**: la app en Aplicaciones, el comando `xtal` en la terminal, el motor
-LaTeX (tectonic) y el simulador (ngspice). No hace falta `brew tap` antes — con el nombre
-de tres partes, Homebrew agrega el tap solo. Tampoco hay que correr nada después: la
-configuración, los themes y el skill del agente se escriben en el primer comando.
+Eso deja **todo**: la app en Aplicaciones, el comando `xtal` en la terminal, el motor de
+LaTeX (Tectonic) y el simulador (ngspice). Lo único que tiene que estar antes es
+[Homebrew](https://brew.sh).
 
-Lo único que tiene que estar antes es [Homebrew](https://brew.sh).
+No hace falta `brew tap` antes: con el nombre de tres partes, Homebrew agrega el tap
+solo. Y no hay nada que correr después.
 
-¿Solo la CLI, sin la app?
+¿Solo el comando, sin la app?
 
 ```bash
 brew install mcorcos/xtal/xtal
@@ -97,35 +54,71 @@ brew install mcorcos/xtal/xtal
 > con dos, no existe — eso nombra el tap, no lo que hay adentro.
 
 > La app **no está firmada con un Developer ID de Apple**. Instalada por el cask no
-> molesta — el cask le saca la cuarentena —, pero bajada a mano de la Release,
-> macOS la bloquea: hay que sacarle el atributo con
+> molesta, porque el cask le saca la cuarentena. Bajada a mano de la Release, macOS la
+> bloquea: hay que sacarle el atributo con
 > `xattr -dr com.apple.quarantine /Applications/Xtal.app`.
 
-**Linux** — **una línea, y deja la CLI y la app**, sin pedir root:
+## Windows
+
+**Lo más fácil**: bajá `Xtal-<version>-windows-x64-setup.exe` de la
+[última Release](https://github.com/mcorcos/xtal/releases/latest) y abrilo. Trae el
+comando `xtal` adentro, así que con eso solo ya funciona todo.
+
+La primera vez, SmartScreen va a advertir que no conoce el programa: es porque la app
+todavía no está firmada. Se pasa con *Más información → Ejecutar de todas formas*.
+
+**Desde PowerShell**, si preferís una línea:
+
+```powershell
+irm https://raw.githubusercontent.com/mcorcos/xtal/main/install.ps1 | iex
+```
+
+Baja el binario, verifica el checksum, lo deja en `%LOCALAPPDATA%\Programs\xtal` y lo
+agrega al PATH del usuario. **Nunca pide administrador.** Solo el comando, sin la app:
+`install.ps1 -SinApp`.
+
+Falta el motor de LaTeX y el simulador, que en Windows no vienen con nada. Lo más
+cómodo es dejar que Xtal se encargue:
+
+```powershell
+xtal doctor --fix
+```
+
+A mano es con [scoop](https://scoop.sh), que es el único camino que no pide
+administrador:
+
+```powershell
+iwr -useb get.scoop.sh | iex        # si no lo tenés
+scoop install tectonic             # el motor de LaTeX
+scoop bucket add extras; scoop install ngspice   # el simulador
+```
+
+> **Todavía no por winget ni por scoop.** Los manifiestos se generan solos en cada
+> release y viajan adentro de `manifiestos-<version>.tar.gz`, pero falta publicarlos:
+> winget se publica por pull request en el repo de Microsoft, y el bucket de scoop
+> todavía no está creado. Hasta entonces `winget install UNIT.Xtal` y
+> `scoop install xtal` **no existen**.
+
+## Linux
+
+Una línea, y deja el comando y la app, sin pedir root en ningún paso:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh
 ```
 
-Solo la CLI, sin la app: `install.sh --sin-app`.
-
 El script baja el binario a `~/.local/bin`, verifica el checksum, y después baja el
-**AppImage** de la app y lo deja instalado en el menú de aplicaciones. No hace falta
-`sudo` en ningún paso: la app se desempaqueta en `~/.local/share/xtal` en vez de
-instalarse con `dpkg`, que sí pediría root.
+**AppImage** de la app y la deja en el menú de aplicaciones. Solo el comando, sin la
+app: `install.sh --sin-app`.
 
-> El AppImage pesa unos **99 MB** porque trae GTK y WebKit adentro — que es justo lo que
-> lo hace andar en cualquier distro sin instalar nada. El `.deb` pesa 10 MB porque usa los
-> del sistema, y por eso pide root.
+No hace falta `sudo` porque la app se desempaqueta en `~/.local/share/xtal` en vez de
+instalarse con `dpkg`, que sí lo pediría.
 
-> **La app es solo x86_64.** En una máquina ARM queda la CLI, que es la que hace el
-> trabajo. Y **el autocomplete no está en Linux**: la pestaña de Ajustes ni aparece.
-
-Si preferís el gestor de tu distro, la Release publica también el `.deb` (Debian, Ubuntu,
-Mint), el `.rpm` (Fedora) y el AppImage suelto:
+Si preferís el gestor de tu distro, la Release publica también los paquetes sueltos:
 
 ```bash
-sudo dpkg -i Xtal-<version>-linux-amd64.deb
+sudo dpkg -i Xtal-<version>-linux-amd64.deb     # Debian, Ubuntu, Mint
+sudo rpm -i  Xtal-<version>-linux-x86_64.rpm    # Fedora
 ```
 
 Y si ya usás **Homebrew on Linux**, la fórmula anda igual que en macOS y arrastra
@@ -135,95 +128,43 @@ Tectonic y ngspice:
 brew install mcorcos/xtal/xtal
 ```
 
-**Script** (macOS) — baja el binario ya compilado a `~/.local/bin`, verificando el
-checksum. En macOS **no instala la app**: esa va por el cask de arriba, que es lo que la
-deja en `/Applications`.
+> El AppImage pesa unos **99 MB** porque trae GTK y WebKit adentro — que es justo lo que
+> lo hace andar en cualquier distro sin instalar nada. El `.deb` pesa 10 MB porque usa
+> los del sistema, y por eso pide root.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/mcorcos/xtal/main/install.sh | sh
-```
+> Dos cosas de Linux: **la app es solo x86_64** (en una máquina ARM queda el comando, que
+> es el que hace el trabajo), y **el autocomplete no está** — la pestaña de Ajustes ni
+> aparece.
 
-El script acepta `--version X.Y.Z` para fijar una version y `--dir <ruta>` para elegir
-dónde dejar el binario. También instala los completions de shell y la man page.
+## Desde el código fuente
 
-**Desde el código fuente** (requiere Rust 1.80+):
+Requiere Rust 1.80+:
 
 ```bash
 git clone https://github.com/mcorcos/xtal.git
 cd xtal
-cargo build --release
-# el binario queda en ./target/release/xtal
+cargo build --release      # el binario queda en ./target/release/xtal
 ```
 
-### No hay paso siguiente
+## Después de instalar no hay ningún paso
 
-Xtal **se configura solo**. El script corre el instalador al terminar; con Homebrew, se
-configura en la primera corrida de cualquier comando. Eso deja la config global, los
-themes, y un **skill** en la carpeta de skills de cada agente de IA que tengas instalado
+Xtal **se configura solo** en la primera corrida de cualquier comando: deja la config,
+los themes, y un **skill** en la carpeta de skills de cada agente de IA que tengas
 (Claude Code, Codex, Copilot CLI, opencode).
 
 Ese skill es la parte que importa: **el agente se entera solo de que Xtal existe**. No
-hay que explicarle nada ni acordarse de ningún comando. Le decís "tengo que armar el TP
-de electrónica, tengo el CSV del osciloscopio" y ya sabe por dónde empezar.
+hay que explicarle nada ni acordarse de ningún comando.
 
-Para ver cómo quedó enchufado cada agente, o para enchufar uno a mano:
-
-```bash
-xtal agents                       # la lista, con el estado de cada uno
-xtal agents install --all         # los que falten
-```
-
-¿Usás un agente que no está en la lista? Decile dónde busca sus skills y queda como uno
-más:
+Para ver si quedó todo bien:
 
 ```bash
-xtal agents add "Mi agente" --skills ~/.mi-agente/skills
-```
-
-Y si querés elegir theme y formato a mano, o registrar el MCP en Claude Desktop:
-
-```bash
-xtal setup           # pregunta y registra el MCP en los agentes que encuentre
-xtal setup --no-ai   # solo lo de Xtal, sin tocar la config de otros programas
-```
-
-Cada agente dice **qué archivos suyos toca Xtal** antes de que se toque nada. Detalle
-completo en [`docs/AGENTES.md`](docs/AGENTES.md).
-
-### Sacarlo
-
-```bash
-xtal uninstall       # lista lo que va a borrar y pide confirmación
-```
-
-Borra la config global, los themes y el skill, y saca el registro del MCP de los
-clientes. **No toca el binario ni tus proyectos**: el binario lo saca quien lo instaló
-(`brew uninstall xtal`, o borrar el archivo que dejó el script), y tus proyectos son
-carpetas tuyas.
-
-### Usarlo desde un cliente de IA sin terminal
-
-Claude Code no necesita nada: corre `xtal` por bash. Para Claude Desktop, Codex y
-similares, Xtal trae un servidor MCP adentro del mismo binario:
-
-```bash
-xtal mcp install --client claude-desktop
-```
-
-Escribe la config del cliente por vos (con backup) y listo: no hay nada que dejar
-corriendo. Detalle completo en [`docs/MCP.md`](docs/MCP.md).
-
-### Autocompletado y man page
-
-Los paquetes de Homebrew y del script ya los dejan instalados. Si compilaste a mano,
-los genera el propio binario:
-
-```bash
-xtal completions zsh --out ~/.local/share/zsh/site-functions   # o bash, fish, ...
-xtal man --out ~/.local/share/man/man1
+xtal doctor        # qué hay, qué falta y para qué sirve cada cosa
+xtal doctor --fix  # te ofrece instalar lo que falte, preguntando una por una
 ```
 
 ---
+
+# Cómo se usa
 
 ## El primer minuto
 
@@ -231,21 +172,119 @@ xtal man --out ~/.local/share/man/man1
 xtal example --open
 ```
 
-Crea un proyecto de ejemplo completo en tu disco, lo compila y te abre el PDF. Es un informe
-de 13 páginas sobre un filtro RLC de segundo orden, con las cuatro maneras de conseguir una
-curva —fórmula, ngspice, CSV de instrumento y rawfile de LTspice— consolidadas en seis
-gráficos, más esquemáticos dibujados en LaTeX, una captura de osciloscopio anotada, tablas y
-anexo. El ejemplo viene adentro del binario: no hace falta clonar nada.
+Crea un proyecto de ejemplo completo en tu disco, lo compila y te abre el PDF. Es un
+informe de 13 páginas sobre un filtro RLC, con las cuatro maneras de conseguir una curva
+—fórmula, ngspice, CSV del osciloscopio y `.raw` de LTspice— consolidadas en seis
+gráficos, más esquemáticos dibujados en LaTeX, una captura de osciloscopio anotada,
+tablas y anexo.
 
-Si algo no compila:
+El ejemplo viene adentro del binario: no hace falta clonar nada. También está en
+[`examples/filtro-rlc/`](examples/filtro-rlc/), con un `reproducir.sh` comentado paso a
+paso que lo arma desde cero.
+
+## La idea, en un minuto
+
+Hay **dos cosas** en Xtal, y entender la diferencia es entender todo lo demás:
+
+- Una **medición** es una curva: una columna de X, una de Y, y de dónde salió. Da igual
+  si la sacaste del osciloscopio, de una simulación o de una fórmula: adentro de Xtal las
+  tres son lo mismo. **Nunca se modifica.**
+- Un **gráfico** es una *receta*: qué mediciones van adentro y con qué estilo. **No tiene
+  datos adentro.**
+
+Por eso la teórica, la simulada y la medida entran al mismo gráfico como tres series, y
+la misma medición puede aparecer en varios gráficos sin copiarse.
+
+Y no tenés que elegir colores ni estilos: los defaults ya están puestos con criterio.
+Teórica en línea sólida, simulada con markers, medida punteada; entrada amarilla, salida
+verde; el Bode en escala logarítmica. Todo se puede pisar con un flag, pero rara vez hace
+falta.
+
+## Lo más fácil: pedírselo al agente
+
+Xtal está hecho para que lo maneje una IA. Si tenés Claude Code, Codex o similar, el
+skill ya quedó instalado y no hay que explicarle nada:
+
+> *"Tengo que armar el TP de electrónica. En esta carpeta está el CSV del osciloscopio y
+> el netlist del filtro. Quiero un Bode con la teórica, la simulada y la medida."*
+
+El agente crea el proyecto, importa el CSV, corre la simulación, arma el gráfico, escribe
+las secciones y compila el PDF. Vos revisás el resultado.
+
+Adentro de la app de escritorio el agente ya está: es el modo agente, con la terminal a
+un lado y el PDF al otro.
+
+## A mano: cuatro pasos
+
+**1. Crear el proyecto.** Es una carpeta común, versionable con git.
 
 ```bash
-xtal doctor        # qué falta y para qué sirve
-xtal doctor --fix  # te ofrece instalarlo, preguntando una por una
+xtal new mi-ensayo && cd mi-ensayo
 ```
 
-El mismo ejemplo está en [`examples/filtro-rlc/`](examples/filtro-rlc/), con un
-`reproducir.sh` comentado paso a paso que lo arma desde cero.
+**2. Meter las tres curvas.** Cada una queda como una medición, sin importar de dónde
+vino:
+
+```bash
+# la medida: el CSV que te dio el osciloscopio
+xtal meas import fuentes/osciloscopio.csv --id medida --kind measured \
+    --x-unit Hz --y-unit dB --label "Medida"
+
+# la teórica: una fórmula
+xtal meas formula --id teorica --from 100 --to 10000 --x-unit Hz --y-unit dB \
+    --expr "20*math::log10(1/math::sqrt(1+(f/1000)^2))"
+
+# la simulada: ngspice sobre tu netlist
+xtal circuit import filtro.cir --as filtro
+xtal sim ac filtro --as simulada --node "v(out)" --from 100 --to 10000
+```
+
+**3. Armar el gráfico con las tres.** El gráfico no copia los datos: los referencia por
+id.
+
+```bash
+xtal plot new bode --kind bode --title "Respuesta en frecuencia"
+xtal plot add-series bode --measurement teorica
+xtal plot add-series bode --measurement simulada
+xtal plot add-series bode --measurement medida
+```
+
+**4. Escribir el informe y compilar.**
+
+```bash
+xtal section add "Resultados" --figure bode
+xtal run --open
+```
+
+`xtal run --open` genera el LaTeX, lo compila y te abre el PDF. Los colores, los trazos y
+la escala logarítmica ya salieron bien sin que le dijeras nada.
+
+> `xtal sim ac` deja **dos** mediciones: la magnitud con el id que pediste (`simulada`) y
+> la fase con `_fase` al final (`simulada_fase`). `xtal meas list` te las muestra.
+
+## Qué hay adentro de la carpeta
+
+El proyecto es una carpeta de archivos planos, como un repo de LaTeX: la podés versionar
+con git, abrirla con cualquier editor y llevártela a otra máquina.
+
+```
+mi-ensayo/
+├── xtal.toml       ← el informe: título, autor, secciones y el plan
+├── fuentes/        ← lo que traés de afuera (CSV, .raw, netlists)
+├── imagenes/       ← fotos y figuras que Xtal no dibuja
+├── secciones/      ← el texto de cada sección, en .tex
+├── mediciones/     ← cada curva: un .csv con los datos y un .toml con su origen
+├── graficos/       ← las recetas: qué mediciones lleva cada gráfico
+├── esquematicos/   ← los circuitos importados
+├── salida/         ← el .tex generado y el PDF. Se pisa en cada compilación
+└── AGENTS.md       ← qué es este proyecto, para que la IA no pregunte
+```
+
+Si dejaste un archivo por ahí y no sabés qué hacer con él:
+
+```bash
+xtal scan       # qué es cada cosa, si ya se usó, y el comando que la convierte en informe
+```
 
 ## Mientras trabajás
 
@@ -253,14 +292,14 @@ El mismo ejemplo está en [`examples/filtro-rlc/`](examples/filtro-rlc/), con un
 xtal watch --open
 ```
 
-Deja el PDF abierto y lo recompila cada vez que tocás un dato o un texto. Un error de LaTeX
-no corta el watch: lo muestra y sigue esperando.
+Deja el PDF abierto y lo recompila cada vez que tocás un dato o un texto. Un error de
+LaTeX no corta el watch: lo muestra y sigue esperando.
 
-## Planificar primero
+## Planificar el informe primero
 
 El objetivo no es un gráfico: es el informe. Y un informe son varios gráficos, cada uno
 con dos o tres curvas que hay que ir consiguiendo de lugares distintos, muchas veces en
-días distintos.
+días distintos. Sin anotarlo, "qué me falta" vive en la cabeza del que lo hace.
 
 ```bash
 xtal plan     # ¿cuántos gráficos? ¿qué lleva cada uno?
@@ -280,59 +319,32 @@ el esqueleto del trabajo, listo para ir llenando.
       ✗ medida     xtal meas import <archivo.csv> --id <id> --kind measured
 ```
 
-Cada falta viene con el comando que la resuelve.
+**Cada falta viene con el comando que la resuelve.**
 
 El plan se guarda adentro de `xtal.toml`, no en un archivo aparte: así no se
 desactualiza. Para scripts o IAs está `xtal plan add|list|remove`.
 
-## El proyecto se explica solo
-
-`xtal new` deja un `AGENTS.md` (y un `CLAUDE.md`) adentro de la carpeta. Quien la abra
-con Claude Code, Codex o similar no tiene que explicarle nada al modelo: ya está escrito
-qué es el proyecto, cuál es el modelo de datos y qué comandos existen.
-
-## Flujo típico
-
-```bash
-# 1. Crear el proyecto (carpeta de archivos planos) y planificar el informe
-xtal new mi-ensayo && cd mi-ensayo
-xtal plan
-
-# 2. Meter las tres fuentes como mediciones
-xtal meas import osciloscopio.csv --id salida --kind measured \
-    --x-unit Hz --y-unit dB --label "Salida"
-xtal meas formula "20*log10(1/sqrt(1+(f/1000)^2))" --id teorica --kind theoretical
-xtal sim ac filtro.cir --id simulada
-
-# 3. Consolidar en un gráfico
-xtal plot new bode --title "Respuesta en frecuencia"
-xtal plot add-series bode teorica
-xtal plot add-series bode simulada
-xtal plot add-series bode salida
-
-# 4. Armar el informe y compilar
-xtal section add "Resultados"
-xtal run --open
-```
-
 ---
 
-## Comandos
+# Referencia de comandos
+
+Todos los comandos aceptan `--json` y `--project <dir>`.
 
 ### Proyecto
 | Comando | Descripción |
 |---|---|
 | `xtal new` | Crea un proyecto nuevo con plantilla y su `AGENTS.md` |
-| `xtal init` | Inicializa un proyecto en el directorio actual |
+| `xtal init` | Inicializa un proyecto en una carpeta que ya existe. Solo agrega: no mueve ni borra nada |
 | `xtal plan` | Entrevista: qué gráficos va a tener el informe y qué lleva cada uno |
 | `xtal plan add\|list\|remove` | Lo mismo, atómico, para scripts o IAs |
 | `xtal status` | Qué está cargado y qué falta, con el comando que resuelve cada falta |
+| `xtal scan` | Qué es cada archivo de la carpeta y qué se puede hacer con él |
 
 ### Mediciones — `xtal meas`
 | Subcomando | Descripción |
 |---|---|
 | `import <archivo.csv>` | Importa un CSV de instrumento. Flags: `--x-col`, `--y-col`, `--delimiter`, `--skip-rows`, `--x-unit`, `--y-unit`, `--label`, `--kind`, `--inspect` |
-| `formula <expr>` | Crea una medición teórica evaluando una fórmula |
+| `formula --expr <expr>` | Crea una medición teórica evaluando una fórmula. Pide además `--id`, `--from` y `--to` |
 | `random` | Genera una medición sintética |
 | `list` · `show` | Listar y mostrar mediciones |
 
@@ -340,16 +352,9 @@ xtal run --open
 | Subcomando | Descripción |
 |---|---|
 | `new` | Crea un gráfico |
-| `add-series` | Agrega una serie (una medición) al gráfico |
+| `add-series <plot> --measurement <id>` | Agrega una serie (una medición) al gráfico |
 | `list` · `show` | Listar y mostrar |
 | `preview` | Compila un solo gráfico a PDF, para iterar rápido |
-
-### Paquetes de LaTeX y preámbulo propio
-
-En el `xtal.toml`, bajo `[document]`: `packages = ["booktabs", "[version=4]{mhchem}"]` y
-`preamble = "\\newcommand{...}"`. Tectonic baja lo que falte solo. Todo el detalle —y
-dónde poner una imagen para que la encuentre— está en
-[`docs/PIPELINE.md`](docs/PIPELINE.md).
 
 ### Informe — `xtal section`
 `add` (sección o subsección) · `set` · `rename` · `remove` · `list`
@@ -358,15 +363,23 @@ dónde poner una imagen para que la encuentre— está en
 El cuerpo va por archivo y no por argumento porque el LaTeX tiene comillas, barras y
 saltos de línea: pasarlo por la línea de comandos obliga a escapar todo y se rompe en el
 primer apóstrofe. `list --json` devuelve el árbol entero con los cuerpos, para que algo
-pueda mostrarlas o editarlas sin parsear el `xtal.toml` por su cuenta. `remove` se
-lleva las subsecciones con ella: son parte de la sección, no algo que quede colgando en
-la raíz del informe.
+pueda mostrarlas o editarlas sin parsear el `xtal.toml` por su cuenta. `remove` se lleva
+las subsecciones con ella: son parte de la sección, no algo que quede colgando en la raíz
+del informe.
 
-### Circuitos — `xtal circuit`
-`import` (copia un `.cir` al proyecto) · `list` · `show`
+**Paquetes de LaTeX y preámbulo propio**: en el `xtal.toml`, bajo `[document]`:
+`packages = ["booktabs", "[version=4]{mhchem}"]` y `preamble = "\\newcommand{...}"`.
+Tectonic baja lo que falte solo. Todo el detalle —y dónde poner una imagen para que la
+encuentre— está en [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
-### Simulación — `xtal sim`
-Corre ngspice sobre un circuito del proyecto y convierte el resultado en mediciones.
+### Circuitos y simulación
+`xtal circuit import <archivo> --as <id>` (copia un `.cir` al proyecto) · `list` · `show`
+
+`xtal raw import <archivo.raw>` trae el resultado de una corrida que ya hiciste en
+LTspice o ngspice y lo vuelve medición.
+
+`xtal sim` corre ngspice sobre un circuito del proyecto y convierte el resultado en
+mediciones:
 
 | Análisis | Descripción |
 |---|---|
@@ -381,34 +394,144 @@ Corre ngspice sobre un circuito del proyecto y convierte el resultado en medicio
 ### Salida
 | Comando | Descripción |
 |---|---|
-| `xtal export` | Genera el `.tex` sin compilar |
 | `xtal run` | **Genera** el `.tex` desde el `xtal.toml` y compila. Pisa lo que hubiera |
 | `xtal compile [archivo]` | Compila un `.tex` **tal cual está**. Es lo que corresponde cuando el LaTeX lo escribiste vos |
+| `xtal export` | Genera el `.tex` sin compilar |
 | `xtal watch` | Recompila solo cuando cambia algo. Mismos flags que `run`, más `--interval` |
+
+`run` y `watch` toman `--open` (abre el PDF), `--monochrome` (todo a blanco y negro,
+logo incluido) y `--pdflatex` (usa tu TeX Live en vez de Tectonic).
 
 ### Sistema
 `xtal config get|set|list [--global] [--resolved]` · `xtal doctor [--fix]` · `xtal setup` ·
 `xtal example [nombre] [--run] [--open]` · `xtal update [--check] [--yes] [--channel ...]` ·
-`xtal agents [install|uninstall|add|remove]` · `xtal uninstall [--yes]` ·
+`xtal agents [install|uninstall|add|remove]` · `xtal latex [consulta]` · `xtal refs` ·
+`xtal app [abrir|compilar|modo|ver|panel|terminal|frente]` · `xtal uninstall [--yes]` ·
 `xtal completions <shell> [--out DIR]` · `xtal man [--out DIR]` ·
 `xtal mcp [serve] | install --client <cliente>`
 
-`xtal doctor` también reporta la **integración con IA**, agente por agente: si el skill
-está y está al día, y si el MCP quedó registrado apuntando a un binario que existe. Las
-dos cosas fallan en silencio. El detalle está en `xtal agents`.
+---
 
-Todos los comandos aceptan `--json` y `--project <dir>`.
+# Ajustes finos
+
+### Agentes de IA
+
+```bash
+xtal agents                       # la lista, con el estado de cada uno
+xtal agents install --all         # los que falten
+```
+
+¿Usás un agente que no está en la lista? Decile dónde busca sus skills y queda como uno
+más:
+
+```bash
+xtal agents add "Mi agente" --skills ~/.mi-agente/skills
+```
+
+Cada agente dice **qué archivos suyos toca Xtal** antes de que se toque nada. Detalle
+completo en [`docs/AGENTES.md`](docs/AGENTES.md).
+
+`xtal doctor` también reporta esta integración agente por agente: si el skill está y está
+al día, y si el MCP quedó registrado apuntando a un binario que existe. Las dos cosas
+fallan en silencio.
+
+### Clientes de IA sin terminal
+
+Claude Code no necesita nada: corre `xtal` por bash. Para Claude Desktop, Codex y
+similares, Xtal trae un servidor MCP adentro del mismo binario:
+
+```bash
+xtal mcp install --client claude-desktop
+```
+
+Escribe la config del cliente por vos (con backup) y listo: no hay nada que dejar
+corriendo. Detalle completo en [`docs/MCP.md`](docs/MCP.md).
+
+### Elegir theme y formato a mano
+
+```bash
+xtal setup           # pregunta y registra el MCP en los agentes que encuentre
+xtal setup --no-ai   # solo lo de Xtal, sin tocar la config de otros programas
+```
+
+### Autocompletado y man page
+
+Los paquetes de Homebrew y del script ya los dejan instalados. Si compilaste a mano, los
+genera el propio binario:
+
+```bash
+xtal completions zsh --out ~/.local/share/zsh/site-functions   # o bash, fish, ...
+xtal man --out ~/.local/share/man/man1
+```
+
+### Actualizar
+
+```bash
+xtal update --check    # ¿hay una version nueva?
+xtal update            # la instala como corresponda según cómo lo instalaste
+```
+
+La app de escritorio se actualiza sola desde **Ajustes → Actualizaciones**.
+
+### Sacarlo
+
+```bash
+xtal uninstall       # lista lo que va a borrar y pide confirmación
+```
+
+Borra la config global, los themes y el skill, y saca el registro del MCP de los
+clientes. **No toca el binario ni tus proyectos**: el binario lo saca quien lo instaló
+(`brew uninstall xtal`, o borrar el archivo que dejó el script), y tus proyectos son
+carpetas tuyas.
 
 ---
 
+# Cómo está pensado
+
+- **Medición ≠ Gráfico.** Una *medición* es dato crudo X/Y con metadata, y es inmutable.
+  Un *gráfico* es una receta (escala, colores, estilos) sobre una o más mediciones. La
+  relación es muchos-a-muchos.
+- **El proyecto es una carpeta de archivos planos**, como un repo LaTeX: versionable con
+  git, inspeccionable y portable. Xtal no hace control de versiones ni multiusuario.
+- **Salida siempre LaTeX.** No hay backend de imágenes; el PDF es LaTeX compilado, y los
+  gráficos se dibujan adentro con PGFPlots.
+- **Defaults con buen gusto, todo override-able.** Teórica sólida, simulada con markers,
+  medida punteada; entrada amarilla, salida verde. Bode en escala logarítmica por
+  default. Los ejes lineales eligen su prefijo SI solos (un transitorio se rotula en ms,
+  no en `·10⁻³`), y la leyenda se ubica en la esquina más despejada — o afuera del eje si
+  los datos no dejan ninguna libre, para no taparlos nunca.
+- **Themes como paquete, no como código.** La identidad de una institución (logos,
+  colores, carátulas) es un theme; el motor no sabe de ninguna en particular. Vienen
+  tres: `itba`, `uca` (con su logo en la carátula) y `generico` (sin institución, para el
+  que no es de ninguna facultad o no quiere membrete). Para el de la tuya, copiá
+  `themes/generico/` y cambiale el nombre y el color: ver
+  [docs/THEMES.md](docs/THEMES.md).
+- **Config en cascada**, modelo git: defaults del binario → global del usuario → proyecto
+  → flag.
+- **Pensado para ser orquestado por una IA.** Cada comando es atómico y determinístico, y
+  todos aceptan `--json` para que la salida se parsee sin ambigüedad.
+
+## Qué necesita por debajo
+
+| Dependencia | Para qué | Obligatoria |
+|---|---|---|
+| [Tectonic](https://tectonic-typesetting.github.io/) | Compilar LaTeX a PDF | Sí (o `pdflatex` como fallback) |
+| [ngspice](https://ngspice.sourceforge.io/) | Simular circuitos (`xtal sim`) | Solo para simulación |
+
+En macOS y en Linux con Homebrew las instala el propio paquete. En el resto de los casos,
+`xtal doctor --fix` te ofrece hacerlo.
+
+Tectonic no trae los paquetes de LaTeX adentro: baja cada uno la primera vez que un
+documento lo usa y lo cachea. Son unos 50 MB, contra los 9,7 GB de un TeX Live completo.
+
 ## Arquitectura
 
-Xtal está partido en dos: un **núcleo** que arma el informe (lo necesita cualquiera) y
-un **addon de electrónica** que consigue los datos del circuito (lo necesita quien hace
+Xtal está partido en dos: un **núcleo** que arma el informe (lo necesita cualquiera) y un
+**addon de electrónica** que consigue los datos del circuito (lo necesita quien hace
 electrónica). El addon está detrás de la feature `electronics`, prendida por default;
 `cargo build --bin xtal --no-default-features` da un binario sin `sim`/`circuit`/`raw`
-que compila el mismo PDF. Un job de CI lo verifica en cada cambio.
-Todo el detalle en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+que compila el mismo PDF. Un job de CI lo verifica en cada cambio. Todo el detalle en
+[`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 
 Workspace de Rust con siete crates:
 
@@ -422,12 +545,19 @@ Workspace de Rust con siete crates:
 | `xtal-compile` | Invocación de Tectonic, parseo de errores, fallback a pdflatex |
 | `xtal-cli` | El binario `xtal`: parseo de comandos y orquestación |
 
----
+Las apps de escritorio: `app/` es la de macOS (Swift + SwiftUI) y `app-win/` es la de
+Windows y Linux (Tauri: Rust + React). Las dos le hablan al mismo binario `xtal` y no
+reimplementan nada. Ver [`docs/APP.md`](docs/APP.md),
+[`docs/APP-WINDOWS.md`](docs/APP-WINDOWS.md) y [`docs/APP-LINUX.md`](docs/APP-LINUX.md).
 
 ## Estado
 
-Núcleo funcionando: importación de datos, gráficos, secciones y compilación a PDF end-to-end.
-La ingesta de esquemáticos `.asc` de LTspice y el instalador `curl | sh` están pendientes.
+Funciona de punta a punta y está publicado para los tres sistemas: importación de datos,
+gráficos, secciones, simulación y compilación a PDF.
+
+Lo que falta está en [`docs/PENDIENTES.md`](docs/PENDIENTES.md). Lo más grande: la
+ingesta de esquemáticos `.asc` de LTspice, y que alguien que no sea el autor lo corra en
+Windows y en Linux.
 
 ## Licencia
 
